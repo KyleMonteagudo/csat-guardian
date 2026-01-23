@@ -729,7 +729,7 @@ resource devBoxVm 'Microsoft.Compute/virtualMachines@2023-09-01' = if (deployDev
   tags: commonTags
   properties: {
     hardwareProfile: {
-      vmSize: 'Standard_D2s_v6'  // Dsv6 family - user has quota
+      vmSize: 'Standard_D2s_v3'  // Dsv3 - confirmed available in eastus2
     }
     osProfile: {
       computerName: 'devbox'
