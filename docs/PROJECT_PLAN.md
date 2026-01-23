@@ -5,6 +5,7 @@
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial project plan |
+| 1.1 | 2026-01-23 | Kyle Monteagudo | Updated Sprint 0 checklist with completed Azure Gov deployment |
 
 ---
 
@@ -537,37 +538,38 @@ jobs:
 
 ### 8.1 Infrastructure Tasks
 
-- [ ] Create GitHub repository
+- [x] Create GitHub repository ✅ `kmonteagudo_microsoft/csat-guardian`
 - [ ] Configure branch protection rules
 - [ ] Set up GitHub Projects board
 - [ ] Create issue templates
 - [ ] Create PR template
-- [ ] Set up GitHub Actions workflows
+- [x] Set up GitHub Actions workflows ✅ (CI/CD files created)
 
 ### 8.2 Azure Setup Tasks
 
-- [ ] Create Azure Resource Group
-- [ ] Deploy Key Vault
-- [ ] Deploy Azure SQL Database
-- [ ] Deploy Container Registry
-- [ ] Deploy Container Apps Environment
-- [ ] Configure Managed Identities
+- [x] Create Azure Resource Group ✅ `rg-csatguardian-dev` (usgovvirginia)
+- [x] Deploy Key Vault ✅ `kv-csatguardian-dev.vault.usgovcloudapi.net`
+- [x] Deploy Azure SQL Database ✅ `sql-csatguardian-dev.database.usgovcloudapi.net`
+- [x] Deploy Container Registry ✅ `acrcsatguardiandev.azurecr.us`
+- [x] Deploy Container Apps Environment ✅ `cae-csatguardian-dev`
+- [x] Configure Managed Identities ✅ (Container App has system-assigned identity)
+- [x] Store secrets in Key Vault ✅ (Azure OpenAI + SQL + App Insights)
 - [ ] Seed sample data
 
 ### 8.3 Documentation Tasks
 
-- [ ] Finalize PROJECT_PLAN.md
-- [ ] Create FILE_REFERENCE.md structure
-- [ ] Create ARCHITECTURE.md
+- [x] Finalize PROJECT_PLAN.md ✅
+- [x] Create FILE_REFERENCE.md structure ✅
+- [x] Create ARCHITECTURE.md ✅
 - [ ] Set up ADR folder
-- [ ] Create initial README files
+- [x] Create initial README files ✅
 
 ### 8.4 Development Environment
 
-- [ ] Document local setup process
-- [ ] Create .env.example
-- [ ] Test Azure CLI authentication
-- [ ] Verify Key Vault access
+- [x] Document local setup process ✅
+- [x] Create .env.example ✅
+- [x] Test Azure CLI authentication ✅ (Azure Government)
+- [x] Verify Key Vault access ✅ (Secrets Officer role assigned)
 - [ ] Test database connectivity
 
 ---

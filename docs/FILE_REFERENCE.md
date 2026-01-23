@@ -6,6 +6,31 @@
 
 ---
 
+## 🌐 Deployed Azure Resources (Dev Environment)
+
+| Resource | Name | Endpoint |
+|----------|------|----------|
+| **Resource Group** | `rg-csatguardian-dev` | usgovvirginia |
+| **Key Vault** | `kv-csatguardian-dev` | `https://kv-csatguardian-dev.vault.usgovcloudapi.net/` |
+| **SQL Server** | `sql-csatguardian-dev` | `sql-csatguardian-dev.database.usgovcloudapi.net` |
+| **SQL Database** | `sqldb-csatguardian-dev` | (on above server) |
+| **Container Registry** | `acrcsatguardiandev` | `acrcsatguardiandev.azurecr.us` |
+| **Container App** | `ca-csatguardian-dev` | `https://ca-csatguardian-dev.victoriouswater-4f81631d.usgovvirginia.azurecontainerapps.us` |
+| **App Insights** | `appi-csatguardian-dev` | (connection string in Key Vault) |
+
+### Key Vault Secrets
+
+| Secret Name | Description |
+|-------------|-------------|
+| `AzureOpenAI--ApiKey` | Azure OpenAI API key |
+| `AzureOpenAI--Endpoint` | `https://NewOpenAI.openai.azure.us` |
+| `AzureOpenAI--DeploymentName` | `gpt-4o` |
+| `AzureOpenAI--ApiVersion` | `2025-01-01-preview` |
+| `SqlServer--ConnectionString` | SQL connection string (auto-generated) |
+| `AppInsights--ConnectionString` | App Insights connection (auto-generated) |
+
+---
+
 ## 📁 Directory Structure Overview
 
 ```
@@ -150,15 +175,29 @@ USE_MOCK_TEAMS            # true = print to console
 | Attribute | Value |
 |-----------|-------|
 | **Purpose** | Infrastructure as Code for Azure resources |
-| **Deploys** | Key Vault, SQL, Container Apps, etc. |
+| **Deploys** | Key Vault, SQL, Container Apps, Container Registry, App Insights |
+| **Cloud** | Azure Government (usgovvirginia) |
 
 **What it creates:**
 ```bicep
-// Resource Group: rg-csat-guardian-{env}
-// Key Vault: kv-csat-guardian-{env}
-// SQL Server: sql-csat-guardian-{env}
-// Container App: ca-csat-guardian-{env}
-// App Insights: appi-csat-guardian-{env}
+// Resource Group: rg-csatguardian-{env}
+// Key Vault: kv-csatguardian-{env}
+// SQL Server: sql-csatguardian-{env}
+// SQL Database: sqldb-csatguardian-{env}
+// Container Registry: acrcsatguardian{env}
+// Container App Env: cae-csatguardian-{env}
+// Container App: ca-csatguardian-{env}
+// App Insights: appi-csatguardian-{env}
+// Log Analytics: log-csatguardian-{env}
+```
+
+**Deployment Command:**
+```powershell
+az cloud set --name AzureUSGovernment
+az deployment group create `
+  --resource-group rg-csatguardian-dev `
+  --template-file infrastructure/bicep/main.bicep `
+  --parameters environment=dev location=usgovvirginia sqlAdminPassword="YourPassword" deployOpenAI=false
 ```
 
 ---

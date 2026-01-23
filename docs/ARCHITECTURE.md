@@ -6,6 +6,7 @@
 |---------|------|--------|---------|
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial architecture document |
 | 1.1 | 2026-01-23 | Kyle Monteagudo | Updated for Azure Government |
+| 1.2 | 2026-01-23 | Kyle Monteagudo | Added actual deployed resource names and endpoints |
 
 ---
 
@@ -125,14 +126,19 @@ Ingress: External HTTPS
 
 **Purpose**: Securely stores all secrets and credentials
 
+**Deployed Instance:** `kv-csatguardian-dev.vault.usgovcloudapi.net`
+
 **Secrets Stored:**
-| Secret Name | Description |
-|-------------|-------------|
-| `AzureOpenAI--Endpoint` | Azure OpenAI endpoint URL |
-| `AzureOpenAI--ApiKey` | Azure OpenAI API key |
-| `SqlServer--ConnectionString` | Azure SQL connection string |
-| `Teams--WebhookUrl` | Teams incoming webhook |
-| `DfM--ClientSecret` | DfM API client secret (future) |
+| Secret Name | Description | Status |
+|-------------|-------------|--------|
+| `AzureOpenAI--Endpoint` | Azure OpenAI endpoint URL | ✅ Stored |
+| `AzureOpenAI--ApiKey` | Azure OpenAI API key | ✅ Stored |
+| `AzureOpenAI--DeploymentName` | GPT-4o deployment name | ✅ Stored |
+| `AzureOpenAI--ApiVersion` | API version | ✅ Stored |
+| `SqlServer--ConnectionString` | Azure SQL connection string | ✅ Auto-generated |
+| `AppInsights--ConnectionString` | App Insights connection | ✅ Auto-generated |
+| `Teams--WebhookUrl` | Teams incoming webhook | ⏳ Pending |
+| `DfM--ClientSecret` | DfM API client secret (future) | ⏳ Future |
 
 **Access Pattern:**
 ```
@@ -150,6 +156,11 @@ Application Config
 ### 3.3 Azure SQL Database
 
 **Purpose**: Stores case data, alert history, and analytics
+
+**Deployed Instances:**
+- Server: `sql-csatguardian-dev.database.usgovcloudapi.net`
+- Database: `sqldb-csatguardian-dev`
+- Admin: `sqladmin`
 
 **Why Azure SQL?**
 - Simulates production DfM data access pattern
