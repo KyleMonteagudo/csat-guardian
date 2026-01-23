@@ -6,16 +6,16 @@
 //
 // DEPLOYS EVERYTHING FROM SCRATCH:
 // - VNet with subnets for App Service and Private Endpoints
-// - Private DNS Zones for SQL, Key Vault, and Azure OpenAI
+// - Private DNS Zones for SQL, Key Vault, and AI Services
 // - Azure SQL Server + Database with sample data
 // - Azure Key Vault with secrets
-// - Azure OpenAI with GPT-4o deployment
+// - Azure AI Foundry (AI Hub + AI Services with GPT-4o)
 // - Private Endpoints for all backend services
 // - App Service with VNet integration
 // - Application Insights + Log Analytics
+// - Azure Bastion + Dev-box VM for secure testing
 //
 // All Azure-to-Azure communication is private (no public internet).
-// The only public endpoint is the App Service frontend (for POC).
 //
 // Usage:
 //   az deployment group create \
@@ -72,11 +72,15 @@ var vnetName = 'vnet-${baseName}-${environment}'
 var keyVaultName = 'kv-${baseName}-${environment}'
 var sqlServerName = 'sql-${baseName}-${environment}'
 var sqlDatabaseName = 'sqldb-${baseName}-${environment}'
-var openAIName = 'oai-${baseName}-${environment}'
 var appServicePlanName = 'asp-${baseName}-${environment}'
 var appServiceName = 'app-${baseName}-${environment}'
 var appInsightsName = 'appi-${baseName}-${environment}'
 var logAnalyticsName = 'log-${baseName}-${environment}'
+
+// AI Foundry naming
+var aiHubName = 'aihub-${baseName}-${environment}'
+var aiServicesName = 'ais-${baseName}-${environment}'
+var aiStorageName = 'staifoundry${baseName}${environment}'  // Storage accounts have strict naming
 
 // Network configuration
 var vnetAddressPrefix = '10.100.0.0/16'
@@ -108,7 +112,7 @@ var commonTags = {
 var privateDnsZones = {
   sql: 'privatelink${az.environment().suffixes.sqlServerHostname}'
   keyVault: 'privatelink.vaultcore.azure.net'
-  openAI: 'privatelink.openai.azure.com'
+  cognitiveServices: 'privatelink.cognitiveservices.azure.com'
 }
 
 // -----------------------------------------------------------------------------
@@ -210,8 +214,8 @@ resource keyVaultPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' =
   tags: commonTags
 }
 
-resource openAIPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: privateDnsZones.openAI
+resource cognitiveServicesPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: privateDnsZones.cognitiveServices
   location: 'global'
   tags: commonTags
 }
@@ -243,9 +247,9 @@ resource keyVaultDnsVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLi
   }
 }
 
-resource openAIDnsVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: openAIPrivateDnsZone
-  name: 'link-${vnetName}-oai'
+resource cognitiveServicesDnsVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: cognitiveServicesPrivateDnsZone
+  name: 'link-${vnetName}-ais'
   location: 'global'
   tags: commonTags
   properties: {
@@ -341,28 +345,58 @@ resource sqlFirewallRule 'Microsoft.Sql/servers/firewallRules@2023-05-01-preview
 }
 
 // -----------------------------------------------------------------------------
-// Azure OpenAI
+// Azure AI Foundry - Storage Account (required for AI Hub)
 // -----------------------------------------------------------------------------
 
-resource openAI 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
-  name: openAIName
+resource aiStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: aiStorageName
   location: location
   tags: commonTags
-  kind: 'OpenAI'
   sku: {
-    name: 'S0'
+    name: 'Standard_LRS'
   }
+  kind: 'StorageV2'
   properties: {
-    customSubDomainName: openAIName
-    publicNetworkAccess: enablePublicAccess ? 'Enabled' : 'Disabled'
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+    publicNetworkAccess: 'Enabled'  // Required for AI Hub provisioning
     networkAcls: {
-      defaultAction: enablePublicAccess ? 'Allow' : 'Deny'
+      defaultAction: 'Allow'
+      bypass: 'AzureServices'
     }
   }
 }
 
+// -----------------------------------------------------------------------------
+// Azure AI Services (backs AI Foundry models)
+// -----------------------------------------------------------------------------
+
+resource aiServices 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+  name: aiServicesName
+  location: location
+  tags: commonTags
+  kind: 'AIServices'  // Multi-service AI account for Foundry
+  sku: {
+    name: 'S0'
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    customSubDomainName: aiServicesName
+    publicNetworkAccess: enablePublicAccess ? 'Enabled' : 'Disabled'
+    networkAcls: {
+      defaultAction: enablePublicAccess ? 'Allow' : 'Deny'
+    }
+    apiProperties: {
+      statisticsEnabled: false
+    }
+  }
+}
+
+// GPT-4o model deployment
 resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
-  parent: openAI
+  parent: aiServices
   name: 'gpt-4o'
   sku: {
     name: 'Standard'
@@ -373,6 +407,54 @@ resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-
       format: 'OpenAI'
       name: 'gpt-4o'
       version: '2024-11-20'
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Azure AI Hub (AI Foundry workspace)
+// -----------------------------------------------------------------------------
+
+resource aiHub 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
+  name: aiHubName
+  location: location
+  tags: commonTags
+  kind: 'Hub'
+  identity: {
+    type: 'SystemAssigned'
+  }
+  sku: {
+    name: 'Basic'
+    tier: 'Basic'
+  }
+  properties: {
+    friendlyName: 'CSAT Guardian AI Hub'
+    description: 'AI Hub for CSAT Guardian POC'
+    storageAccount: aiStorage.id
+    keyVault: keyVault.id
+    applicationInsights: appInsights.id
+    publicNetworkAccess: enablePublicAccess ? 'Enabled' : 'Disabled'
+  }
+  dependsOn: [
+    aiServices
+  ]
+}
+
+// Connect AI Services to AI Hub
+resource aiHubConnection 'Microsoft.MachineLearningServices/workspaces/connections@2024-04-01' = {
+  parent: aiHub
+  name: 'aiservices-connection'
+  properties: {
+    category: 'AIServices'
+    target: aiServices.properties.endpoint
+    authType: 'ApiKey'
+    isSharedToAll: true
+    credentials: {
+      key: aiServices.listKeys().key1
+    }
+    metadata: {
+      ApiType: 'Azure'
+      ResourceId: aiServices.id
     }
   }
 }
@@ -451,8 +533,8 @@ resource keyVaultPrivateDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZ
   }
 }
 
-resource openAIPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
-  name: 'pe-${openAIName}'
+resource aiServicesPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
+  name: 'pe-${aiServicesName}'
   location: location
   tags: commonTags
   properties: {
@@ -461,9 +543,9 @@ resource openAIPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' =
     }
     privateLinkServiceConnections: [
       {
-        name: 'plsc-${openAIName}'
+        name: 'plsc-${aiServicesName}'
         properties: {
-          privateLinkServiceId: openAI.id
+          privateLinkServiceId: aiServices.id
           groupIds: ['account']
         }
       }
@@ -471,15 +553,15 @@ resource openAIPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' =
   }
 }
 
-resource openAIPrivateDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
-  parent: openAIPrivateEndpoint
+resource aiServicesPrivateDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
+  parent: aiServicesPrivateEndpoint
   name: 'default'
   properties: {
     privateDnsZoneConfigs: [
       {
         name: 'config1'
         properties: {
-          privateDnsZoneId: openAIPrivateDnsZone.id
+          privateDnsZoneId: cognitiveServicesPrivateDnsZone.id
         }
       }
     ]
@@ -531,7 +613,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'AZURE_OPENAI_ENDPOINT'
-          value: openAI.properties.endpoint
+          value: aiServices.properties.endpoint
         }
         {
           name: 'AZURE_OPENAI_DEPLOYMENT'
@@ -578,12 +660,12 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-0
 }
 
 // -----------------------------------------------------------------------------
-// RBAC: Grant App Service access to Azure OpenAI
+// RBAC: Grant App Service access to AI Services
 // -----------------------------------------------------------------------------
 
-resource openAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!skipRbacAssignments) {
-  name: guid(resourceGroup().id, openAIName, appServiceName, 'Cognitive Services OpenAI User')
-  scope: openAI
+resource aiServicesUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!skipRbacAssignments) {
+  name: guid(resourceGroup().id, aiServicesName, appServiceName, 'Cognitive Services OpenAI User')
+  scope: aiServices
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
     principalId: appService.identity.principalId
@@ -611,19 +693,19 @@ resource sqlPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   }
 }
 
-resource openAIKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource aiServicesKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'AzureOpenAI--ApiKey'
   properties: {
-    value: openAI.listKeys().key1
+    value: aiServices.listKeys().key1
   }
 }
 
-resource openAIEndpointSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource aiServicesEndpointSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'AzureOpenAI--Endpoint'
   properties: {
-    value: openAI.properties.endpoint
+    value: aiServices.properties.endpoint
   }
 }
 
@@ -792,8 +874,11 @@ output appServiceUrl string = 'https://${appService.properties.defaultHostName}'
 @description('App Service hostname')
 output appServiceHostname string = appService.properties.defaultHostName
 
-@description('Azure OpenAI endpoint')
-output openAIEndpoint string = openAI.properties.endpoint
+@description('AI Services endpoint (for OpenAI API)')
+output aiServicesEndpoint string = aiServices.properties.endpoint
+
+@description('AI Hub name')
+output aiHubName string = aiHub.name
 
 @description('Key Vault URI')
 output keyVaultUri string = keyVault.properties.vaultUri
