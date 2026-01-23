@@ -7,6 +7,7 @@
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial project plan |
 | 1.1 | 2026-01-23 | Kyle Monteagudo | Updated Sprint 0 checklist with completed Azure Gov deployment |
 | 1.2 | 2026-01-23 | Kyle Monteagudo | Marked database seeding and connectivity testing complete |
+| 1.3 | 2026-01-23 | Kyle Monteagudo | Sprint 0 complete: branch protection, ADRs, issue templates |
 
 ---
 
@@ -540,10 +541,10 @@ jobs:
 ### 8.1 Infrastructure Tasks
 
 - [x] Create GitHub repository ✅ `kmonteagudo_microsoft/csat-guardian`
-- [ ] Configure branch protection rules
-- [ ] Set up GitHub Projects board
-- [ ] Create issue templates
-- [ ] Create PR template
+- [x] Configure branch protection rules ✅ (main: require PR, 1 reviewer, dismiss stale)
+- [ ] Set up GitHub Projects board ⚠️ (requires `gh auth refresh -s project,read:project`)
+- [x] Create issue templates ✅ (bug_report.md, feature_request.md, task.md)
+- [x] Create PR template ✅ (PULL_REQUEST_TEMPLATE.md)
 - [x] Set up GitHub Actions workflows ✅ (CI/CD files created)
 
 ### 8.2 Azure Setup Tasks
@@ -562,7 +563,7 @@ jobs:
 - [x] Finalize PROJECT_PLAN.md ✅
 - [x] Create FILE_REFERENCE.md structure ✅
 - [x] Create ARCHITECTURE.md ✅
-- [ ] Set up ADR folder
+- [x] Set up ADR folder ✅ (3 ADRs: Azure Gov, Key Vault, Container Apps)
 - [x] Create initial README files ✅
 
 ### 8.4 Development Environment
