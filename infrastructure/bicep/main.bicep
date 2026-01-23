@@ -129,8 +129,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     // Soft delete for recovery
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    // Purge protection for compliance (disable for dev to allow cleanup)
-    enablePurgeProtection: environment == 'prod' ? true : false
+    // Note: Not setting enablePurgeProtection - defaults to false for dev
+    // For prod, uncomment: enablePurgeProtection: true
   }
 }
 
@@ -195,7 +195,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
 }
 
 // -----------------------------------------------------------------------------
-// Container Apps Environment
+// Container Apps Environment (Workload Profile - required for Azure Government)
 // -----------------------------------------------------------------------------
 
 resource containerAppsEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
@@ -210,6 +210,12 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
         sharedKey: logAnalytics.listKeys().primarySharedKey
       }
     }
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
   }
 }
 
@@ -226,6 +232,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
   properties: {
     managedEnvironmentId: containerAppsEnv.id
+    workloadProfileName: 'Consumption'
     configuration: {
       ingress: {
         external: true
