@@ -1,0 +1,136 @@
+# =============================================================================
+# CSAT Guardian - Continuous Integration
+# =============================================================================
+# This workflow runs on every push and PR to ensure code quality.
+#
+# IMPORTANT: This project targets AZURE GOVERNMENT cloud.
+# All Azure endpoints use .us domains (e.g., .openai.azure.us)
+#
+# Jobs:
+# 1. Build & Test - Install dependencies, run linting, run tests
+# 2. Security Scan - Check for vulnerabilities
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build and Test
+  # ---------------------------------------------------------------------------
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Check out the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest pytest-asyncio pytest-cov
+      
+      # Run linting with Ruff
+      - name: Lint with Ruff
+        run: |
+          ruff check src/ --output-format=github
+      
+      # Run type checking (optional, uncomment if using mypy)
+      # - name: Type check with mypy
+      #   run: |
+      #     pip install mypy
+      #     mypy src/
+      
+      # Run tests
+      - name: Run tests
+        env:
+          # Use mock services for testing
+          USE_MOCK_DFM: 'true'
+          USE_MOCK_TEAMS: 'true'
+          # Dummy values for config validation (Azure Government endpoints)
+          AZURE_OPENAI_ENDPOINT: 'https://test.openai.azure.us/'
+          AZURE_OPENAI_API_KEY: 'test-key'
+          AZURE_CLOUD: 'AzureUSGovernment'
+          AZURE_AUTHORITY_HOST: 'https://login.microsoftonline.us'
+        run: |
+          pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
+      
+      # Upload coverage report
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'push'
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ---------------------------------------------------------------------------
+  # Security Scan
+  # ---------------------------------------------------------------------------
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      # Run pip-audit for vulnerability scanning
+      - name: Install pip-audit
+        run: pip install pip-audit
+      
+      - name: Audit dependencies
+        run: |
+          pip-audit -r requirements.txt --ignore-vuln GHSA-xxxx-xxxx-xxxx || true
+        continue-on-error: true  # Don't fail build on vulnerabilities (for now)
+      
+      # Check for secrets in code
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          extra_args: --only-verified
+
+  # ---------------------------------------------------------------------------
+  # Documentation Check
+  # ---------------------------------------------------------------------------
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Check that key documentation exists
+      - name: Verify documentation exists
+        run: |
+          echo "Checking for required documentation..."
+          test -f README.md || (echo "❌ Missing README.md" && exit 1)
+          test -f docs/FILE_REFERENCE.md || (echo "❌ Missing docs/FILE_REFERENCE.md" && exit 1)
+          test -f docs/APPLICATION_SECURITY_REVIEW.md || (echo "❌ Missing security review doc" && exit 1)
+          echo "✅ All required documentation present"
