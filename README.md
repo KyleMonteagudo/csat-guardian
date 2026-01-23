@@ -2,188 +2,246 @@
 
 > **Customer Satisfaction Guardian** - Proactive CSAT Risk Detection and Intervention
 
-## Overview
+---
 
-CSAT Guardian is an AI-powered system that monitors support cases to proactively identify at-risk customer satisfaction situations before they escalate.
+## 🚀 Quick Deployment (Secure Environment)
 
-### Key Features
+**Prerequisites on your machine:**
+- Azure CLI installed
+- Git installed
+- PowerShell
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| 🔍 **Sentiment Analysis** | AI-powered detection of frustrated/unhappy customer communications | ✅ Implemented |
-| ⏰ **Compliance Monitoring** | Tracks 7-day case note requirements and alerts before breaches | ✅ Implemented |
-| 📉 **Trend Detection** | Identifies declining sentiment patterns across case timelines | ✅ Implemented |
-| 🚨 **Proactive Alerts** | Generates alerts for engineers and managers | ✅ Implemented |
-| 💬 **Conversational AI** | Engineers can ask questions about their cases via chat | ✅ Implemented |
-| 🔒 **Private Networking** | All backend services accessed via Private Endpoints | ✅ Deployed |
-| 🌐 **FastAPI Backend** | REST API for all case/sentiment/alert operations | ✅ Implemented |
-| 📱 **Teams Integration** | Bot-based alerts and chat in Teams | 🔮 Future |
-| 📋 **DfM Integration** | Real case data from DfM API | 🔮 Future |
+### Step 1: Clone the Repository
 
-## Architecture
+```powershell
+git clone https://github.com/kmonteagudo_microsoft/csat-guardian.git
+cd csat-guardian
+git checkout develop
+```
+
+### Step 2: Login to Azure
+
+```powershell
+az login
+az account set --subscription "a20d761d-cb36-4f83-b827-58ccdb166f39"
+az account show  # Verify: should show KMonteagudo subscription
+```
+
+### Step 3: Deploy Infrastructure + Application
+
+```powershell
+cd infrastructure
+.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!" -SkipDatabase
+```
+
+**What this deploys:**
+- Virtual Network with private subnets
+- Azure Bastion for secure VM access
+- Dev-box VM (Windows 11, no public IP)
+- Azure SQL Database (private endpoint only)
+- Azure OpenAI with gpt-4o model
+- Key Vault for secrets
+- App Service with VNet integration
+
+**Expected time:** 15-20 minutes
+
+### Step 4: Seed the Database (via Azure Portal)
+
+Since ODBC drivers can't be installed on locked-down laptops, seed the database through the Azure Portal:
+
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Navigate to: `Resource Groups` → `KMonteagudo_CSAT_Guardian` → `sqldb-csatguardian-dev`
+3. Click **Query editor (preview)** in the left menu
+4. Login with:
+   - **Username:** `sqladmin`
+   - **Password:** (the SqlPassword you used in Step 3)
+5. Open the file `infrastructure/seed-database.sql` from your local clone
+6. Copy the entire contents and paste into the query editor
+7. Click **Run**
+
+### Step 5: Verify Deployment
+
+**Option A: Via Bastion (from the dev-box VM)**
+
+1. Azure Portal → `vm-devbox-csatguardian` → **Connect** → **Bastion**
+2. Login: `testadmin` / `Password1!`
+3. Open Edge browser on the VM and go to:
+   ```
+   https://app-csatguardian-dev.azurewebsites.net/docs
+   ```
+
+**Option B: Quick health check (if App Service has public endpoint)**
+
+```powershell
+Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/health"
+```
+
+---
+
+## 📋 Troubleshooting
+
+### "Resource group not found"
+
+```powershell
+az group create --name KMonteagudo_CSAT_Guardian --location eastus
+```
+
+### "Deployment failed - name already exists"
+
+Resources may already exist from a previous deployment. Check the Portal and delete conflicting resources, or run:
+
+```powershell
+.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!" -SkipDatabase
+```
+
+### "SQL connection failed"
+
+The SQL server only accepts connections from within the VNet. You must:
+1. Use the dev-box VM (via Bastion) to connect, OR
+2. Use Azure Portal Query Editor (which bypasses the firewall)
+
+### "App Service returns 500 error"
+
+Check the logs:
+1. Azure Portal → `app-csatguardian-dev` → **Log stream**
+2. Or via CLI:
+   ```powershell
+   az webapp log tail --name app-csatguardian-dev --resource-group KMonteagudo_CSAT_Guardian
+   ```
+
+### Need to redeploy just the app code
+
+```powershell
+.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!" -SkipInfrastructure -SkipDatabase
+```
+
+---
+
+## 🔐 Credentials Reference
+
+| Resource | Username | Password |
+|----------|----------|----------|
+| SQL Admin | `sqladmin` | Your `-SqlPassword` value |
+| Dev-box VM | `testadmin` | `Password1!` |
+
+---
+
+## 🏗️ Architecture
 
 ### Infrastructure Overview
 
-```mermaid
-flowchart TB
-    subgraph Azure["☁️ Azure Commercial (East US)"]
-        subgraph RG["📦 KMonteagudo_CSAT_Guardian"]
-            subgraph VNet["🔒 VNet: 10.100.0.0/16"]
-                AppService["🌐 App Service<br/>(FastAPI)"]
-                subgraph PE["Private Endpoints"]
-                    PE_SQL["SQL"]
-                    PE_KV["Key Vault"]
-                    PE_OAI["OpenAI"]
-                end
-            end
-            SQL["🗄️ Azure SQL"]
-            KV["🔐 Key Vault"]
-            OAI["🤖 Azure OpenAI<br/>gpt-4o"]
-        end
-    end
-
-    AppService --> PE_SQL --> SQL
-    AppService --> PE_KV --> KV
-    AppService --> PE_OAI --> OAI
+```
+Azure Commercial (East US)
+└── KMonteagudo_CSAT_Guardian
+    ├── VNet: 10.100.0.0/16
+    │   ├── snet-app (10.100.1.0/24) - App Service
+    │   ├── snet-private (10.100.2.0/24) - Private Endpoints
+    │   ├── snet-devbox (10.100.3.0/24) - Dev VM
+    │   └── AzureBastionSubnet (10.100.4.0/26) - Bastion
+    │
+    ├── Azure Bastion - Secure RDP access (no public IPs)
+    ├── Dev-box VM - Windows 11 for testing
+    │
+    ├── App Service - FastAPI backend
+    │   └── VNet integrated (outbound via VNet)
+    │
+    ├── Azure SQL - Private endpoint only
+    ├── Azure OpenAI - gpt-4o model, private endpoint
+    └── Key Vault - Stores all secrets
 ```
 
 ### Data Flow
 
-```mermaid
-flowchart LR
-    A["📋 Case Data<br/>(SQL)"] --> B["⚙️ Monitor<br/>Service"]
-    B --> C["🤖 Sentiment<br/>Analysis"]
-    C --> D["🚨 Alert<br/>Service"]
-    D --> E["💬 Teams<br/>(Mock)"]
-    D --> F["📊 Dashboard"]
+```
+Case Data (SQL) → Monitor Service → Sentiment Analysis (OpenAI) → Alerts → Dashboard
 ```
 
-## Deployed Resources
+---
 
-| Resource | Name | Endpoint |
-|----------|------|----------|
-| **App Service** | `app-csatguardian-dev` | `.azurewebsites.net` |
-| **Azure OpenAI** | `oai-csatguardian-dev` | `.openai.azure.com` |
-| **SQL Server** | `sql-csatguardian-dev` | `.database.windows.net` |
-| **Key Vault** | `kv-csatguardian-dev` | `.vault.azure.net` |
-| **VNet** | `vnet-csatguardian-dev` | 10.100.0.0/16 |
+## 🔗 Deployed Resources
 
-## Quick Links
+| Resource | Name | Access |
+|----------|------|--------|
+| **App Service** | `app-csatguardian-dev` | `https://app-csatguardian-dev.azurewebsites.net` |
+| **SQL Server** | `sql-csatguardian-dev` | Private endpoint only |
+| **Azure OpenAI** | `oai-csatguardian-dev` | Private endpoint only |
+| **Key Vault** | `kv-csatguardian-dev` | Private endpoint only |
+| **Bastion** | `bas-csatguardian-dev` | Portal → VM → Connect → Bastion |
+| **Dev-box VM** | `vm-devbox-csatguardian` | Access via Bastion |
 
-| Document | Description |
-|----------|-------------|
-| [Deployment Guide](infrastructure/DEPLOYMENT_GUIDE.md) | Step-by-step deployment instructions |
-| [Project Plan](docs/PROJECT_PLAN.md) | SDLC methodology, branching strategy |
-| [Architecture](docs/ARCHITECTURE.md) | System design |
-| [File Reference](docs/FILE_REFERENCE.md) | Cheat sheet for all files |
+---
 
-## Getting Started
+## 📡 API Endpoints
 
-### Prerequisites
-
-- Python 3.11+
-- Azure CLI: `az login`
-- Git
-
-### Local Development
-
-1. **Clone and navigate to the project**:
-   ```bash
-   cd csat-guardian
-   ```
-
-2. **Create and activate virtual environment**:
-   ```bash
-   python -m venv env
-   env\Scripts\activate  # Windows
-   source env/bin/activate  # macOS/Linux
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment**:
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your Azure credentials
-   ```
-
-5. **Run the API server**:
-   ```bash
-   cd src
-   python -m uvicorn api:app --host 0.0.0.0 --port 8000
-   ```
-
-6. **Access the API**:
-   - Swagger docs: http://localhost:8000/docs
-   - Health check: http://localhost:8000/api/health
-
-### Deployment to Azure
-
-See [Deployment Guide](infrastructure/DEPLOYMENT_GUIDE.md) for full instructions.
-
-Quick deployment:
-```powershell
-cd infrastructure
-.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!"
-```
-
-## API Endpoints
+Once deployed, access Swagger docs at: `https://app-csatguardian-dev.azurewebsites.net/docs`
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | API info |
 | `/api/health` | GET | Health check with service status |
 | `/api/engineers` | GET | List all engineers |
 | `/api/cases` | GET | List cases (with optional filters) |
 | `/api/cases/{id}` | GET | Get case details with timeline |
-| `/api/analyze/{id}` | POST | Run sentiment analysis |
+| `/api/analyze/{id}` | POST | Run sentiment analysis on a case |
 | `/api/chat` | POST | Chat with the Guardian agent |
 | `/api/alerts` | GET | List active alerts |
 
-## Project Structure
+---
+
+## 🧪 Test Cases
+
+The seed data includes 6 test scenarios:
+
+| Case ID | Scenario | Expected Alerts |
+|---------|----------|-----------------|
+| `case-001` | Happy Customer | None |
+| `case-002` | Frustrated Customer | Negative sentiment |
+| `case-003` | Neutral Customer | None |
+| `case-004` | Declining Sentiment | Trend + 7-day breach |
+| `case-005` | 7-Day Warning | Compliance warning |
+| `case-006` | 7-Day Breach | Compliance breach |
+
+**Test sentiment analysis:**
+```powershell
+# From the dev-box VM (via Bastion):
+Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/analyze/case-002" -Method POST
+```
+
+---
+
+## 📁 Project Structure
 
 ```
 csat-guardian/
-├── .github/workflows/      # CI pipeline
-├── docs/                   # Documentation
 ├── infrastructure/
-│   ├── bicep/              # Azure IaC
-│   │   └── main-commercial.bicep
-│   ├── deploy-all.ps1      # One-click deployment script
-│   └── DEPLOYMENT_GUIDE.md
-├── scripts/                # Utility scripts
+│   ├── bicep/
+│   │   ├── main-commercial.bicep      # All Azure resources
+│   │   └── main-commercial.bicepparam # Parameter values
+│   ├── deploy-all.ps1                 # One-click deployment
+│   ├── seed-database.sql              # SQL for Portal Query Editor
+│   └── DEPLOYMENT_GUIDE.md            # Detailed deployment guide
 ├── src/
 │   ├── api.py              # FastAPI REST backend
 │   ├── db_sync.py          # Azure SQL client
 │   ├── config.py           # Configuration
-│   ├── models.py           # Data models
-│   ├── agent/              # Conversational AI
-│   ├── clients/            # External service clients
 │   └── services/           # Business logic
-├── requirements.txt
-└── README.md
+├── docs/                   # Additional documentation
+├── requirements.txt        # Python dependencies
+└── README.md               # This file
 ```
 
-## Sample Data
+---
 
-The POC includes 6 test cases:
+## 🆘 Getting Help
 
-| Case ID | Scenario | Expected Alerts |
-|---------|----------|-----------------|
-| case-001 | Happy Customer | None |
-| case-002 | Frustrated Customer | Negative sentiment |
-| case-003 | Neutral Customer | None |
-| case-004 | Declining Sentiment | Trend + 7-day breach |
-| case-005 | 7-Day Warning | Compliance warning |
-| case-006 | 7-Day Breach | Compliance breach |
+If deployment fails:
+1. Copy the exact error message
+2. Commit any fix to GitHub from your dev machine
+3. On the secure laptop: `git pull origin develop` then retry
 
-## License
+**GitHub Repo:** https://github.com/kmonteagudo_microsoft/csat-guardian
 
-Internal Microsoft Use Only
+---
 
-## Support
+## 📜 License
 
-Contact: CSS Escalations Team
+Internal Microsoft Use Only - CSS Escalations Team POC
