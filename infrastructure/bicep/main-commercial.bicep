@@ -80,7 +80,7 @@ var logAnalyticsName = 'log-${baseName}-${environment}'
 // AI Foundry naming
 var aiHubName = 'aihub-${baseName}-${environment}'
 var aiServicesName = 'ais-${baseName}-${environment}'
-var aiStorageName = 'staifoundry${baseName}${environment}'  // Storage accounts have strict naming
+var aiStorageName = 'stai${baseName}${environment}'  // Storage accounts: max 24 chars, lowercase only
 
 // Network configuration
 var vnetAddressPrefix = '10.100.0.0/16'
@@ -387,9 +387,6 @@ resource aiServices 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
     publicNetworkAccess: enablePublicAccess ? 'Enabled' : 'Disabled'
     networkAcls: {
       defaultAction: enablePublicAccess ? 'Allow' : 'Deny'
-    }
-    apiProperties: {
-      statisticsEnabled: false
     }
   }
 }
