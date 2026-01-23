@@ -6,6 +6,7 @@
 |---------|------|--------|---------|
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial project plan |
 | 1.1 | 2026-01-23 | Kyle Monteagudo | Updated Sprint 0 checklist with completed Azure Gov deployment |
+| 1.2 | 2026-01-23 | Kyle Monteagudo | Marked database seeding and connectivity testing complete |
 
 ---
 
@@ -554,7 +555,7 @@ jobs:
 - [x] Deploy Container Apps Environment ✅ `cae-csatguardian-dev`
 - [x] Configure Managed Identities ✅ (Container App has system-assigned identity)
 - [x] Store secrets in Key Vault ✅ (Azure OpenAI + SQL + App Insights)
-- [ ] Seed sample data
+- [x] Seed sample data ✅ (6 cases, 17 timeline entries, 3 engineers, 6 customers)
 
 ### 8.3 Documentation Tasks
 
@@ -570,7 +571,7 @@ jobs:
 - [x] Create .env.example ✅
 - [x] Test Azure CLI authentication ✅ (Azure Government)
 - [x] Verify Key Vault access ✅ (Secrets Officer role assigned)
-- [ ] Test database connectivity
+- [x] Test database connectivity ✅ (via scripts/test_db_connection.py)
 
 ---
 
