@@ -7,6 +7,7 @@
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial architecture document |
 | 1.1 | 2026-01-23 | Kyle Monteagudo | Updated for Azure Government |
 | 1.2 | 2026-01-23 | Kyle Monteagudo | Added actual deployed resource names and endpoints |
+| 2.0 | 2026-01-23 | Kyle Monteagudo | **Major update**: Private networking architecture with VNet, Private Endpoints, App Service |
 
 ---
 
@@ -17,116 +18,151 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 - Ensuring timely case updates (7-day compliance)
 - Providing engineers with actionable coaching recommendations
 
-> **⚠️ IMPORTANT: Azure Government Cloud**
+> **⚠️ IMPORTANT: Azure Government Cloud with Private Networking**
 > 
-> This application is deployed in **Azure Government** cloud, not Azure Commercial.
-> All Azure endpoints use `.us` domains. See [AZURE_GOVERNMENT.md](AZURE_GOVERNMENT.md) for details.
+> This application is deployed in **Azure Government** cloud with **private endpoints**.
+> All Azure-to-Azure communication is private (no public internet).
+> See [AZURE_GOVERNMENT.md](AZURE_GOVERNMENT.md) for details.
 
 **Key Architectural Principles:**
 1. **Cloud-First**: All components run in Azure Government, no local hosting
-2. **No Secrets in Code**: All credentials stored in Azure Key Vault
-3. **API-Based Access**: Even sample data accessed via API patterns
-4. **Mock-Ready**: Interfaces allow swapping between mock and real implementations
-5. **FedRAMP Compliant**: Azure Government meets federal compliance requirements
+2. **Private by Default**: All backend services use Private Endpoints
+3. **No Secrets in Code**: All credentials stored in Azure Key Vault
+4. **API-Based Access**: Even sample data accessed via API patterns
+5. **VNet Integration**: App Service routes all traffic through VNet
+6. **FedRAMP Compliant**: Azure Government meets federal compliance requirements
 
 ---
 
 ## 2. High-Level Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                      CSAT GUARDIAN ARCHITECTURE (AZURE GOVERNMENT)                │
-└──────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│             CSAT GUARDIAN ARCHITECTURE (AZURE GOVERNMENT - PRIVATE NETWORKING)      │
+└────────────────────────────────────────────────────────────────────────────────────┘
 
                             ┌─────────────────────────────┐
                             │        GitHub Actions       │
                             │       (CI/CD Pipeline)      │
-                            │   environment: AzureGov     │
                             └─────────────┬───────────────┘
-                                          │
                                           │ Deploy
                                           ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                         AZURE GOVERNMENT CLOUD (USGov Virginia)                   │
-│                                                                                   │
-│   ┌───────────────┐                              ┌───────────────┐               │
-│   │   Azure       │                              │   Azure       │               │
-│   │   OpenAI      │◀─────────────────────────────│   Key Vault   │               │
-│   │   (GPT-4o)    │      Sentiment Analysis      │   (Secrets)   │               │
-│   │  .azure.us    │                              │.usgovcloudapi │               │
-│   └───────┬───────┘                              └───────┬───────┘               │
-│           │                                              │                        │
-│           │ Analyze                                      │ Credentials            │
-│           ▼                                              ▼                        │
-│   ┌─────────────────────────────────────────────────────────────────────┐        │
-│   │                      AZURE CONTAINER APPS                            │        │
-│   │                                                                      │        │
-│   │   ┌────────────────────────────────────────────────────────────┐    │        │
-│   │   │                   CSAT GUARDIAN SERVICE                     │    │        │
-│   │   │                                                             │    │        │
-│   │   │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │    │        │
-│   │   │   │   Monitor    │  │  Sentiment   │  │    Alert     │    │    │        │
-│   │   │   │   Service    │──│   Service    │──│   Service    │    │    │        │
-│   │   │   └──────┬───────┘  └──────────────┘  └──────┬───────┘    │    │        │
-│   │   │          │                                    │            │    │        │
-│   │   │   ┌──────┴───────┐  ┌──────────────┐  ┌──────┴───────┐    │    │        │
-│   │   │   │     DfM      │  │  Guardian    │  │    Teams     │    │    │        │
-│   │   │   │    Client    │  │    Agent     │  │    Client    │    │    │        │
-│   │   │   └──────────────┘  └──────────────┘  └──────────────┘    │    │        │
-│   │   │                                                             │    │        │
-│   │   └─────────────────────────────────────────────────────────────┘    │        │
-│   │                                  │                                   │        │
-│   └──────────────────────────────────┼───────────────────────────────────┘        │
-│                                      │                                            │
-│           ┌──────────────────────────┼──────────────────────────┐                │
-│           │                          │                          │                │
-│           ▼                          ▼                          ▼                │
-│   ┌───────────────┐          ┌───────────────┐          ┌───────────────┐       │
-│   │   Azure SQL   │          │   Microsoft   │          │     App       │       │
-│   │   Database    │          │    Teams      │          │   Insights    │       │
-│   │   (Data)      │          │   (Alerts)    │          │   (Logs)      │       │
-│   │.usgovcloudapi │          │  graph.us     │          │               │       │
-│   └───────────────┘          └───────────────┘          └───────────────┘       │
-│                                                                                   │
-└──────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                       AZURE GOVERNMENT CLOUD (USGov Virginia)                       │
+│                           Resource Group: rg-csatguardian-dev                       │
+│                                                                                     │
+│  ┌────────────────────────────────────────────────────────────────────────────┐    │
+│  │                    VIRTUAL NETWORK (vnet-csatguardian-dev)                  │    │
+│  │                           Address Space: 10.100.0.0/16                      │    │
+│  │                                                                             │    │
+│  │  ┌─────────────────────────────┐   ┌──────────────────────────────────┐   │    │
+│  │  │   snet-appservice           │   │   snet-privateendpoints          │   │    │
+│  │  │   10.100.1.0/24             │   │   10.100.2.0/24                  │   │    │
+│  │  │                             │   │                                  │   │    │
+│  │  │  ┌───────────────────────┐  │   │  ┌─────────────────────────┐    │   │    │
+│  │  │  │    App Service        │  │   │  │  Private Endpoints      │    │   │    │
+│  │  │  │    (Streamlit POC)    │──┼───┼──│  ├─ pep-sql (10.100.2.4) │    │   │    │
+│  │  │  │    VNet Integration   │  │   │  │  ├─ pep-kv  (10.100.2.5) │    │   │    │
+│  │  │  └───────────────────────┘  │   │  │  └─ pep-oai (10.100.2.6) │    │   │    │
+│  │  │                             │   │  └─────────────────────────┘    │   │    │
+│  │  └─────────────────────────────┘   └──────────────────────────────────┘   │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                          │                                          │
+│         ┌────────────────────────────────┼────────────────────────────────┐        │
+│         │                                │                                │        │
+│         ▼                                ▼                                ▼        │
+│  ┌───────────────┐               ┌───────────────┐               ┌───────────────┐ │
+│  │   Azure SQL   │               │   Key Vault   │               │  Azure OpenAI │ │
+│  │   (Private)   │               │   (Private)   │               │   (Private)   │ │
+│  │               │               │               │               │               │ │
+│  │ sql-csat...   │               │ kv-csat...    │               │ oai-csat...   │ │
+│  │ 10.100.2.4    │               │ 10.100.2.5    │               │ 10.100.2.6    │ │
+│  └───────────────┘               └───────────────┘               └───────────────┘ │
+│                                                                                     │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐ │
+│  │                         PRIVATE DNS ZONES                                      │ │
+│  │  privatelink.database.usgovcloudapi.net  ← SQL Server                         │ │
+│  │  privatelink.vaultcore.usgovcloudapi.net ← Key Vault                          │ │
+│  │  privatelink.openai.azure.us             ← Azure OpenAI                       │ │
+│  └───────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                     │
+└────────────────────────────────────────────────────────────────────────────────────┘
 
                                           │
-                                          │ API Calls (Future)
+                                          │ Future: Teams Bot
                                           ▼
                               ┌───────────────────────┐
-                              │         DfM           │
-                              │  (Dynamics for MSFT)  │
-                              │  [External Service]   │
+                              │   Microsoft Teams     │
+                              │   (via Bot Service)   │
                               └───────────────────────┘
 ```
 
 ---
 
-## 3. Component Details
+## 3. Deployed Resources
 
-### 3.1 Azure Container Apps
+### Resource Group: `rg-csatguardian-dev`
 
-**Purpose**: Hosts the main CSAT Guardian application
+| Resource | Name | Type | Notes |
+|----------|------|------|-------|
+| **VNet** | `vnet-csatguardian-dev` | Virtual Network | 10.100.0.0/16 |
+| **App Service Plan** | `asp-csatguardian-dev` | Linux B1 | Python 3.12 |
+| **App Service** | `app-csatguardian-dev` | Web App | Streamlit POC with VNet integration |
+| **Azure OpenAI** | `oai-csatguardian-dev` | Cognitive Services | GPT-4o deployment |
+| **SQL Server** | `sql-csatguardian-dev` | Azure SQL | Logical server |
+| **SQL Database** | `sqldb-csatguardian-dev` | Azure SQL DB | Basic tier |
+| **Key Vault** | `kv-csatguardian-dev` | Key Vault | RBAC-enabled |
+| **App Insights** | `appi-csatguardian-dev` | Application Insights | Logging/monitoring |
+| **Log Analytics** | `log-csatguardian-dev` | Log Analytics | Central logs |
+| **Container Registry** | `acrcsatguardiandev` | ACR | For future containers |
 
-**Why Container Apps?**
-- Serverless pricing (scale to zero when not in use)
-- Automatic scaling based on load
-- No infrastructure management
-- Built-in support for Managed Identity
+### Private Endpoints
+
+| Endpoint | Target | Private IP | DNS Zone |
+|----------|--------|-----------|----------|
+| `pep-csatguardian-dev-sql` | SQL Server | 10.100.2.4 | privatelink.database.usgovcloudapi.net |
+| `pep-csatguardian-dev-kv` | Key Vault | 10.100.2.5 | privatelink.vaultcore.usgovcloudapi.net |
+| `pep-csatguardian-dev-oai` | Azure OpenAI | 10.100.2.6 | privatelink.openai.azure.us |
+
+### Subnets
+
+| Subnet | Address Range | Purpose |
+|--------|--------------|---------|
+| `snet-appservice` | 10.100.1.0/24 | App Service VNet integration |
+| `snet-privateendpoints` | 10.100.2.0/24 | Private Endpoints |
+
+---
+
+## 4. Component Details
+
+### 4.1 App Service (POC Frontend)
+
+**Purpose**: Hosts the Streamlit web UI for POC demonstration
+
+**Why App Service (not Container Apps)?**
+- Simpler deployment for Python apps
+- Native VNet integration support
+- Easier for single-app scenarios
+- Well-supported in Azure Government
 
 **Configuration:**
 ```
-SKU: Consumption (0.5 vCPU, 1GB RAM)
-Min Replicas: 0 (dev), 1 (prod)
-Max Replicas: 3
-Ingress: External HTTPS
+Plan: asp-csatguardian-dev (Linux B1)
+Runtime: Python 3.12
+VNet Integration: snet-appservice
+Route All: Enabled (all outbound through VNet)
+URL: https://app-csatguardian-dev.azurewebsites.us
 ```
 
-### 3.2 Azure Key Vault
+**Note**: This is a temporary POC frontend. Production will use Teams Bot integration.
+
+### 4.2 Azure Key Vault
 
 **Purpose**: Securely stores all secrets and credentials
 
 **Deployed Instance:** `kv-csatguardian-dev.vault.usgovcloudapi.net`
+**Private Endpoint IP:** 10.100.2.5
 
 **Secrets Stored:**
 | Secret Name | Description | Status |
@@ -134,39 +170,32 @@ Ingress: External HTTPS
 | `AzureOpenAI--Endpoint` | Azure OpenAI endpoint URL | ✅ Stored |
 | `AzureOpenAI--ApiKey` | Azure OpenAI API key | ✅ Stored |
 | `AzureOpenAI--DeploymentName` | GPT-4o deployment name | ✅ Stored |
-| `AzureOpenAI--ApiVersion` | API version | ✅ Stored |
 | `SqlServer--ConnectionString` | Azure SQL connection string | ✅ Auto-generated |
 | `AppInsights--ConnectionString` | App Insights connection | ✅ Auto-generated |
 | `Teams--WebhookUrl` | Teams incoming webhook | ⏳ Pending |
-| `DfM--ClientSecret` | DfM API client secret (future) | ⏳ Future |
 
 **Access Pattern:**
 ```
-Container App (Managed Identity)
+App Service (Managed Identity)
+    │
+    │ VNet Integration → Private Endpoint
+    ▼
+Key Vault (10.100.2.5)
     │
     │ RBAC: Key Vault Secrets User
-    ▼
-Key Vault
-    │
-    │ Get Secret
     ▼
 Application Config
 ```
 
-### 3.3 Azure SQL Database
+### 4.3 Azure SQL Database
 
 **Purpose**: Stores case data, alert history, and analytics
 
 **Deployed Instances:**
 - Server: `sql-csatguardian-dev.database.usgovcloudapi.net`
 - Database: `sqldb-csatguardian-dev`
+- Private Endpoint IP: 10.100.2.4
 - Admin: `sqladmin`
-
-**Why Azure SQL?**
-- Simulates production DfM data access pattern
-- Supports API-based queries (no local file access)
-- Managed service with automatic backups
-- Easy integration with Managed Identity
 
 **Tables:**
 ```sql
@@ -178,46 +207,23 @@ TimelineEntries -- Case notes, emails, calls
 
 -- Analytics (persisted)
 Alerts        -- Sent alert history (for deduplication)
-Metrics       -- Aggregated metrics (no PII)
 ```
 
-**Tier:**
-- Dev: Basic (5 DTU, ~$5/month)
-- Prod: Standard S0 (10 DTU)
-
-### 3.4 Azure OpenAI
+### 4.4 Azure OpenAI
 
 **Purpose**: Provides AI capabilities for sentiment analysis and recommendations
 
-**Deployed Endpoint:**
-- Endpoint: `https://newopenai.openai.azure.us`
-- Deployment: `gpt-4o`
-- API Version: `2025-01-01-preview`
-- Region: USGov Arizona
-
-**Model**: GPT-4o (2024-05-13)
+**Deployed Instance:**
+- Resource: `oai-csatguardian-dev`
+- Endpoint: `https://oai-csatguardian-dev.openai.azure.us/`
+- Deployment: `gpt-4o` (version 2024-11-20)
+- Private Endpoint IP: 10.100.2.6
+- Region: USGov Virginia
 
 **Use Cases:**
 1. **Sentiment Analysis**: Classify customer communications as positive/neutral/negative
 2. **Recommendations**: Generate coaching tips for engineers
-3. **Summarization**: Create case briefings
-
-**Data Handling:**
-- No PII sent to model (content analyzed, not identity)
-- Data processed transiently, not stored
-- Azure OpenAI (not public OpenAI) - enterprise compliance
-
-### 3.5 Application Insights
-
-**Purpose**: Monitoring, logging, and alerting
-
-**Captures:**
-- Application logs (structured JSON)
-- Performance metrics
-- Exception traces
-- Custom events (case analyzed, alert sent)
-
-**Retention**: 30 days (dev), 90 days (prod)
+3. **Conversational AI**: Interactive case Q&A (via Semantic Kernel)
 
 ---
 
@@ -279,7 +285,7 @@ Metrics       -- Aggregated metrics (no PII)
 │                    AUTHENTICATION FLOW                          │
 └─────────────────────────────────────────────────────────────────┘
 
-Container App
+App Service
     │
     │ System Managed Identity
     ▼
@@ -308,7 +314,7 @@ Target Service (Key Vault, SQL, OpenAI)
             │    VNet Integration   │
             │                       │
             │   ┌───────────────┐   │
-            │   │ Container App │   │
+            │   │  App Service  │   │
             │   └───────┬───────┘   │
             │           │           │
             │   ┌───────┴───────┐   │
@@ -331,7 +337,7 @@ Target Service (Key Vault, SQL, OpenAI)
 
 **Key Vault Access Control:**
 - RBAC enabled (not access policies)
-- Container App has "Key Vault Secrets User" role
+- App Service has "Key Vault Secrets User" role
 - Developers have "Key Vault Secrets Officer" for management
 
 ---
@@ -348,22 +354,26 @@ Target Service (Key Vault, SQL, OpenAI)
 
 ### 6.2 Infrastructure as Code
 
-All Azure resources defined in Bicep:
+All Azure resources defined in Bicep (private networking):
 
 ```
 infrastructure/
 ├── bicep/
-│   ├── main.bicep           # Orchestrator
+│   ├── main-private.bicep       # Main orchestrator
+│   ├── main-private.bicepparam  # Parameters
 │   ├── modules/
-│   │   ├── keyvault.bicep   # Key Vault
-│   │   ├── sql.bicep        # Azure SQL
-│   │   ├── container.bicep  # Container Apps
-│   │   └── monitoring.bicep # App Insights
+│   │   ├── networking.bicep     # VNet and subnets
+│   │   ├── private-dns.bicep    # Private DNS zones
+│   │   ├── keyvault.bicep       # Key Vault
+│   │   ├── sql.bicep            # Azure SQL
+│   │   ├── openai.bicep         # Azure OpenAI
+│   │   ├── appservice.bicep     # App Service + Plan
+│   │   ├── private-endpoints.bicep # SQL, KV, OpenAI endpoints
+│   │   └── monitoring.bicep     # App Insights
 │   └── parameters/
-│       ├── dev.json
-│       └── prod.json
+│       └── dev.json
 └── scripts/
-    └── deploy.ps1           # Deployment script
+    └── deploy-private-infra.ps1  # Deployment script
 ```
 
 ### 6.3 CI/CD Pipeline
@@ -389,7 +399,7 @@ Push to Feature Branch
        │ Merge
        ▼
 ┌─────────────┐
-│ CD: Deploy  │──▶ Build image, push to ACR, deploy to Dev
+│ CD: Deploy  │──▶ Run Bicep, deploy to App Service
 │   to Dev    │
 └──────┬──────┘
        │ PR to main
@@ -404,18 +414,19 @@ Push to Feature Branch
 
 ## 7. Scalability
 
-### 7.1 Container Apps Scaling
+### 7.1 App Service Scaling
 
-```yaml
-scale:
-  minReplicas: 0  # Scale to zero when idle
-  maxReplicas: 10
-  rules:
-    - name: http-requests
-      http:
-        metadata:
-          concurrentRequests: "100"
 ```
+Plan: asp-csatguardian-dev
+Tier: B1 (Basic)
+Scale: Manual (1 instance for POC)
+Future: Can scale to P1v3 or Premium for auto-scale
+```
+
+**Production Scale Options:**
+- Scale Up: P1v3, P2v3 (more CPU/RAM)
+- Scale Out: Multiple instances with load balancing
+- Auto-scale: Based on CPU, memory, or HTTP requests
 
 ### 7.2 Database Scaling
 
@@ -480,13 +491,18 @@ Azure Monitor workbook displaying:
 
 | Resource | SKU | Monthly Cost |
 |----------|-----|--------------|
-| Container Apps | Consumption | ~$10 |
+| App Service Plan | Linux B1 | ~$13 |
 | Azure SQL | Basic (5 DTU) | ~$5 |
 | Key Vault | Standard | ~$1 |
-| Container Registry | Basic | ~$5 |
 | App Insights | Free tier | $0 |
+| Private Endpoints | 3 endpoints | ~$22 |
+| Private DNS Zones | 3 zones | ~$1.50 |
 | Azure OpenAI | Pay-per-use | ~$5-20 |
-| **Total** | | **~$25-45/month** |
+| VNet | (no cost) | $0 |
+| **Total** | | **~$50-70/month** |
+
+> **Note**: Private endpoint costs are the main addition (~$7.30/endpoint/month).
+> For production, consider Premium App Service Plan for auto-scaling capabilities.
 
 ---
 

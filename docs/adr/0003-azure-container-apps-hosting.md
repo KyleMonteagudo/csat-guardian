@@ -2,7 +2,9 @@
 
 ## Status
 
-**Accepted** - January 23, 2026
+**Superseded by [ADR 0004](0004-app-service-private-networking.md)** - January 24, 2026
+
+> **Note**: This ADR documents the initial Container Apps decision. We subsequently moved to App Service with VNet integration for simpler private networking. See ADR 0004 for current architecture.
 
 ## Context
 

@@ -2,28 +2,40 @@
 
 > **Purpose:** Quick reference guide explaining what every file in the project does.
 > 
-> **Last Updated:** January 23, 2026
+> **Last Updated:** January 24, 2026
 
 ---
 
 ## 🌐 Deployed Azure Resources (Dev Environment)
 
-| Resource | Name | Endpoint |
-|----------|------|----------|
+All resources deployed with **private endpoints** in VNet `vnet-csatguardian-dev` (10.100.0.0/16).
+
+| Resource | Name | Endpoint / Private IP |
+|----------|------|----------------------|
 | **Resource Group** | `rg-csatguardian-dev` | usgovvirginia |
-| **Key Vault** | `kv-csatguardian-dev` | `https://kv-csatguardian-dev.vault.usgovcloudapi.net/` |
-| **SQL Server** | `sql-csatguardian-dev` | `sql-csatguardian-dev.database.usgovcloudapi.net` |
-| **SQL Database** | `sqldb-csatguardian-dev` | (on above server) |
-| **Container Registry** | `acrcsatguardiandev` | `acrcsatguardiandev.azurecr.us` |
-| **Container App** | `ca-csatguardian-dev` | `https://ca-csatguardian-dev.victoriouswater-4f81631d.usgovvirginia.azurecontainerapps.us` |
+| **Virtual Network** | `vnet-csatguardian-dev` | 10.100.0.0/16 |
+| **Key Vault** | `kv-csatguardian-dev` | PE: 10.100.2.5 |
+| **SQL Server** | `sql-csatguardian-dev` | PE: 10.100.2.4 |
+| **SQL Database** | `csatdb` | (on above server) |
+| **Azure OpenAI** | `oai-csatguardian-dev` | PE: 10.100.2.6 |
+| **App Service** | `app-csatguardian-dev` | `https://app-csatguardian-dev.azurewebsites.us` |
+| **App Service Plan** | `asp-csatguardian-dev` | Linux B1, Python 3.12 |
 | **App Insights** | `appi-csatguardian-dev` | (connection string in Key Vault) |
+
+### Private DNS Zones
+
+| Zone | Purpose |
+|------|---------|
+| `privatelink.database.usgovcloudapi.net` | SQL Server private resolution |
+| `privatelink.vaultcore.usgovcloudapi.net` | Key Vault private resolution |
+| `privatelink.openai.azure.us` | Azure OpenAI private resolution |
 
 ### Key Vault Secrets
 
 | Secret Name | Description |
 |-------------|-------------|
 | `AzureOpenAI--ApiKey` | Azure OpenAI API key |
-| `AzureOpenAI--Endpoint` | `https://NewOpenAI.openai.azure.us` |
+| `AzureOpenAI--Endpoint` | `https://oai-csatguardian-dev.openai.azure.us/` |
 | `AzureOpenAI--DeploymentName` | `gpt-4o` |
 | `AzureOpenAI--ApiVersion` | `2025-01-01-preview` |
 | `SqlServer--ConnectionString` | SQL connection string (auto-generated) |
@@ -170,48 +182,60 @@ USE_MOCK_TEAMS            # true = print to console
 
 ## 📁 infrastructure/ - Azure Resources
 
-### `bicep/main.bicep`
+### `bicep/main-private.bicep`
 
 | Attribute | Value |
 |-----------|-------|
-| **Purpose** | Infrastructure as Code for Azure resources |
-| **Deploys** | Key Vault, SQL, Container Apps, Container Registry, App Insights |
+| **Purpose** | Infrastructure as Code for Azure resources with private networking |
+| **Deploys** | VNet, Private Endpoints, Key Vault, SQL, Azure OpenAI, App Service |
 | **Cloud** | Azure Government (usgovvirginia) |
 
 **What it creates:**
 ```bicep
 // Resource Group: rg-csatguardian-{env}
-// Key Vault: kv-csatguardian-{env}
-// SQL Server: sql-csatguardian-{env}
-// SQL Database: sqldb-csatguardian-{env}
-// Container Registry: acrcsatguardian{env}
-// Container App Env: cae-csatguardian-{env}
-// Container App: ca-csatguardian-{env}
+// Virtual Network: vnet-csatguardian-{env} (10.100.0.0/16)
+// Subnets: snet-appservice (10.100.1.0/24), snet-privateendpoints (10.100.2.0/24)
+// Private DNS Zones: SQL, Key Vault, OpenAI
+// Key Vault: kv-csatguardian-{env} + Private Endpoint
+// SQL Server: sql-csatguardian-{env} + Private Endpoint
+// Azure OpenAI: oai-csatguardian-{env} + Private Endpoint (gpt-4o)
+// App Service Plan: asp-csatguardian-{env} (Linux B1)
+// App Service: app-csatguardian-{env} (VNet Integrated)
 // App Insights: appi-csatguardian-{env}
 // Log Analytics: log-csatguardian-{env}
 ```
+
+**Bicep Modules:**
+| Module | Purpose |
+|--------|---------|
+| `modules/networking.bicep` | VNet and subnets |
+| `modules/private-dns.bicep` | Private DNS zones with VNet links |
+| `modules/openai.bicep` | Azure OpenAI with gpt-4o deployment |
+| `modules/private-endpoints.bicep` | Private endpoints for SQL, Key Vault, OpenAI |
+| `modules/appservice.bicep` | App Service Plan and Web App with VNet integration |
 
 **Deployment Command:**
 ```powershell
 az cloud set --name AzureUSGovernment
 az deployment group create `
   --resource-group rg-csatguardian-dev `
-  --template-file infrastructure/bicep/main.bicep `
-  --parameters environment=dev location=usgovvirginia sqlAdminPassword="YourPassword" deployOpenAI=false
+  --template-file infrastructure/bicep/main-private.bicep `
+  --parameters infrastructure/bicep/main-private.bicepparam
 ```
 
 ---
 
-### `scripts/deploy.ps1`
+### `scripts/deploy-private-infra.ps1`
 
 | Attribute | Value |
 |-----------|-------|
-| **Purpose** | Deployment automation script |
+| **Purpose** | Deployment automation script for private networking infrastructure |
 | **Runs** | Azure CLI + Bicep deployment |
 
 **Usage:**
 ```powershell
-./deploy.ps1 -Environment dev -Location eastus
+./deploy-private-infra.ps1 -WhatIf  # Preview changes
+./deploy-private-infra.ps1          # Deploy
 ```
 
 ---

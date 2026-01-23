@@ -9,6 +9,7 @@
 | 1.2 | 2026-01-23 | Kyle Monteagudo | Marked database seeding and connectivity testing complete |
 | 1.3 | 2026-01-23 | Kyle Monteagudo | Sprint 0 complete: branch protection, ADRs, issue templates |
 | 1.4 | 2026-01-23 | Kyle Monteagudo | Sprint 0 validated: Application runs end-to-end with Azure SQL/OpenAI (0 errors) |
+| 1.5 | 2026-01-24 | Kyle Monteagudo | Updated to App Service with VNet integration and private endpoints |
 
 ---
 
@@ -23,9 +24,11 @@ This document outlines the Software Development Life Cycle (SDLC) plan for CSAT 
 | **Source Control** | GitHub repository with branch protection |
 | **SDLC Methodology** | Agile with 2-week sprints, GitHub Projects for tracking |
 | **Documentation** | In-repo docs with file-level README files |
-| **Secrets Management** | Azure Key Vault with Managed Identity |
-| **Data Storage** | Azure SQL Database (no local data) |
-| **Application Hosting** | Azure Container Apps (no local hosting) |
+| **Secrets Management** | Azure Key Vault with Managed Identity (private endpoint) |
+| **Data Storage** | Azure SQL Database via private endpoint (no local data) |
+| **Application Hosting** | Azure App Service with VNet integration (no local hosting) |
+| **Network Security** | Private endpoints for all Azure services (no public access) |
+| **AI Services** | Azure OpenAI (gpt-4o) via private endpoint |
 
 ---
 
@@ -551,11 +554,16 @@ jobs:
 ### 8.2 Azure Setup Tasks
 
 - [x] Create Azure Resource Group ✅ `rg-csatguardian-dev` (usgovvirginia)
+- [x] Deploy Virtual Network ✅ `vnet-csatguardian-dev` (10.100.0.0/16)
 - [x] Deploy Key Vault ✅ `kv-csatguardian-dev.vault.usgovcloudapi.net`
 - [x] Deploy Azure SQL Database ✅ `sql-csatguardian-dev.database.usgovcloudapi.net`
-- [x] Deploy Container Registry ✅ `acrcsatguardiandev.azurecr.us`
-- [x] Deploy Container Apps Environment ✅ `cae-csatguardian-dev`
-- [x] Configure Managed Identities ✅ (Container App has system-assigned identity)
+- [x] Deploy Azure OpenAI ✅ `oai-csatguardian-dev.openai.azure.us` (gpt-4o)
+- [x] Deploy App Service ✅ `app-csatguardian-dev.azurewebsites.us` (Python 3.12, Linux)
+- [x] Deploy App Service Plan ✅ `asp-csatguardian-dev` (Linux B1)
+- [x] Configure Private Endpoints ✅ (SQL: 10.100.2.4, Key Vault: 10.100.2.5, OpenAI: 10.100.2.6)
+- [x] Configure Private DNS Zones ✅ (3 zones with VNet links)
+- [x] Configure VNet Integration ✅ (App Service → snet-appservice)
+- [x] Configure Managed Identities ✅ (App Service has system-assigned identity)
 - [x] Store secrets in Key Vault ✅ (Azure OpenAI + SQL + App Insights)
 - [x] Seed sample data ✅ (6 cases, 17 timeline entries, 3 engineers, 6 customers)
 

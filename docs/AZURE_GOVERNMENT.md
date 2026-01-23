@@ -10,6 +10,29 @@ CSAT Guardian is deployed in **Azure Government** cloud, which has:
 
 ---
 
+## Deployed Resources
+
+CSAT Guardian is deployed to **rg-csatguardian-dev** in **USGov Virginia** with private networking:
+
+| Resource | Name | Private Endpoint IP |
+|----------|------|---------------------|
+| **Virtual Network** | vnet-csatguardian-dev | 10.100.0.0/16 |
+| **Azure OpenAI** | oai-csatguardian-dev | 10.100.2.6 |
+| **Azure SQL** | sql-csatguardian-dev | 10.100.2.4 |
+| **Key Vault** | kv-csatguardian-dev | 10.100.2.5 |
+| **App Service** | app-csatguardian-dev | VNet Integrated |
+| **App Service Plan** | asp-csatguardian-dev | Linux B1 |
+
+### Private DNS Zones
+
+| Zone | VNet Linked |
+|------|-------------|
+| privatelink.database.usgovcloudapi.net | ✅ |
+| privatelink.vaultcore.usgovcloudapi.net | ✅ |
+| privatelink.openai.azure.us | ✅ |
+
+---
+
 ## 1. Azure Government Endpoints
 
 | Service | Commercial Endpoint | Government Endpoint |
@@ -31,11 +54,12 @@ CSAT Guardian is deployed in **Azure Government** cloud, which has:
 
 | Service | Gov Availability | Regions | Notes |
 |---------|-----------------|---------|-------|
-| **Azure OpenAI** | ✅ GA | USGov Virginia, USGov Arizona | GPT-4o available |
+| **Azure OpenAI** | ✅ GA | USGov Virginia, USGov Arizona | GPT-4o (2024-11-20) deployed |
 | **Azure Key Vault** | ✅ GA | All Gov regions | Full feature parity |
 | **Azure SQL Database** | ✅ GA | All Gov regions | Full feature parity |
-| **Azure Container Apps** | ✅ GA | USGov Virginia, USGov Arizona | Some features may lag |
-| **Azure Container Registry** | ✅ GA | All Gov regions | Full feature parity |
+| **Azure App Service** | ✅ GA | All Gov regions | Python 3.12, Linux |
+| **Virtual Network** | ✅ GA | All Gov regions | Private Endpoints |
+| **Private DNS Zones** | ✅ GA | All Gov regions | Gov-specific zone names |
 | **Application Insights** | ✅ GA | All Gov regions | Full feature parity |
 | **Azure Monitor** | ✅ GA | All Gov regions | Full feature parity |
 | **Azure AD** | ✅ GA | All Gov regions | Full feature parity |
@@ -126,17 +150,22 @@ AUTH_ENDPOINT = "https://login.microsoftonline.us/{tenant}/oauth2/v2.0/token"
 
 ## 6. Configuration for Government
 
-### Environment Variables
+### Deployed Endpoints (CSAT Guardian)
 
 ```bash
-# Azure Government Cloud Setting
-AZURE_CLOUD=AzureUSGovernment
+# Azure OpenAI (deployed via private endpoint)
+AZURE_OPENAI_ENDPOINT=https://oai-csatguardian-dev.openai.azure.us/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
 
-# Azure OpenAI (Gov endpoint)
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.us/
-
-# Key Vault (Gov endpoint)
+# Key Vault (deployed via private endpoint)
 AZURE_KEY_VAULT_URL=https://kv-csatguardian-dev.vault.usgovcloudapi.net/
+
+# Azure SQL (deployed via private endpoint)
+SQL_SERVER=sql-csatguardian-dev.database.usgovcloudapi.net
+SQL_DATABASE=csatdb
+
+# App Service (VNet integrated)
+APP_SERVICE_URL=https://app-csatguardian-dev.azurewebsites.us
 
 # Microsoft Graph (Gov endpoint)
 GRAPH_BASE_URL=https://graph.microsoft.us/v1.0
