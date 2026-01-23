@@ -328,10 +328,8 @@ class AlertService:
             await self.db.create_alert(
                 alert_id=alert.id,
                 alert_type=alert.type.value,
-                urgency=alert.urgency.value,
                 case_id=alert.case_id,
                 recipient_id=alert.recipient.id,
-                title=alert.title,
                 message=alert.message,
             )
             

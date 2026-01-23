@@ -171,20 +171,19 @@ class CaseMonitor:
                         results["compliance_breaches"] += 1
                     
                     # Step 3: Process alerts
-                    alerts = await self.alert_service.process_analysis(case, analysis)
+                    alerts = await self.alert_service.process_analysis(analysis)
                     
                     if alerts:
                         results["alerts_sent"] += len(alerts)
-                        case_result["alerts_triggered"] = [a.alert_type.value for a in alerts]
+                        case_result["alerts_triggered"] = [a.type.value for a in alerts]
                         logger.info(f"Generated {len(alerts)} alerts for case {case.id}")
                     
                     results["cases_analyzed"].append(case_result)
                     
                     log_case_event(
                         logger,
-                        "case_analyzed",
                         case.id,
-                        f"Sentiment: {analysis.overall_sentiment.label.value}, "
+                        f"Analysis complete - Sentiment: {analysis.overall_sentiment.label.value}, "
                         f"Compliance: {analysis.compliance_status}"
                     )
                     
@@ -275,18 +274,36 @@ class CaseMonitor:
         logger.debug("Recording scan metrics to database...")
         
         try:
-            # Store scan summary
+            # Store scan summary metrics
             await self.database.record_metric(
-                metric_name="scan_completed",
-                metric_value=1.0,
-                dimensions={
-                    "scan_id": results["scan_id"],
-                    "total_cases": results["total_cases"],
-                    "negative_sentiment": results["negative_sentiment"],
-                    "compliance_warnings": results["compliance_warnings"],
-                    "compliance_breaches": results["compliance_breaches"],
-                    "alerts_sent": results["alerts_sent"],
-                }
+                metric_name="scan_total_cases",
+                metric_value=float(results["total_cases"]),
+                dimension_name="scan_id",
+                dimension_value=results["scan_id"],
+            )
+            await self.database.record_metric(
+                metric_name="scan_negative_sentiment",
+                metric_value=float(results["negative_sentiment"]),
+                dimension_name="scan_id",
+                dimension_value=results["scan_id"],
+            )
+            await self.database.record_metric(
+                metric_name="scan_compliance_warnings",
+                metric_value=float(results["compliance_warnings"]),
+                dimension_name="scan_id",
+                dimension_value=results["scan_id"],
+            )
+            await self.database.record_metric(
+                metric_name="scan_compliance_breaches",
+                metric_value=float(results["compliance_breaches"]),
+                dimension_name="scan_id",
+                dimension_value=results["scan_id"],
+            )
+            await self.database.record_metric(
+                metric_name="scan_alerts_sent",
+                metric_value=float(results["alerts_sent"]),
+                dimension_name="scan_id",
+                dimension_value=results["scan_id"],
             )
             
             logger.debug("Metrics recorded successfully")

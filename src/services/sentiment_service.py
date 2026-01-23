@@ -204,8 +204,18 @@ class SentimentAnalysisService:
             
             # Parse JSON response
             import json
+            import re
+            
+            # Strip markdown code blocks if present (```json ... ```)
+            clean_response = response_text
+            if response_text.startswith('```'):
+                # Remove markdown code fences
+                clean_response = re.sub(r'^```(?:json)?\s*', '', response_text)
+                clean_response = re.sub(r'\s*```$', '', clean_response)
+                logger.debug(f"Stripped markdown fences from response")
+            
             try:
-                result_data = json.loads(response_text)
+                result_data = json.loads(clean_response)
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse OpenAI response as JSON: {e}")
                 logger.error(f"Response was: {response_text}")

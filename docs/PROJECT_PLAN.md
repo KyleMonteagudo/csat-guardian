@@ -8,6 +8,7 @@
 | 1.1 | 2026-01-23 | Kyle Monteagudo | Updated Sprint 0 checklist with completed Azure Gov deployment |
 | 1.2 | 2026-01-23 | Kyle Monteagudo | Marked database seeding and connectivity testing complete |
 | 1.3 | 2026-01-23 | Kyle Monteagudo | Sprint 0 complete: branch protection, ADRs, issue templates |
+| 1.4 | 2026-01-23 | Kyle Monteagudo | Sprint 0 validated: Application runs end-to-end with Azure SQL/OpenAI (0 errors) |
 
 ---
 
@@ -573,6 +574,14 @@ jobs:
 - [x] Test Azure CLI authentication ✅ (Azure Government)
 - [x] Verify Key Vault access ✅ (Secrets Officer role assigned)
 - [x] Test database connectivity ✅ (via scripts/test_db_connection.py)
+
+### 8.5 Application Validation
+
+- [x] Run monitoring scan ✅ (`python main.py scan`)
+- [x] Verify Azure OpenAI connectivity ✅ (sentiment analysis working)
+- [x] Verify Azure SQL connectivity ✅ (6 cases, 17 timeline entries)
+- [x] Test alert generation ✅ (7 alerts generated correctly)
+- [x] Confirm zero errors ✅ (all 6 cases analyzed successfully)
 
 ---
 

@@ -51,19 +51,19 @@ class DBEngineer(Base):
     This table stores engineer information for routing notifications
     and tracking alert history.
     """
-    __tablename__ = "engineers"
+    __tablename__ = "Engineers"  # Azure SQL table name
     
     # Primary key - unique engineer identifier
-    id = Column(String(50), primary_key=True)
+    id = Column("Id", String(50), primary_key=True)
     
     # Engineer details
-    name = Column(String(200), nullable=False)
-    email = Column(String(200), nullable=False, unique=True)
-    teams_id = Column(String(100), nullable=True)
+    name = Column("Name", String(200), nullable=False)
+    email = Column("Email", String(200), nullable=False, unique=True)
+    teams_id = Column("TeamsId", String(100), nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column("CreatedAt", DateTime, default=datetime.utcnow)
+    updated_at = Column("UpdatedAt", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     cases = relationship("DBCase", back_populates="owner")
@@ -77,16 +77,16 @@ class DBCustomer(Base):
     NOTE: We store minimal customer data - just an ID and optional company.
     No PII like names, emails, or phone numbers.
     """
-    __tablename__ = "customers"
+    __tablename__ = "Customers"  # Azure SQL table name
     
     # Primary key - anonymized customer identifier
-    id = Column(String(50), primary_key=True)
+    id = Column("Id", String(50), primary_key=True)
     
     # Customer details (minimal)
-    company = Column(String(200), nullable=True)
+    company = Column("Company", String(200), nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column("CreatedAt", DateTime, default=datetime.utcnow)
     
     # Relationships
     cases = relationship("DBCase", back_populates="customer")
@@ -99,24 +99,24 @@ class DBCase(Base):
     This is the primary table for POC case data. In production,
     this data would come from DfM API calls instead.
     """
-    __tablename__ = "cases"
+    __tablename__ = "Cases"  # Azure SQL table name
     
     # Primary key - case identifier
-    id = Column(String(50), primary_key=True)
+    id = Column("Id", String(50), primary_key=True)
     
     # Case details
-    title = Column(String(500), nullable=False)
-    description = Column(Text, nullable=False)
-    status = Column(String(50), nullable=False, default="active")
-    priority = Column(String(20), nullable=False, default="medium")
+    title = Column("Title", String(500), nullable=False)
+    description = Column("Description", Text, nullable=False)
+    status = Column("Status", String(50), nullable=False, default="active")
+    priority = Column("Priority", String(20), nullable=False, default="medium")
     
     # Timestamps
-    created_on = Column(DateTime, nullable=False, default=datetime.utcnow)
-    modified_on = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_on = Column("CreatedOn", DateTime, nullable=False, default=datetime.utcnow)
+    modified_on = Column("ModifiedOn", DateTime, nullable=False, default=datetime.utcnow)
     
     # Foreign keys
-    owner_id = Column(String(50), ForeignKey("engineers.id"), nullable=False)
-    customer_id = Column(String(50), ForeignKey("customers.id"), nullable=False)
+    owner_id = Column("OwnerId", String(50), ForeignKey("Engineers.Id"), nullable=False)
+    customer_id = Column("CustomerId", String(50), ForeignKey("Customers.Id"), nullable=False)
     
     # Relationships
     owner = relationship("DBEngineer", back_populates="cases")
@@ -130,22 +130,22 @@ class DBTimelineEntry(Base):
     
     This stores notes, emails, phone call notes, etc. for each case.
     """
-    __tablename__ = "timeline_entries"
+    __tablename__ = "TimelineEntries"  # Azure SQL table name
     
     # Primary key
-    id = Column(String(50), primary_key=True)
+    id = Column("Id", String(50), primary_key=True)
     
     # Foreign key to parent case
-    case_id = Column(String(50), ForeignKey("cases.id"), nullable=False)
+    case_id = Column("CaseId", String(50), ForeignKey("Cases.Id"), nullable=False)
     
     # Entry details
-    entry_type = Column(String(20), nullable=False)  # note, email, phone_call
-    subject = Column(String(500), nullable=True)
-    content = Column(Text, nullable=False)
-    created_on = Column(DateTime, nullable=False, default=datetime.utcnow)
-    created_by = Column(String(200), nullable=False)
-    direction = Column(String(20), nullable=True)  # inbound, outbound (for emails)
-    is_customer_communication = Column(Boolean, default=False)
+    entry_type = Column("EntryType", String(20), nullable=False)  # note, email, phone_call
+    subject = Column("Subject", String(500), nullable=True)
+    content = Column("Content", Text, nullable=False)
+    created_on = Column("CreatedOn", DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column("CreatedBy", String(200), nullable=False)
+    direction = Column("Direction", String(20), nullable=True)  # inbound, outbound (for emails)
+    is_customer_communication = Column("IsCustomerCommunication", Boolean, default=False)
     
     # Relationships
     case = relationship("DBCase", back_populates="timeline_entries")
@@ -158,26 +158,23 @@ class DBAlert(Base):
     This tracks all alerts sent by CSAT Guardian for auditing
     and to prevent duplicate notifications.
     """
-    __tablename__ = "alerts"
+    __tablename__ = "Alerts"  # Azure SQL table name
     
     # Primary key
-    id = Column(String(50), primary_key=True)
+    id = Column("Id", String(50), primary_key=True)
     
     # Alert details
-    alert_type = Column(String(50), nullable=False)
-    urgency = Column(String(20), nullable=False)
-    case_id = Column(String(50), nullable=False)
-    title = Column(String(500), nullable=False)
-    message = Column(Text, nullable=False)
+    case_id = Column("CaseId", String(50), ForeignKey("Cases.Id"), nullable=False)
+    alert_type = Column("AlertType", String(50), nullable=False)
+    message = Column("Message", Text, nullable=False)
     
     # Foreign key to recipient
-    recipient_id = Column(String(50), ForeignKey("engineers.id"), nullable=False)
+    recipient_id = Column("RecipientId", String(50), ForeignKey("Engineers.Id"), nullable=False)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    sent_at = Column(DateTime, nullable=True)
-    acknowledged = Column(Boolean, default=False)
-    acknowledged_at = Column(DateTime, nullable=True)
+    sent_at = Column("SentAt", DateTime, default=datetime.utcnow)
+    acknowledged = Column("Acknowledged", Boolean, default=False)
+    acknowledged_at = Column("AcknowledgedAt", DateTime, nullable=True)
     
     # Relationships
     recipient = relationship("DBEngineer", back_populates="alerts")
@@ -189,6 +186,9 @@ class DBMetric(Base):
     
     This stores anonymized metrics for dashboards and reporting.
     No PII is stored here - just counts and averages.
+    
+    NOTE: This table uses lowercase names for SQLite compatibility.
+    Azure SQL uses SentimentResults table instead for sentiment data.
     """
     __tablename__ = "metrics"
     
@@ -228,28 +228,82 @@ class DatabaseManager:
             print(f"Case {case.id}: {case.title}")
     """
     
-    def __init__(self, db_path: str):
+    def __init__(self, connection_string: str):
         """
         Initialize the database manager.
         
         Args:
-            db_path: Path to the SQLite database file
+            connection_string: Either a SQLite path or an Azure SQL connection string
+                - SQLite: "data/csat_guardian.db" or "sqlite+aiosqlite:///path/to/db"
+                - Azure SQL: "Server=tcp:xxx.database.usgovcloudapi.net,1433;..."
         """
-        logger.info(f"Initializing database manager with path: {db_path}")
+        logger.info(f"Initializing database manager with path: {connection_string}")
         
-        # Ensure the directory exists
-        db_dir = os.path.dirname(db_path)
-        if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-            logger.debug(f"Created database directory: {db_dir}")
+        # Track if using Azure SQL (metrics table may not exist)
+        self.is_azure_sql = False
         
-        # Create async engine for SQLite
-        # Note: aiosqlite is required for async SQLite operations
-        self.db_path = db_path
-        self.engine = create_async_engine(
-            f"sqlite+aiosqlite:///{db_path}",
-            echo=False,  # Set to True for SQL debugging
-        )
+        # Detect if this is an Azure SQL connection string or SQLite
+        if connection_string.startswith("Server=") or "database.usgovcloudapi.net" in connection_string:
+            # Azure SQL connection string - convert to SQLAlchemy format
+            # Parse the ADO.NET style connection string
+            logger.info("Detected Azure SQL connection string, using aioodbc driver")
+            self.is_azure_sql = True
+            
+            # Convert ADO.NET style to ODBC style
+            # ADO.NET uses: Server=tcp:xxx;Initial Catalog=db;User ID=user;Password=pwd;Encrypt=True
+            # ODBC uses: Server=xxx;Database=db;UID=user;PWD=pwd;Encrypt=yes
+            
+            # Parse and convert key names
+            parts = {}
+            for part in connection_string.split(';'):
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    parts[key.strip()] = value.strip()
+            
+            # Build ODBC connection string
+            odbc_parts = [
+                "DRIVER={ODBC Driver 18 for SQL Server}",
+                f"Server={parts.get('Server', '')}",
+                f"Database={parts.get('Initial Catalog', '')}",
+                f"UID={parts.get('User ID', '')}",
+                f"PWD={parts.get('Password', '')}",
+                "Encrypt=yes",
+                "TrustServerCertificate=no",
+            ]
+            odbc_conn = ';'.join(odbc_parts)
+            
+            logger.debug(f"ODBC connection string: Server={parts.get('Server', '')} Database={parts.get('Initial Catalog', '')}")
+            
+            # SQLAlchemy async connection string for Azure SQL
+            # Using mssql+aioodbc with the ODBC connection string
+            from urllib.parse import quote_plus
+            self.engine = create_async_engine(
+                f"mssql+aioodbc:///?odbc_connect={quote_plus(odbc_conn)}",
+                echo=False,
+            )
+            self.db_path = connection_string
+        elif connection_string.startswith("sqlite"):
+            # Already a SQLAlchemy connection string
+            logger.info("Using SQLite with provided connection string")
+            self.db_path = connection_string
+            self.engine = create_async_engine(
+                connection_string,
+                echo=False,
+            )
+        else:
+            # Assume it's a SQLite file path
+            logger.info("Using SQLite with file path")
+            # Ensure the directory exists
+            db_dir = os.path.dirname(connection_string)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir)
+                logger.debug(f"Created database directory: {db_dir}")
+            
+            self.db_path = connection_string
+            self.engine = create_async_engine(
+                f"sqlite+aiosqlite:///{connection_string}",
+                echo=False,
+            )
         
         # Create async session factory
         self.async_session = sessionmaker(
@@ -264,16 +318,25 @@ class DatabaseManager:
         """
         Initialize the database schema.
         
-        This creates all tables if they don't exist. It's safe to call
-        multiple times - existing tables won't be modified.
+        For Azure SQL, we assume the schema is already created via Bicep/SQL scripts.
+        For SQLite (local dev), we create tables if they don't exist.
         """
+        from sqlalchemy import text
+        
         logger.info("Initializing database schema...")
         
-        async with self.engine.begin() as conn:
-            # Create all tables defined by the ORM models
-            await conn.run_sync(Base.metadata.create_all)
-        
-        logger.info("Database schema initialized successfully")
+        # Check if we're using Azure SQL (tables already exist from Bicep deployment)
+        if "aioodbc" in str(self.engine.url):
+            logger.info("Using Azure SQL - schema managed by Bicep/migrations")
+            # Verify connection works by executing a simple query
+            async with self.engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            logger.info("Azure SQL connection verified successfully")
+        else:
+            # SQLite - create tables if needed
+            async with self.engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("SQLite schema initialized successfully")
     
     async def close(self) -> None:
         """
@@ -544,10 +607,8 @@ class DatabaseManager:
         self,
         alert_id: str,
         alert_type: str,
-        urgency: str,
         case_id: str,
         recipient_id: str,
-        title: str,
         message: str,
     ) -> DBAlert:
         """
@@ -556,10 +617,8 @@ class DatabaseManager:
         Args:
             alert_id: Unique alert identifier
             alert_type: Type of alert (sentiment_alert, 7day_warning, etc.)
-            urgency: Urgency level (high, medium, low)
             case_id: Related case ID
             recipient_id: Engineer to notify
-            title: Alert title
             message: Full alert message
             
         Returns:
@@ -571,10 +630,8 @@ class DatabaseManager:
             alert = DBAlert(
                 id=alert_id,
                 alert_type=alert_type,
-                urgency=urgency,
                 case_id=case_id,
                 recipient_id=recipient_id,
-                title=title,
                 message=message,
             )
             session.add(alert)
@@ -634,7 +691,7 @@ class DatabaseManager:
                 select(DBAlert)
                 .where(DBAlert.case_id == case_id)
                 .where(DBAlert.alert_type == alert_type)
-                .where(DBAlert.created_at >= cutoff)
+                .where(DBAlert.sent_at >= cutoff)
             )
             alerts = result.scalars().all()
             
@@ -663,6 +720,11 @@ class DatabaseManager:
             dimension_name: Optional dimension for filtering
             dimension_value: Dimension value
         """
+        # Skip metrics on Azure SQL as the metrics table may not exist
+        if self.is_azure_sql:
+            logger.debug(f"Skipping metric recording on Azure SQL: {metric_name} = {metric_value}")
+            return
+            
         logger.debug(f"Recording metric: {metric_name} = {metric_value}")
         
         async with self.async_session() as session:

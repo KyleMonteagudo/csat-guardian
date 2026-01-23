@@ -24,14 +24,17 @@ import os
 from typing import Optional
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from pathlib import Path
 
 # -----------------------------------------------------------------------------
 # Load environment variables from .env file
 # -----------------------------------------------------------------------------
 # This must happen before we read any os.environ values
 # Try .env.local first (gitignored), then .env
-load_dotenv(".env.local")
-load_dotenv()
+# Use absolute path to handle running from different directories
+_project_root = Path(__file__).parent.parent
+load_dotenv(_project_root / ".env.local")
+load_dotenv(_project_root / ".env")
 
 
 # -----------------------------------------------------------------------------

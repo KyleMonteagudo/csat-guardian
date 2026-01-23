@@ -189,6 +189,12 @@ Metrics       -- Aggregated metrics (no PII)
 
 **Purpose**: Provides AI capabilities for sentiment analysis and recommendations
 
+**Deployed Endpoint:**
+- Endpoint: `https://newopenai.openai.azure.us`
+- Deployment: `gpt-4o`
+- API Version: `2025-01-01-preview`
+- Region: USGov Arizona
+
 **Model**: GPT-4o (2024-05-13)
 
 **Use Cases:**

@@ -91,16 +91,14 @@ class CSATGuardianApp:
         
         # Set up logging
         setup_logging(
-            log_level=self._config.log_level,
-            log_file=self._config.log_file,
-            json_format=self._config.json_logging,
+            level=self._config.log_level,
         )
         self._logger = get_logger(__name__)
         self._logger.info("CSAT Guardian starting...")
         
         # Log configuration status
-        self._logger.info(f"Using mock DfM client: {self._config.feature_flags.use_mock_dfm}")
-        self._logger.info(f"Using mock Teams client: {self._config.feature_flags.use_mock_teams}")
+        self._logger.info(f"Using mock DfM client: {self._config.features.use_mock_dfm}")
+        self._logger.info(f"Using mock Teams client: {self._config.features.use_mock_teams}")
         
         if self._config.azure_openai.endpoint:
             self._logger.info(f"Azure OpenAI configured: {self._config.azure_openai.endpoint}")
@@ -128,7 +126,8 @@ class CSATGuardianApp:
         from services.alert_service import AlertService
         
         # Initialize DfM client (mock or real based on config)
-        self._dfm_client = await get_dfm_client(config=self._config)
+        # Pass our database so it uses Azure SQL, not a separate SQLite DB
+        self._dfm_client = await get_dfm_client(config=self._config, db=self._database)
         self._logger.debug("DfM client initialized")
         
         # Initialize Teams client (mock or real based on config)
@@ -141,8 +140,8 @@ class CSATGuardianApp:
         
         # Initialize alert service
         self._alert_service = AlertService(
+            db=self._database,
             teams_client=self._teams_client,
-            database=self._database,
             config=self._config,
         )
         self._logger.debug("Alert service initialized")

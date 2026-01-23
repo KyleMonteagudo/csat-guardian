@@ -65,10 +65,27 @@ CSAT Guardian is an AI-powered system that monitors support cases to proactively
 ## POC Mode
 
 This POC runs with:
-- ✅ **Real Azure OpenAI** - For sentiment analysis (`.openai.azure.us`)
+- ✅ **Real Azure OpenAI** - For sentiment analysis (`newopenai.openai.azure.us`)
+- ✅ **Real Azure SQL** - Sample data in `sql-csatguardian-dev.database.usgovcloudapi.net`
 - 🔄 **Mock DfM Client** - Returns sample data from Azure SQL Database
 - 🔄 **Mock Teams Client** - Prints alerts to console (can send to real Teams)
-- 📊 **Sample Data** - 6 test cases covering different scenarios in Azure SQL
+- 📊 **Sample Data** - 6 test cases covering different scenarios
+
+### Latest Test Results (Sprint 0)
+
+```
+============================================================
+SCAN RESULTS SUMMARY
+============================================================
+  Total Cases:          6
+  Negative Sentiment:   2
+  Declining Sentiment:  1
+  Compliance Warnings:  2
+  Compliance Breaches:  2
+  Alerts Sent:          7
+  Errors:               0
+============================================================
+```
 
 ## Getting Started
 
