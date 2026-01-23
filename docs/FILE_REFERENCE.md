@@ -61,7 +61,10 @@ csat-guardian/
 │   ├── 📄 PROJECT_PLAN.md
 │   ├── 📄 FILE_REFERENCE.md     # THIS FILE
 │   ├── 📄 ARCHITECTURE.md
-│   └── 📁 adr/                  # Architecture Decision Records
+│   ├── 📄 AZURE_GOVERNMENT.md   # Azure Gov specifics
+│   ├── 📁 adr/                  # Architecture Decision Records
+│   └── 📁 diagrams/             # Infrastructure diagrams
+│       └── 📄 infrastructure.md # Mermaid diagrams for security reviews
 │
 ├── 📁 infrastructure/           # Azure IaC
 │   ├── 📁 bicep/                # Bicep templates

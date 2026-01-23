@@ -1,8 +1,8 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 23, 2026, 3:30 AM EST
-> **Sprint**: Sprint 0 (Infrastructure)
-> **Status**: ✅ Infrastructure Complete, Ready for Streamlit UI
+> **Last Updated**: January 23, 2026, 11:00 AM EST
+> **Sprint**: Sprint 0 (Infrastructure) → Sprint 1 (UI) 
+> **Status**: ✅ Infrastructure & Docs Complete, Ready for Streamlit UI
 
 ---
 
@@ -38,13 +38,14 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand where 
    - Alert generation and deduplication ✅
    - Batch scan mode (`python main.py scan`) ✅
 
-4. **Documentation** - Updated for private networking
-   - ARCHITECTURE.md - Updated with VNet diagrams
-   - README.md - Updated with private endpoint info
+4. **Documentation** - Fully updated with diagrams
+   - ARCHITECTURE.md - Updated with VNet diagrams, linked to infrastructure diagrams
+   - README.md - Updated with Mermaid diagrams, feature status table, accurate project structure
    - AZURE_GOVERNMENT.md - Updated with deployed resources
    - PROJECT_PLAN.md - Updated Sprint 0 checklist
-   - FILE_REFERENCE.md - Updated with Bicep modules
+   - FILE_REFERENCE.md - Updated with Bicep modules and diagrams folder
    - ADR 0004 - Created for App Service decision
+   - **NEW**: `docs/diagrams/infrastructure.md` - Comprehensive Mermaid diagrams for security reviews
 
 ### ⏳ In Progress / Next Steps
 
@@ -81,6 +82,7 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand where 
 | `infrastructure/bicep/main-private.bicep` | Main IaC template |
 | `docs/ARCHITECTURE.md` | System architecture |
 | `docs/PROJECT_PLAN.md` | Sprint planning and progress |
+| **`docs/diagrams/infrastructure.md`** | **Mermaid diagrams for security reviews** |
 
 ---
 

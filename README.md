@@ -14,12 +14,17 @@ CSAT Guardian is an AI-powered system that monitors support cases to proactively
 
 ### Key Features
 
-- **🔍 Sentiment Analysis**: AI-powered detection of frustrated or unhappy customer communications
-- **⏰ Compliance Monitoring**: Tracks 7-day case note requirements and alerts before breaches
-- **📊 Trend Detection**: Identifies declining sentiment patterns across case timelines
-- **🚨 Proactive Alerts**: Sends timely alerts to engineers and managers via Teams
-- **💬 Conversational AI**: Engineers can ask questions about their cases
-- **🔒 Private Networking**: All backend services accessed via Private Endpoints
+| Feature | Description | Status |
+|---------|-------------|--------|
+| 🔍 **Sentiment Analysis** | AI-powered detection of frustrated/unhappy customer communications | ✅ Implemented |
+| ⏰ **Compliance Monitoring** | Tracks 7-day case note requirements and alerts before breaches | ✅ Implemented |
+| 📉 **Trend Detection** | Identifies declining sentiment patterns across case timelines | ✅ Implemented |
+| 🚨 **Proactive Alerts** | Generates alerts for engineers and managers | ✅ Implemented |
+| 💬 **Conversational AI** | Engineers can ask questions about their cases via chat | ✅ Implemented |
+| 🔒 **Private Networking** | All backend services accessed via Private Endpoints | ✅ Deployed |
+| 🖥️ **Streamlit Dashboard** | Web UI for case overview and chat | ⏳ Next Sprint |
+| 📱 **Teams Integration** | Bot-based alerts and chat in Teams | 🔮 Future (pending API approval) |
+| 📋 **DfM Integration** | Real case data from DfM API | 🔮 Future (pending API approval) |
 
 ## Architecture Principles
 
@@ -48,35 +53,60 @@ CSAT Guardian is an AI-powered system that monitors support cases to proactively
 |----------|-------------|
 | [Project Plan](docs/PROJECT_PLAN.md) | SDLC methodology, branching strategy |
 | [Architecture](docs/ARCHITECTURE.md) | System design, private networking |
+| [**Infrastructure Diagrams**](docs/diagrams/infrastructure.md) | **Mermaid diagrams for security reviews** |
 | [File Reference](docs/FILE_REFERENCE.md) | Cheat sheet for all files |
 | [Azure Government](docs/AZURE_GOVERNMENT.md) | Gov-specific endpoints and configuration |
 | [Security Review](docs/APPLICATION_SECURITY_REVIEW.md) | API approval documentation |
 
 ## Architecture
 
+> **📊 Full diagrams available**: [docs/diagrams/infrastructure.md](docs/diagrams/infrastructure.md)
+
+### Infrastructure Overview
+
+```mermaid
+flowchart TB
+    subgraph AzureGov["🏛️ Azure Government (USGov Virginia)"]
+        subgraph RG["📦 rg-csatguardian-dev"]
+            subgraph VNet["🔒 VNet: 10.100.0.0/16"]
+                AppService["🌐 App Service<br/>(Streamlit POC)"]
+                subgraph PE["Private Endpoints"]
+                    PE_SQL["SQL<br/>10.100.2.4"]
+                    PE_KV["Key Vault<br/>10.100.2.5"]
+                    PE_OAI["OpenAI<br/>10.100.2.6"]
+                end
+            end
+            SQL["🗄️ Azure SQL"]
+            KV["🔐 Key Vault"]
+            OAI["🤖 Azure OpenAI<br/>gpt-4o"]
+        end
+    end
+
+    AppService --> PE_SQL --> SQL
+    AppService --> PE_KV --> KV
+    AppService --> PE_OAI --> OAI
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│       CSAT Guardian System (Azure Government - Private Networking)          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌─────────────────────────────────────────────────────────────────────┐  │
-│   │                    VNet (10.100.0.0/16)                              │  │
-│   │                                                                      │  │
-│   │  ┌──────────────────┐        ┌────────────────────────────────┐    │  │
-│   │  │   App Service    │───────▶│      Private Endpoints         │    │  │
-│   │  │   (Streamlit)    │        │  ├─ SQL (10.100.2.4)           │    │  │
-│   │  │   VNet Integrated │        │  ├─ Key Vault (10.100.2.5)    │    │  │
-│   │  └──────────────────┘        │  └─ OpenAI (10.100.2.6)        │    │  │
-│   │                              └────────────────────────────────┘    │  │
-│   └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐  │
-│   │ Azure SQL   │   │ Key Vault   │   │ Azure OpenAI│   │ App Insights│  │
-│   │ (Private)   │   │ (Private)   │   │ (Private)   │   │             │  │
-│   └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    A["📋 Case Data<br/>(DfM/SQL)"] --> B["⚙️ Monitor<br/>Service"]
+    B --> C["🤖 Sentiment<br/>Analysis"]
+    C --> D["🚨 Alert<br/>Service"]
+    D --> E["💬 Teams<br/>(Mock)"]
+    D --> F["📊 Dashboard"]
 ```
+
+### Network Security
+
+| Layer | Implementation | Status |
+|-------|----------------|--------|
+| **Network Isolation** | VNet with dedicated subnets | ✅ Deployed |
+| **Private Connectivity** | Private Endpoints for all PaaS | ✅ Deployed |
+| **DNS Resolution** | Private DNS Zones (Gov domains) | ✅ Deployed |
+| **Secrets** | Azure Key Vault (no secrets in code) | ✅ Deployed |
+| **Public Access** | Enabled for dev, disable post-deployment | ⏳ Pending |
 
 ## POC Mode
 
@@ -222,16 +252,19 @@ csat-guardian/
 ├── .env.local             # Local env (references Key Vault, gitignored)
 ├── requirements.txt       # Python dependencies
 ├── README.md              # This file
+├── SESSION_STATE.md       # Session continuity for AI assistants
 ├── docs/                  # Documentation
 │   ├── PROJECT_PLAN.md    # SDLC and sprint planning
 │   ├── ARCHITECTURE.md    # System architecture (private networking)
 │   ├── AZURE_GOVERNMENT.md # Azure Gov specifics
 │   ├── FILE_REFERENCE.md  # File cheat sheet
-│   └── adr/               # Architecture Decision Records
+│   ├── adr/               # Architecture Decision Records
+│   └── diagrams/          # Infrastructure diagrams (Mermaid)
+│       └── infrastructure.md  # Full infra diagrams for security reviews
 ├── infrastructure/        # Azure IaC
 │   ├── bicep/
-│   │   ├── main.bicep           # Original (Container Apps)
-│   │   ├── main-private.bicep   # Private networking version
+│   │   ├── main.bicep           # Original (Container Apps - superseded)
+│   │   ├── main-private.bicep   # Private networking version (CURRENT)
 │   │   ├── main-private.bicepparam
 │   │   └── modules/
 │   │       ├── networking.bicep      # VNet + Subnets
@@ -245,19 +278,20 @@ csat-guardian/
 │   ├── seed_database.py   # Populate Azure SQL with sample data
 │   └── test_db_connection.py
 └── src/
-    ├── main.py            # Application entry point
+    ├── main.py            # CLI entry point (scan, chat, monitor, setup)
+    ├── interactive_demo.py # Teams-like chat emulation
     ├── config.py          # Configuration management
     ├── logger.py          # Logging setup
     ├── models.py          # Pydantic data models
     ├── database.py        # SQLAlchemy ORM
     ├── sample_data.py     # POC test data
     ├── monitor.py         # Case monitoring orchestrator
-    ├── app.py             # Streamlit web UI (POC)
+    ├── app.py             # Streamlit web UI (POC) - TODO: Not yet created
     ├── agent/
-    │   └── guardian_agent.py  # Conversational AI agent
+    │   └── guardian_agent.py  # Conversational AI agent (Semantic Kernel)
     ├── clients/
-    │   ├── dfm_client.py      # DfM data client (mock/real)
-    │   └── teams_client.py    # Teams notification client (mock/real)
+    │   ├── dfm_client.py      # DfM data client (mock → real pending API approval)
+    │   └── teams_client.py    # Teams notification client (mock → real pending approval)
     └── services/
         ├── sentiment_service.py  # Azure OpenAI sentiment analysis
         └── alert_service.py      # Alert generation and delivery

@@ -8,6 +8,14 @@
 | 1.1 | 2026-01-23 | Kyle Monteagudo | Updated for Azure Government |
 | 1.2 | 2026-01-23 | Kyle Monteagudo | Added actual deployed resource names and endpoints |
 | 2.0 | 2026-01-23 | Kyle Monteagudo | **Major update**: Private networking architecture with VNet, Private Endpoints, App Service |
+| 2.1 | 2026-01-23 | Kyle Monteagudo | Added Mermaid diagrams, linked to infrastructure diagrams document |
+
+---
+
+## Quick Links
+
+> **📊 For visual diagrams (security reviews, stakeholder presentations):**  
+> See [Infrastructure Diagrams](diagrams/infrastructure.md) - includes data flow, auth flow, and network security diagrams in Mermaid format.
 
 ---
 
