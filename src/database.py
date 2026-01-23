@@ -353,6 +353,21 @@ class DatabaseManager:
     # Engineer Operations
     # -------------------------------------------------------------------------
     
+    async def get_all_engineers(self) -> list[DBEngineer]:
+        """
+        Get all engineers.
+        
+        Returns:
+            list[DBEngineer]: All engineers in the database
+        """
+        logger.debug("Fetching all engineers")
+        
+        async with self.async_session() as session:
+            result = await session.execute(select(DBEngineer))
+            engineers = result.scalars().all()
+            logger.debug(f"Found {len(engineers)} engineers")
+            return list(engineers)
+    
     async def get_engineer(self, engineer_id: str) -> Optional[DBEngineer]:
         """
         Get an engineer by ID.

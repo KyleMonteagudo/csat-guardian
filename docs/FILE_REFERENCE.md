@@ -71,18 +71,22 @@ csat-guardian/
 │   └── 📁 scripts/              # Deployment scripts
 │
 └── 📁 src/                      # Source code
-    ├── 📄 main.py               # Application entry point
+    ├── 📄 api.py                # FastAPI REST backend (main entry)
+    ├── 📄 db_sync.py            # Synchronous Azure SQL client (pyodbc)
+    ├── 📄 main.py               # CLI entry point
     ├── 📄 config.py             # Configuration management
     ├── 📄 logger.py             # Logging setup
     ├── 📄 models.py             # Data models
-    ├── 📄 database.py           # Database operations
+    ├── 📄 database.py           # Async database operations
     ├── 📄 sample_data.py        # POC test data
     ├── 📄 monitor.py            # Case monitoring
+    ├── 📄 interactive_demo.py   # Teams-like chat demo
     │
     ├── 📁 agent/                # Conversational AI
     │   └── 📄 guardian_agent.py
     │
     ├── 📁 clients/              # External service clients
+    │   ├── 📄 azure_sql_adapter.py # Async wrapper for db_sync
     │   ├── 📄 dfm_client.py
     │   └── 📄 teams_client.py
     │
@@ -245,7 +249,63 @@ az deployment group create `
 
 ## 📁 src/ - Source Code
 
-### `main.py` - Application Entry Point
+### `api.py` - FastAPI REST Backend
+
+| Attribute | Value |
+|-----------|-------|
+| **Purpose** | Production-ready REST API for CSAT Guardian |
+| **Run Command** | `python -m uvicorn api:app --host 0.0.0.0 --port 8000` |
+| **Docs URL** | `http://localhost:8000/docs` |
+
+**Endpoints:**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | API info and status |
+| `/api/health` | GET | Health check with service status |
+| `/api/engineers` | GET | List all engineers |
+| `/api/cases` | GET | List cases (with filters) |
+| `/api/cases/{id}` | GET | Get case details with timeline |
+| `/api/analyze/{id}` | POST | Sentiment analysis via Azure OpenAI |
+| `/api/chat` | POST | Chat with the Guardian agent |
+| `/api/alerts` | GET | List active alerts |
+
+**Key Features:**
+- Async request handling
+- Automatic OpenAPI docs
+- CORS middleware
+- Lifecycle management (startup/shutdown)
+
+---
+
+### `db_sync.py` - Synchronous Azure SQL Client
+
+| Attribute | Value |
+|-----------|-------|
+| **Purpose** | Direct Azure SQL access using pyodbc (sync) |
+| **Pattern** | Synchronous database operations |
+
+**Key Classes:**
+| Class | Purpose |
+|-------|---------|
+| `SyncDatabaseManager` | All sync database operations |
+
+**Key Methods:**
+| Method | Purpose |
+|--------|---------|
+| `connect()` | Get/create database connection |
+| `get_engineers()` | Get all engineers |
+| `get_cases_for_engineer(id)` | Get cases for an engineer |
+| `get_all_active_cases()` | Get all active cases |
+| `get_timeline_entries(case_id)` | Get timeline for a case |
+
+**Why synchronous?**
+- Streamlit/FastAPI compatibility issues with aioodbc
+- pyodbc is more stable for Azure SQL in Government cloud
+- Wrapped by `azure_sql_adapter.py` for async FastAPI
+
+---
+
+### `main.py` - CLI Entry Point
 
 | Attribute | Value |
 |-----------|-------|
@@ -486,6 +546,40 @@ response = await agent.chat("Tell me about case 12345")
 ---
 
 ## 📁 src/clients/ - External Service Clients
+
+### `azure_sql_adapter.py`
+
+| Attribute | Value |
+|-----------|-------|
+| **Purpose** | Async wrapper for synchronous db_sync module |
+| **Pattern** | Adapter pattern using `run_in_executor` |
+
+**Key Classes:**
+| Class | Purpose |
+|-------|---------|
+| `AzureSQLDfMAdapter` | Async adapter wrapping SyncDatabaseManager |
+
+**Key Methods:**
+| Method | Purpose |
+|--------|---------|
+| `get_case(id)` | Async fetch single case |
+| `get_active_cases()` | Async get all active cases |
+| `get_cases_by_owner(id)` | Async cases for engineer |
+| `get_engineers()` | Async get all engineers |
+| `close()` | Close database connection |
+
+**Why this adapter?**
+- FastAPI requires async operations
+- pyodbc is synchronous
+- Uses `asyncio.run_in_executor()` to bridge sync/async
+
+**Factory:**
+```python
+adapter = await get_azure_sql_adapter()
+cases = await adapter.get_active_cases()
+```
+
+---
 
 ### `dfm_client.py`
 

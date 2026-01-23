@@ -1,8 +1,8 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 23, 2026, 11:00 AM EST
-> **Sprint**: Sprint 0 (Infrastructure) → Sprint 1 (UI) 
-> **Status**: ✅ Infrastructure & Docs Complete, Ready for Streamlit UI
+> **Last Updated**: January 23, 2026, 12:45 PM EST
+> **Sprint**: Sprint 0 (Infrastructure) → Sprint 1 (API & UI)
+> **Status**: ✅ FastAPI Backend Complete, Ready for UI or Deployment
 
 ---
 
@@ -18,7 +18,7 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand where 
 
 ## Current State Summary
 
-### ✅ Completed (Sprint 0)
+### ✅ Completed (Sprint 0 + Sprint 1 Backend)
 
 1. **Private Networking Infrastructure** - All deployed and tested
    - VNet: `vnet-csatguardian-dev` (10.100.0.0/16)
@@ -26,48 +26,37 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand where 
    - Private Endpoints: SQL (10.100.2.4), Key Vault (10.100.2.5), OpenAI (10.100.2.6)
    - Private DNS Zones: 3 zones configured with VNet links
 
-2. **Azure OpenAI** - Deployed in project resource group
+2. **Azure OpenAI** - Deployed and working with real sentiment analysis
    - Resource: `oai-csatguardian-dev.openai.azure.us`
    - Model: gpt-4o (version 2024-11-20)
    - Deployment: `gpt-4o`
+   - **Real sentiment analysis working** ✅
 
-3. **Core Application** - Working end-to-end
-   - Sentiment analysis with Azure OpenAI ✅
-   - Azure SQL connectivity ✅
-   - Key Vault secret retrieval ✅
-   - Alert generation and deduplication ✅
-   - Batch scan mode (`python main.py scan`) ✅
+3. **Azure SQL Database** - Connected and populated
+   - Server: `sql-csatguardian-dev.database.usgovcloudapi.net`
+   - Database: `sqldb-csatguardian-dev`
+   - Data: 3 engineers, 6 cases, 17 timeline entries
 
-4. **Documentation** - Fully updated with diagrams
-   - ARCHITECTURE.md - Updated with VNet diagrams, linked to infrastructure diagrams
-   - README.md - Updated with Mermaid diagrams, feature status table, accurate project structure
-   - AZURE_GOVERNMENT.md - Updated with deployed resources
-   - PROJECT_PLAN.md - Updated Sprint 0 checklist
-   - FILE_REFERENCE.md - Updated with Bicep modules and diagrams folder
-   - ADR 0004 - Created for App Service decision
-   - **NEW**: `docs/diagrams/infrastructure.md` - Comprehensive Mermaid diagrams for security reviews
+4. **FastAPI Backend** - Production-ready REST API (replaced Streamlit)
+   - File: `src/api.py`
+   - All endpoints working with Azure SQL and Azure OpenAI
+   - Swagger docs at `/docs`
+
+5. **Documentation** - Fully updated with diagrams
+   - ARCHITECTURE.md, README.md, AZURE_GOVERNMENT.md
+   - `docs/diagrams/infrastructure.md` - Mermaid diagrams
 
 ### ⏳ In Progress / Next Steps
 
-1. **Create Streamlit POC UI** (HIGH PRIORITY)
-   - Dashboard showing case overview
-   - Real-time chat with Guardian agent
-   - Alert visualization
-   - File: `src/app.py` (to be created)
+1. **Create Web UI** (HIGH PRIORITY)
+   - Simple HTML/JS frontend served by FastAPI
+   - Dashboard: case overview, sentiment, alerts
 
 2. **Deploy to App Service**
-   - Use `az webapp up` or ZIP deploy
-   - Configure app settings for Key Vault
-   - Test private endpoint connectivity from App Service
+   - Package FastAPI app
+   - Deploy to `app-csatguardian-dev.azurewebsites.us`
 
-3. **Disable Public Access** (after app deployed)
-   - SQL Server: `publicNetworkAccess: 'Disabled'`
-   - Key Vault: `publicNetworkAccess: 'Disabled'`
-   - OpenAI: `publicNetworkAccess: 'Disabled'`
-
-4. **Reduce Log Verbosity**
-   - Change default LOG_LEVEL from DEBUG to INFO
-   - Less noisy console output
+3. **Disable Public Access** (after deployment)
 
 ---
 
@@ -75,69 +64,53 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand where 
 
 | File | Purpose |
 |------|---------|
-| `src/main.py` | CLI entry point (scan, chat, monitor commands) |
+| `src/api.py` | **FastAPI REST backend** (main entry point) |
+| `src/db_sync.py` | Synchronous Azure SQL client |
+| `src/clients/azure_sql_adapter.py` | Async wrapper for FastAPI |
+| `src/main.py` | CLI entry point (scan, chat, monitor) |
 | `src/config.py` | Configuration management |
-| `src/agent/guardian_agent.py` | Conversational AI agent |
 | `src/services/sentiment_service.py` | Azure OpenAI sentiment analysis |
-| `infrastructure/bicep/main-private.bicep` | Main IaC template |
-| `docs/ARCHITECTURE.md` | System architecture |
-| `docs/PROJECT_PLAN.md` | Sprint planning and progress |
-| **`docs/diagrams/infrastructure.md`** | **Mermaid diagrams for security reviews** |
 
 ---
 
-## Azure Resources (rg-csatguardian-dev)
+## API Endpoints
 
-| Resource | Name | Endpoint |
-|----------|------|----------|
-| Resource Group | rg-csatguardian-dev | USGov Virginia |
-| VNet | vnet-csatguardian-dev | 10.100.0.0/16 |
-| App Service | app-csatguardian-dev | https://app-csatguardian-dev.azurewebsites.us |
-| Azure OpenAI | oai-csatguardian-dev | https://oai-csatguardian-dev.openai.azure.us |
-| SQL Server | sql-csatguardian-dev | sql-csatguardian-dev.database.usgovcloudapi.net |
-| SQL Database | sqldb-csatguardian-dev | (on above server) |
-| Key Vault | kv-csatguardian-dev | https://kv-csatguardian-dev.vault.usgovcloudapi.net |
-
----
-
-## Important Notes
-
-1. **Azure Government Cloud** - All endpoints use `.us` domains
-2. **Public access still enabled** - For local development; disable after deploying app
-3. **Streamlit is POC only** - Production will use Teams Bot
-4. **Mock clients** - DfM and Teams are mocked; real integration pending approval
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | API info |
+| `/api/health` | GET | Health check |
+| `/api/engineers` | GET | List all engineers |
+| `/api/cases` | GET | List cases (with filters) |
+| `/api/cases/{id}` | GET | Case details with timeline |
+| `/api/analyze/{id}` | POST | Sentiment analysis |
+| `/api/chat` | POST | Chat with agent |
+| `/api/alerts` | GET | Active alerts |
 
 ---
 
-## Test Command
+## Test Commands
 
-To verify everything works:
 ```powershell
+# Start API server
 cd csat-guardian/src
 ..\env\Scripts\Activate.ps1
-python main.py scan
-```
+python -m uvicorn api:app --host 0.0.0.0 --port 8000
 
-Expected: 6 cases analyzed, 0 errors
+# Test endpoints
+Invoke-RestMethod -Uri "http://localhost:8000/api/health" | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:8000/api/engineers" | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:8000/api/analyze/case-001" -Method POST -Body '{}' -ContentType "application/json" | ConvertTo-Json
+```
 
 ---
 
 ## ⚠️ CRITICAL GUARDRAILS
 
-**Resource Group Boundaries - DO NOT VIOLATE:**
 - ✅ Only work within: `rg-csatguardian-dev`
-- ❌ **NEVER** modify resources in `kmonteagudo` RG or any other resource group
-- ❌ **NEVER** reference or depend on resources outside `rg-csatguardian-dev`
-- All new Azure resources MUST be created in `rg-csatguardian-dev`
-- Azure OpenAI is already in project RG (decoupled from kmonteagudo RG)
-
-**Other Restrictions:**
-- ❌ Don't delete existing resources in `rg-csatguardian-dev` without explicit approval
-- ❌ Don't change the VNet address space (10.100.0.0/16)
-- ❌ Don't disable public access until app is deployed to App Service
-- ❌ Don't commit `.env.local`, secrets, or connection strings
-- ❌ Don't create resources in other subscriptions
+- ❌ **NEVER** modify resources in other resource groups
+- ❌ Don't commit `.env.local` or secrets
+- ❌ Don't disable public access until app is deployed
 
 ---
 
-*Update this file at the end of each session to maintain continuity.*
+*Update this file at the end of each session.*

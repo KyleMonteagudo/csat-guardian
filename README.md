@@ -22,7 +22,7 @@ CSAT Guardian is an AI-powered system that monitors support cases to proactively
 | 🚨 **Proactive Alerts** | Generates alerts for engineers and managers | ✅ Implemented |
 | 💬 **Conversational AI** | Engineers can ask questions about their cases via chat | ✅ Implemented |
 | 🔒 **Private Networking** | All backend services accessed via Private Endpoints | ✅ Deployed |
-| 🖥️ **Streamlit Dashboard** | Web UI for case overview and chat | ⏳ Next Sprint |
+| 🌐 **FastAPI Backend** | REST API for all case/sentiment/alert operations | ✅ Implemented |
 | 📱 **Teams Integration** | Bot-based alerts and chat in Teams | 🔮 Future (pending API approval) |
 | 📋 **DfM Integration** | Real case data from DfM API | 🔮 Future (pending API approval) |
 
@@ -41,7 +41,7 @@ CSAT Guardian is an AI-powered system that monitors support cases to proactively
 
 | Resource | Name | Purpose |
 |----------|------|---------|
-| **App Service** | `app-csatguardian-dev.azurewebsites.us` | Streamlit POC UI |
+| **App Service** | `app-csatguardian-dev.azurewebsites.us` | FastAPI Backend |
 | **Azure OpenAI** | `oai-csatguardian-dev.openai.azure.us` | Sentiment analysis (gpt-4o) |
 | **SQL Server** | `sql-csatguardian-dev.database.usgovcloudapi.net` | Case data storage |
 | **Key Vault** | `kv-csatguardian-dev.vault.usgovcloudapi.net` | Secrets management |
@@ -249,10 +249,11 @@ The interactive demo (`interactive_demo.py`) emulates a Teams-like chat experien
 ```
 csat-guardian/
 ├── .env.example           # Environment configuration template
-├── .env.local             # Local env (references Key Vault, gitignored)
+├── .env.local             # Local env (gitignored, contains credentials)
 ├── requirements.txt       # Python dependencies
 ├── README.md              # This file
 ├── SESSION_STATE.md       # Session continuity for AI assistants
+├── Dockerfile             # Container image definition
 ├── docs/                  # Documentation
 │   ├── PROJECT_PLAN.md    # SDLC and sprint planning
 │   ├── ARCHITECTURE.md    # System architecture (private networking)
@@ -278,20 +279,22 @@ csat-guardian/
 │   ├── seed_database.py   # Populate Azure SQL with sample data
 │   └── test_db_connection.py
 └── src/
-    ├── main.py            # CLI entry point (scan, chat, monitor, setup)
+    ├── api.py             # FastAPI REST backend (main entry point)
+    ├── db_sync.py         # Synchronous Azure SQL client (pyodbc)
+    ├── main.py            # CLI entry point (scan, chat, monitor)
     ├── interactive_demo.py # Teams-like chat emulation
     ├── config.py          # Configuration management
     ├── logger.py          # Logging setup
     ├── models.py          # Pydantic data models
-    ├── database.py        # SQLAlchemy ORM
+    ├── database.py        # SQLAlchemy ORM (async)
     ├── sample_data.py     # POC test data
     ├── monitor.py         # Case monitoring orchestrator
-    ├── app.py             # Streamlit web UI (POC) - TODO: Not yet created
     ├── agent/
     │   └── guardian_agent.py  # Conversational AI agent (Semantic Kernel)
     ├── clients/
-    │   ├── dfm_client.py      # DfM data client (mock → real pending API approval)
-    │   └── teams_client.py    # Teams notification client (mock → real pending approval)
+    │   ├── azure_sql_adapter.py # Async wrapper for db_sync
+    │   ├── dfm_client.py      # DfM data client (mock → real pending API)
+    │   └── teams_client.py    # Teams notification client (mock)
     └── services/
         ├── sentiment_service.py  # Azure OpenAI sentiment analysis
         └── alert_service.py      # Alert generation and delivery

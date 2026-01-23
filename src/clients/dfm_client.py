@@ -97,7 +97,20 @@ class DfMClientBase(ABC):
             Engineer if found, None otherwise
         """
         pass
-
+    
+    @abstractmethod
+    async def get_engineers(self) -> list[Engineer]:
+        """
+        Get all engineers.
+        
+        Returns:
+            list[Engineer]: All available engineers
+        """
+        pass
+    
+    async def close(self) -> None:
+        """Close any open connections. Override if needed."""
+        pass
 
 class MockDfMClient(DfMClientBase):
     """
@@ -381,6 +394,53 @@ class MockDfMClient(DfMClientBase):
             )
             logger.error(f"Error fetching engineer {engineer_id}: {e}", exc_info=True)
             raise
+    
+    async def get_engineers(self) -> list[Engineer]:
+        """
+        Get all engineers.
+        
+        Returns:
+            list[Engineer]: All available engineers
+        """
+        start_time = time.time()
+        logger.debug("MockDfMClient.get_engineers: Fetching all engineers")
+        
+        try:
+            # Query the database
+            db_engineers = await self.db.get_all_engineers()
+            
+            # Convert to Pydantic models
+            engineers = [
+                Engineer(
+                    id=e.id,
+                    name=e.name,
+                    email=e.email,
+                    teams_id=e.teams_id,
+                )
+                for e in db_engineers
+            ]
+            
+            log_api_call(
+                logger, "dfm_mock", "get_engineers", True,
+                duration_ms=(time.time() - start_time) * 1000,
+                count=len(engineers)
+            )
+            
+            return engineers
+            
+        except Exception as e:
+            log_api_call(
+                logger, "dfm_mock", "get_engineers", False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error=str(e)
+            )
+            logger.error(f"Error fetching engineers: {e}", exc_info=True)
+            raise
+    
+    async def close(self) -> None:
+        """Close database connection."""
+        if self.db:
+            await self.db.close()
 
 
 class RealDfMClient(DfMClientBase):
@@ -454,6 +514,17 @@ class RealDfMClient(DfMClientBase):
     async def get_engineer(self, engineer_id: str) -> Optional[Engineer]:
         """
         Get engineer details by ID from the real DfM API.
+        
+        TODO: Implement when API access is approved.
+        """
+        raise NotImplementedError(
+            "Real DfM API access is not yet implemented. "
+            "Set USE_MOCK_DFM=true to use mock data."
+        )
+    
+    async def get_engineers(self) -> list[Engineer]:
+        """
+        Get all engineers from the real DfM API.
         
         TODO: Implement when API access is approved.
         """
