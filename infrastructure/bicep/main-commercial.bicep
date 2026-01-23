@@ -60,6 +60,9 @@ param devBoxAdminUsername string = 'testadmin'
 @secure()
 param devBoxAdminPassword string
 
+@description('Skip RBAC role assignments (use if you only have Contributor role, not Owner)')
+param skipRbacAssignments bool = false
+
 // -----------------------------------------------------------------------------
 // Variables
 // -----------------------------------------------------------------------------
@@ -267,7 +270,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       name: 'standard'
     }
     tenantId: subscription().tenantId
-    enableRbacAuthorization: true
+    enableRbacAuthorization: !skipRbacAssignments
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     publicNetworkAccess: enablePublicAccess ? 'Enabled' : 'Disabled'
@@ -275,6 +278,24 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       defaultAction: enablePublicAccess ? 'Allow' : 'Deny'
       bypass: 'AzureServices'
     }
+    accessPolicies: []
+  }
+}
+
+// Add access policy for App Service when RBAC is skipped (separate resource to avoid circular dependency)
+resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (skipRbacAssignments) {
+  parent: keyVault
+  name: 'add'
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: appService.identity.principalId
+        permissions: {
+          secrets: ['get', 'list']
+        }
+      }
+    ]
   }
 }
 
@@ -546,7 +567,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
 // RBAC: Grant App Service access to Key Vault
 // -----------------------------------------------------------------------------
 
-resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!skipRbacAssignments) {
   name: guid(resourceGroup().id, keyVaultName, appServiceName, 'Key Vault Secrets User')
   scope: keyVault
   properties: {
@@ -560,7 +581,7 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-0
 // RBAC: Grant App Service access to Azure OpenAI
 // -----------------------------------------------------------------------------
 
-resource openAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource openAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!skipRbacAssignments) {
   name: guid(resourceGroup().id, openAIName, appServiceName, 'Cognitive Services OpenAI User')
   scope: openAI
   properties: {
