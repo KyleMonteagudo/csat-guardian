@@ -38,17 +38,40 @@ load_dotenv(_project_root / ".env")
 
 
 # -----------------------------------------------------------------------------
-# Azure Government Constants
+# Azure Cloud Configuration (Government vs Commercial)
 # -----------------------------------------------------------------------------
-# These constants define the endpoints for Azure Government cloud.
-# Commercial cloud uses different endpoints (e.g., .com instead of .us)
+# Detect which Azure cloud to use based on AZURE_CLOUD environment variable.
+# Default to Commercial Azure if not specified.
 
-AZURE_GOV_AUTHORITY = "https://login.microsoftonline.us"
-AZURE_GOV_KEYVAULT_SUFFIX = "vault.usgovcloudapi.net"
-AZURE_GOV_SQL_SUFFIX = "database.usgovcloudapi.net"
-AZURE_GOV_OPENAI_SUFFIX = "openai.azure.us"
-AZURE_GOV_GRAPH_ENDPOINT = "https://graph.microsoft.us/v1.0"
-AZURE_GOV_CONTAINER_REGISTRY_SUFFIX = "azurecr.us"
+AZURE_CLOUD = os.getenv("AZURE_CLOUD", "AzureCommercial").lower()
+IS_AZURE_GOVERNMENT = AZURE_CLOUD in ["azureusgovernment", "azuregov", "government", "gov"]
+
+if IS_AZURE_GOVERNMENT:
+    # Azure Government endpoints
+    AZURE_AUTHORITY = "https://login.microsoftonline.us"
+    AZURE_KEYVAULT_SUFFIX = "vault.usgovcloudapi.net"
+    AZURE_SQL_SUFFIX = "database.usgovcloudapi.net"
+    AZURE_OPENAI_SUFFIX = "openai.azure.us"
+    AZURE_GRAPH_ENDPOINT = "https://graph.microsoft.us/v1.0"
+    AZURE_CONTAINER_REGISTRY_SUFFIX = "azurecr.us"
+    AZURE_WEBAPP_SUFFIX = "azurewebsites.us"
+else:
+    # Commercial Azure endpoints (default)
+    AZURE_AUTHORITY = "https://login.microsoftonline.com"
+    AZURE_KEYVAULT_SUFFIX = "vault.azure.net"
+    AZURE_SQL_SUFFIX = "database.windows.net"
+    AZURE_OPENAI_SUFFIX = "openai.azure.com"
+    AZURE_GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0"
+    AZURE_CONTAINER_REGISTRY_SUFFIX = "azurecr.io"
+    AZURE_WEBAPP_SUFFIX = "azurewebsites.net"
+
+# Legacy aliases for backward compatibility
+AZURE_GOV_AUTHORITY = AZURE_AUTHORITY
+AZURE_GOV_KEYVAULT_SUFFIX = AZURE_KEYVAULT_SUFFIX
+AZURE_GOV_SQL_SUFFIX = AZURE_SQL_SUFFIX
+AZURE_GOV_OPENAI_SUFFIX = AZURE_OPENAI_SUFFIX
+AZURE_GOV_GRAPH_ENDPOINT = AZURE_GRAPH_ENDPOINT
+AZURE_GOV_CONTAINER_REGISTRY_SUFFIX = AZURE_CONTAINER_REGISTRY_SUFFIX
 
 
 # -----------------------------------------------------------------------------
@@ -57,15 +80,15 @@ AZURE_GOV_CONTAINER_REGISTRY_SUFFIX = "azurecr.us"
 
 def get_secret_from_keyvault(secret_name: str, default: str = "") -> str:
     """
-    Retrieve a secret from Azure Key Vault in Azure Government.
+    Retrieve a secret from Azure Key Vault.
     
     This function uses DefaultAzureCredential which supports:
     - Managed Identity (in Azure)
     - Azure CLI credentials (local dev)
     - Environment credentials (CI/CD)
     
-    IMPORTANT: For Azure Government, the authority host must be set to
-    https://login.microsoftonline.us
+    Automatically detects Azure Government vs Commercial cloud based on
+    the AZURE_CLOUD environment variable.
     
     Args:
         secret_name: Name of the secret in Key Vault (e.g., "AzureOpenAI--ApiKey")
@@ -86,11 +109,10 @@ def get_secret_from_keyvault(secret_name: str, default: str = "") -> str:
         from azure.identity import DefaultAzureCredential
         from azure.keyvault.secrets import SecretClient
         
-        # Get the authority host (Azure Government or Commercial)
-        # Default to Azure Government for this application
-        authority_host = os.getenv("AZURE_AUTHORITY_HOST", AZURE_GOV_AUTHORITY)
+        # Get the authority host (auto-detect from AZURE_CLOUD or use override)
+        authority_host = os.getenv("AZURE_AUTHORITY_HOST", AZURE_AUTHORITY)
         
-        # Create credential with Government authority
+        # Create credential with appropriate authority
         credential = DefaultAzureCredential(
             authority=authority_host
         )
