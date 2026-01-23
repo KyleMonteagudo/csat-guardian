@@ -100,14 +100,19 @@ This POC runs with:
 
 4. **Configure environment**:
    ```bash
-   cp .env.example .env
-   # Edit .env with your Azure OpenAI credentials
+   cp .env.example .env.local
+   # Credentials are stored in Azure Key Vault - see .env.example for details
+   # Authenticate to Azure Government: az cloud set --name AzureUSGovernment && az login
    ```
 
-5. **Initialize and run**:
+5. **Test database connectivity** (optional):
+   ```bash
+   python scripts/test_db_connection.py
+   ```
+
+6. **Run the application**:
    ```bash
    cd src
-   python main.py setup  # Create sample data
    python main.py scan   # Run monitoring scan
    ```
 
@@ -116,9 +121,6 @@ This POC runs with:
 ### Commands
 
 ```bash
-# Initialize database with sample data
-python main.py setup
-
 # Run a single monitoring scan
 python main.py scan
 
@@ -133,6 +135,9 @@ python main.py chat
 
 # Chat as a specific engineer
 python main.py chat --engineer eng-002
+
+# Seed database (run from project root, uses Key Vault for credentials)
+python scripts/seed_database.py
 ```
 
 ### Interactive Chat Examples
@@ -156,10 +161,19 @@ python main.py chat --engineer eng-002
 ```
 csat-guardian/
 ├── .env.example           # Environment configuration template
+├── .env.local             # Local env (references Key Vault, gitignored)
 ├── requirements.txt       # Python dependencies
 ├── README.md              # This file
-├── data/                  # SQLite database (created at runtime)
-│   └── csat_guardian.db
+├── docs/                  # Documentation
+│   ├── PROJECT_PLAN.md    # SDLC and sprint planning
+│   ├── ARCHITECTURE.md    # System architecture
+│   ├── FILE_REFERENCE.md  # File cheat sheet
+│   └── adr/               # Architecture Decision Records
+├── infrastructure/        # Azure IaC
+│   └── bicep/             # Bicep templates
+├── scripts/               # Utility scripts
+│   ├── seed_database.py   # Populate Azure SQL with sample data
+│   └── test_db_connection.py
 └── src/
     ├── main.py            # Application entry point
     ├── config.py          # Configuration management
@@ -193,12 +207,22 @@ The POC includes 6 test cases:
 
 ## Configuration
 
+### Secrets Management
+
+All secrets are stored in **Azure Key Vault** (`kv-csatguardian-dev`):
+
+| Secret | Key Vault Name | Description |
+|--------|----------------|-------------|
+| OpenAI API Key | `AzureOpenAI--ApiKey` | Azure OpenAI authentication |
+| OpenAI Endpoint | `AzureOpenAI--Endpoint` | Service URL |
+| SQL Connection | `SqlServer--ConnectionString` | Database connection |
+| SQL Password | `SqlServer--AdminPassword` | Admin credentials |
+
 ### Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | Yes |
-| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | Yes |
+| `KEY_VAULT_NAME` | Key Vault name for secrets | Yes |
 | `AZURE_OPENAI_DEPLOYMENT` | Deployment name (default: gpt-4o) | No |
 | `USE_MOCK_DFM` | Use mock DfM client (default: true) | No |
 | `USE_MOCK_TEAMS` | Use mock Teams client (default: true) | No |
