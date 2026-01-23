@@ -1,14 +1,13 @@
-# CSAT Guardian - Deployment Guide (Commercial Azure)
+# CSAT Guardian - Deployment Guide
 
 ## Overview
 
-This guide explains how to deploy CSAT Guardian to **Commercial Azure** from a locked-down PC that doesn't have VS Code or AI tools.
+This guide explains how to deploy CSAT Guardian to **Commercial Azure** from a locked-down PC.
 
 **Target Environment:**
 - Subscription ID: `a20d761d-cb36-4f83-b827-58ccdb166f39`
 - Resource Group: `KMonteagudo_CSAT_Guardian`
 - Region: East US
-- Cloud: Commercial Azure (not Government)
 
 ---
 
@@ -20,87 +19,131 @@ Before starting, ensure the locked-down PC has:
    - Download: https://aka.ms/installazurecliwindows
    - Verify: `az --version`
 
-2. **PowerShell 5.1+** (usually pre-installed on Windows)
+2. **PowerShell 5.1+** (pre-installed on Windows)
    - Verify: `$PSVersionTable.PSVersion`
 
-3. **ODBC Driver 18 for SQL Server** (for database seeding)
-   - Download: https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server
+3. **Git** installed
+   - Download: https://git-scm.com/download/win
+   - Verify: `git --version`
 
-4. **sqlcmd utility** (for database seeding)
-   - Usually installed with ODBC Driver, or download SQL Server tools
+**Note:** ODBC Driver is NOT required on the deployment machine. Database seeding is done via Azure Portal.
 
 ---
 
-## Deployment Steps
+## Step-by-Step Deployment
 
-### Step 1: Transfer Files
-
-Copy the `csat-guardian-deployment.zip` file to the locked-down PC.
-
-Unzip to a location like `C:\Deploy\csat-guardian`
-
-### Step 2: Open PowerShell as Administrator
-
-Press `Win + X` → Select "Windows PowerShell (Admin)"
-
-### Step 3: Navigate to Deployment Folder
+### Step 1: Clone the Repository
 
 ```powershell
-cd C:\Deploy\csat-guardian\infrastructure
+cd C:\Projects  # or wherever you want
+git clone https://github.com/kmonteagudo_microsoft/csat-guardian.git
+cd csat-guardian
+git checkout develop
 ```
 
-### Step 4: Login to Azure
+### Step 2: Login to Azure
 
 ```powershell
-# Login to Azure (this will open a browser for authentication)
 az login
-
-# Set the subscription
 az account set --subscription "a20d761d-cb36-4f83-b827-58ccdb166f39"
 
-# Verify you're in the right subscription
+# Verify
 az account show --query "{Name:name, SubscriptionId:id}" -o table
 ```
 
-### Step 5: Run the Deployment Script
+### Step 3: Create Resource Group (if needed)
 
 ```powershell
-# Run the all-in-one deployment script
-# Replace 'YourSecurePassword123!' with a strong password (min 8 chars, must include uppercase, lowercase, number)
-
-.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!"
+az group create --name KMonteagudo_CSAT_Guardian --location eastus
 ```
 
-**The script will:**
-1. Deploy all Azure infrastructure (VNet, SQL, OpenAI, Key Vault, App Service)
-2. Create database tables and insert sample data
-3. Deploy the application code to App Service
+### Step 4: Run the Deployment Script
 
-**This takes approximately 10-15 minutes.**
+```powershell
+cd infrastructure
+
+# Deploy infrastructure and app (skip database seeding)
+.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!" -SkipDatabase
+```
+
+**This takes approximately 15-20 minutes** (Bastion alone takes ~10 min).
+
+The script deploys:
+- Virtual Network with private subnets
+- Azure Bastion (for secure VM access)
+- Dev-box VM (Windows 11, no public IP)
+- Azure SQL Server + Database
+- Azure OpenAI with GPT-4o
+- Azure Key Vault
+- App Service with VNet integration
+- Private Endpoints for all backend services
+- Private DNS Zones
+
+### Step 5: Seed the Database (via Azure Portal)
+
+Since we can't install ODBC on the locked-down PC, seed the database using Azure Portal:
+
+1. Go to **Azure Portal** → **SQL databases** → `sqldb-csatguardian-dev`
+2. Click **Query editor (preview)** in the left menu
+3. Login with:
+   - Username: `sqladmin`
+   - Password: (the password you used in Step 4)
+4. Copy the contents of `infrastructure/seed-database.sql`
+5. Paste into Query editor and click **Run**
 
 ### Step 6: Verify Deployment
 
-After the script completes, test the application:
+Connect to the dev-box VM via Bastion to test:
+
+1. Go to **Azure Portal** → **Virtual machines** → `vm-devbox-csatguardian`
+2. Click **Connect** → **Bastion**
+3. Enter credentials:
+   - Username: `testadmin`
+   - Password: `Password1!`
+4. Open browser in VM and go to:
+   - https://app-csatguardian-dev.azurewebsites.net/docs
+
+---
+
+## What Gets Deployed
+
+| Resource | Name | Purpose |
+|----------|------|---------|
+| Virtual Network | vnet-csatguardian-dev | Private networking (10.100.0.0/16) |
+| Azure Bastion | bas-csatguardian-dev | Secure VM access |
+| Dev-box VM | vm-devbox-csatguardian | Testing private endpoints |
+| SQL Server | sql-csatguardian-dev | Database server |
+| SQL Database | sqldb-csatguardian-dev | Application data |
+| Azure OpenAI | oai-csatguardian-dev | Sentiment analysis (GPT-4o) |
+| Key Vault | kv-csatguardian-dev | Secrets storage |
+| App Service Plan | asp-csatguardian-dev | Hosting plan (Linux B1) |
+| App Service | app-csatguardian-dev | Web application |
+| Application Insights | appi-csatguardian-dev | Monitoring |
+| Private Endpoints | pe-* | Private connectivity |
+| Private DNS Zones | privatelink.* | DNS resolution |
+
+---
+
+## Redeploying Code Changes
+
+After making code changes, redeploy just the app:
 
 ```powershell
-# Test health endpoint
-$response = Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/health"
-$response | ConvertTo-Json
-
-# Test engineers endpoint
-$response = Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/engineers"
-$response | ConvertTo-Json
-
-# Test cases endpoint
-$response = Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/cases"
-$response | ConvertTo-Json
+.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!" -SkipInfrastructure -SkipDatabase
 ```
 
-### Step 7: Open the Application
+Or manually:
 
-Open a browser and navigate to:
-- **Application:** https://app-csatguardian-dev.azurewebsites.net
-- **API Docs:** https://app-csatguardian-dev.azurewebsites.net/docs
+```powershell
+# Create zip of src folder
+Compress-Archive -Path "..\src\*" -DestinationPath "app.zip" -Force
+
+# Copy requirements.txt into the zip
+Compress-Archive -Path "..\requirements.txt" -DestinationPath "app.zip" -Update
+
+# Deploy
+az webapp deploy --resource-group KMonteagudo_CSAT_Guardian --name app-csatguardian-dev --src-path app.zip --type zip
+```
 
 ---
 
@@ -113,103 +156,48 @@ Azure CLI is not installed. Download from https://aka.ms/installazurecliwindows
 Run `az login` again. Make sure you're using an account with access to the subscription.
 
 ### "Resource group does not exist"
-The resource group `KMonteagudo_CSAT_Guardian` must exist before deployment:
 ```powershell
 az group create --name KMonteagudo_CSAT_Guardian --location eastus
 ```
 
-### "SQL firewall rule failed"
-Manually add your IP in Azure Portal:
-1. Go to SQL Server `sql-csatguardian-dev`
-2. Networking → Firewall rules
-3. Add your client IP
-
-### "Database seeding failed"
-If sqlcmd isn't working, you can seed the database manually:
-1. Go to Azure Portal → SQL Database → Query editor
-2. Copy the SQL from `infrastructure/deploy-all.ps1` (the `$sqlScript` section)
-3. Paste and run in Query editor
-
-### "App Service deployment failed"
-Try manual ZIP deployment:
-```powershell
-# Create the zip manually
-Compress-Archive -Path "C:\Deploy\csat-guardian\src\*" -DestinationPath "app.zip"
-
-# Deploy
-az webapp deploy --resource-group KMonteagudo_CSAT_Guardian --name app-csatguardian-dev --src-path app.zip --type zip
-```
+### Bastion connection fails
+Wait 5-10 minutes after deployment for Bastion to fully provision.
 
 ### App returns 500 errors
-Check application logs:
+Check logs from dev-box VM:
 ```powershell
 az webapp log tail --resource-group KMonteagudo_CSAT_Guardian --name app-csatguardian-dev
 ```
 
----
-
-## What Gets Deployed
-
-| Resource | Name | Purpose |
-|----------|------|---------|
-| Virtual Network | vnet-csatguardian-dev | Private networking |
-| SQL Server | sql-csatguardian-dev | Database server |
-| SQL Database | sqldb-csatguardian-dev | Application data |
-| Azure OpenAI | oai-csatguardian-dev | Sentiment analysis (GPT-4o) |
-| Key Vault | kv-csatguardian-dev | Secrets storage |
-| App Service Plan | asp-csatguardian-dev | Hosting plan |
-| App Service | app-csatguardian-dev | Web application |
-| Application Insights | appi-csatguardian-dev | Monitoring |
-| Private Endpoints | pe-* | Private connectivity |
-| Private DNS Zones | privatelink.* | DNS resolution |
+### Query editor won't connect
+Make sure you're using the correct SQL admin password from deployment.
 
 ---
 
-## Post-Deployment (Optional)
-
-### Disable Public Access
-
-After verifying everything works, disable public access for security:
-
-```powershell
-# Disable public access on SQL Server
-az sql server update --resource-group KMonteagudo_CSAT_Guardian --name sql-csatguardian-dev --enable-public-network false
-
-# Disable public access on Key Vault
-az keyvault update --resource-group KMonteagudo_CSAT_Guardian --name kv-csatguardian-dev --public-network-access Disabled
-
-# Disable public access on Azure OpenAI
-az cognitiveservices account update --resource-group KMonteagudo_CSAT_Guardian --name oai-csatguardian-dev --public-network-access Disabled
-```
-
-**Note:** After disabling public access, resources are only accessible through the VNet/Private Endpoints.
-
----
-
-## Clean Up (If Needed)
-
-To delete all resources:
+## Clean Up (Delete Everything)
 
 ```powershell
 az group delete --name KMonteagudo_CSAT_Guardian --yes --no-wait
 ```
 
-**Warning:** This deletes everything including data!
+**Warning:** This deletes ALL resources including data!
 
 ---
 
-## Support
+## Architecture Summary
 
-If deployment fails, save the error output and contact the development team.
-
-Useful diagnostic commands:
-```powershell
-# Show deployment status
-az deployment group list --resource-group KMonteagudo_CSAT_Guardian -o table
-
-# Show deployment errors
-az deployment group show --resource-group KMonteagudo_CSAT_Guardian --name <deployment-name> --query properties.error
-
-# List all resources
-az resource list --resource-group KMonteagudo_CSAT_Guardian -o table
 ```
+Internet
+    │
+    └──▶ Azure Bastion ──▶ Dev-box VM (private)
+                              │
+                              ├──▶ App Service (VNet integrated)
+                              │        │
+                              │        ├──▶ SQL (Private Endpoint)
+                              │        ├──▶ Key Vault (Private Endpoint)
+                              │        └──▶ OpenAI (Private Endpoint)
+                              │
+                              └──▶ Direct test of private endpoints
+```
+
+All backend services (SQL, Key Vault, OpenAI) have **public access disabled** and are only accessible via Private Endpoints within the VNet.

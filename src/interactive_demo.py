@@ -52,7 +52,7 @@ class InteractiveDemo:
         """Initialize the demo with Azure connections."""
         print("\n" + "=" * 60)
         print("   CSAT GUARDIAN - Interactive Demo")
-        print("   Powered by Azure OpenAI (Azure Government)")
+        print("   Powered by Azure OpenAI")
         print("=" * 60)
         print("\nInitializing...")
         
