@@ -47,8 +47,18 @@ param sqlAdminUsername string = 'sqladmin'
 @secure()
 param sqlAdminPassword string
 
-@description('Enable public network access during initial deployment (set to false after testing)')
-param enablePublicAccess bool = true
+@description('Enable public network access (false = fully private, use Bastion to access devbox)')
+param enablePublicAccess bool = false
+
+@description('Deploy a dev-box VM for testing private endpoints')
+param deployDevBox bool = true
+
+@description('Dev-box VM admin username')
+param devBoxAdminUsername string = 'testadmin'
+
+@description('Dev-box VM admin password')
+@secure()
+param devBoxAdminPassword string
 
 // -----------------------------------------------------------------------------
 // Variables
@@ -69,6 +79,17 @@ var logAnalyticsName = 'log-${baseName}-${environment}'
 var vnetAddressPrefix = '10.100.0.0/16'
 var appServiceSubnetPrefix = '10.100.1.0/24'
 var privateEndpointsSubnetPrefix = '10.100.2.0/24'
+var devBoxSubnetPrefix = '10.100.3.0/24'
+var bastionSubnetPrefix = '10.100.4.0/26' // Bastion requires /26 or larger
+
+// Dev-box naming
+var devBoxVmName = 'vm-devbox-${baseName}'
+var devBoxNicName = 'nic-devbox-${baseName}'
+var devBoxNsgName = 'nsg-devbox-${baseName}'
+
+// Bastion naming
+var bastionName = 'bas-${baseName}-${environment}'
+var bastionPublicIpName = 'pip-bastion-${baseName}'
 
 // Tags applied to all resources
 var commonTags = {
@@ -80,9 +101,9 @@ var commonTags = {
   NetworkMode: 'Private'
 }
 
-// Commercial Azure Private DNS Zone names
+// Private DNS Zone names using az.environment() function for cloud compatibility
 var privateDnsZones = {
-  sql: 'privatelink.database.windows.net'
+  sql: 'privatelink${az.environment().suffixes.sqlServerHostname}'
   keyVault: 'privatelink.vaultcore.azure.net'
   openAI: 'privatelink.openai.azure.com'
 }
@@ -152,6 +173,18 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
         properties: {
           addressPrefix: privateEndpointsSubnetPrefix
           privateEndpointNetworkPolicies: 'Disabled'
+        }
+      }
+      {
+        name: 'snet-devbox'
+        properties: {
+          addressPrefix: devBoxSubnetPrefix
+        }
+      }
+      {
+        name: 'AzureBastionSubnet' // Must be named exactly this
+        properties: {
+          addressPrefix: bastionSubnetPrefix
         }
       }
     ]
@@ -578,6 +611,147 @@ resource appInsightsConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@20
   name: 'AppInsights--ConnectionString'
   properties: {
     value: appInsights.properties.ConnectionString
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Dev-Box VM (for testing private endpoints)
+// -----------------------------------------------------------------------------
+
+resource devBoxNsg 'Microsoft.Network/networkSecurityGroups@2023-05-01' = if (deployDevBox) {
+  name: devBoxNsgName
+  location: location
+  tags: commonTags
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowBastionRDP'
+        properties: {
+          priority: 1000
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: bastionSubnetPrefix
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '3389'
+        }
+      }
+    ]
+  }
+}
+
+// Bastion Public IP (required for Bastion service)
+resource bastionPublicIp 'Microsoft.Network/publicIPAddresses@2023-05-01' = if (deployDevBox) {
+  name: bastionPublicIpName
+  location: location
+  tags: commonTags
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+}
+
+// Azure Bastion Host
+resource bastion 'Microsoft.Network/bastionHosts@2023-05-01' = if (deployDevBox) {
+  name: bastionName
+  location: location
+  tags: commonTags
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    ipConfigurations: [
+      {
+        name: 'bastionIpConfig'
+        properties: {
+          subnet: {
+            id: vnet.properties.subnets[3].id // AzureBastionSubnet
+          }
+          publicIPAddress: {
+            id: bastionPublicIp.id
+          }
+        }
+      }
+    ]
+  }
+}
+
+// Dev-box NIC (no public IP - access via Bastion only)
+resource devBoxNic 'Microsoft.Network/networkInterfaces@2023-05-01' = if (deployDevBox) {
+  name: devBoxNicName
+  location: location
+  tags: commonTags
+  properties: {
+    ipConfigurations: [
+      {
+        name: 'ipconfig1'
+        properties: {
+          subnet: {
+            id: vnet.properties.subnets[2].id // snet-devbox
+          }
+          privateIPAllocationMethod: 'Dynamic'
+        }
+      }
+    ]
+    networkSecurityGroup: {
+      id: devBoxNsg.id
+    }
+  }
+}
+
+resource devBoxVm 'Microsoft.Compute/virtualMachines@2023-09-01' = if (deployDevBox) {
+  name: devBoxVmName
+  location: location
+  tags: commonTags
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_DS2_v2'
+    }
+    osProfile: {
+      computerName: 'devbox'
+      adminUsername: devBoxAdminUsername
+      adminPassword: devBoxAdminPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'MicrosoftWindowsDesktop'
+        offer: 'Windows-11'
+        sku: 'win11-23h2-pro'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'Premium_LRS'
+        }
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: devBoxNic.id
+        }
+      ]
+    }
+  }
+}
+
+// Install tools on dev-box (Azure CLI, Python, VS Code, SSMS, etc.)
+resource devBoxExtension 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = if (deployDevBox) {
+  parent: devBoxVm
+  name: 'InstallDevTools'
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      commandToExecute: 'powershell -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString(\'https://community.chocolatey.org/install.ps1\')); choco install -y azure-cli python vscode sql-server-management-studio git"'
+    }
   }
 }
 

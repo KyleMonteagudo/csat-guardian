@@ -12,5 +12,11 @@ param environment = 'dev'
 param location = 'eastus'
 param baseName = 'csatguardian'
 param sqlAdminUsername = 'sqladmin'
-// sqlAdminPassword will be prompted during deployment or set via --parameters
-param enablePublicAccess = true  // Set to false after initial deployment
+param sqlAdminPassword = readEnvironmentVariable('SQL_ADMIN_PASSWORD', '')
+param enablePublicAccess = false  // All backend services are private-only
+param deployDevBox = true
+param devBoxAdminUsername = 'testadmin'
+param devBoxAdminPassword = 'Password1!'
+
+// Note: Set SQL_ADMIN_PASSWORD environment variable before deployment, or override via CLI:
+// az deployment group create ... --parameters sqlAdminPassword='YourSecurePassword123!'
