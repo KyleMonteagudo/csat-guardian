@@ -127,10 +127,9 @@ async def initialize_services():
         # Load config
         st.session_state.config = get_config()
         
-        # Connect to Azure SQL
-        st.session_state.database = DatabaseManager(
-            st.session_state.config.database.connection_string
-        )
+        # Connect to Azure SQL (use effective_connection_string for fallback handling)
+        conn_string = st.session_state.config.database.effective_connection_string
+        st.session_state.database = DatabaseManager(conn_string)
         await st.session_state.database.initialize()
         
         # Initialize DfM client
@@ -148,7 +147,9 @@ async def initialize_services():
         return True
         
     except Exception as e:
+        import traceback
         st.error(f"Failed to initialize services: {e}")
+        st.code(traceback.format_exc(), language="python")
         return False
 
 
