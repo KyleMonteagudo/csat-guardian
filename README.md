@@ -147,7 +147,13 @@ python main.py monitor
 # Start continuous monitoring (custom interval)
 python main.py monitor --interval 30
 
-# Start interactive chat
+# Start interactive demo (Teams chat emulation)
+python interactive_demo.py
+
+# Interactive demo as specific engineer
+python interactive_demo.py --engineer eng-002
+
+# Start interactive chat (Semantic Kernel - requires debugging)
 python main.py chat
 
 # Chat as a specific engineer
@@ -157,20 +163,37 @@ python main.py chat --engineer eng-002
 python scripts/seed_database.py
 ```
 
-### Interactive Chat Examples
+### Interactive Demo Examples
+
+The interactive demo (`interactive_demo.py`) emulates a Teams-like chat experience:
 
 ```
-[John Smith] You: list my cases
-[CSAT Guardian] 📂 Your Cases (3 total)
+============================================================
+   YOUR CASES (2 total)
+============================================================
 
-[John Smith] You: tell me about case 12345
-[CSAT Guardian] 📋 Case Summary: 12345...
+  1. ✅ [case-001] Azure VM Performance Optimization
+     Priority: medium | Status: active
+     Last update: 3 days ago
 
-[John Smith] You: analyze case 12345
-[CSAT Guardian] 🎭 Sentiment Analysis...
+  2. 🚨 [case-004] Billing Discrepancy Investigation
+     Priority: high | Status: active
+     Last update: 10 days ago (OVERDUE)
 
-[John Smith] You: recommendations for case 12345
-[CSAT Guardian] 💡 Recommendations...
+[John Smith] > 2
+✓ Selected: [case-004] Billing Discrepancy Investigation
+  Commands: summary, sentiment, recommendations
+
+[John Smith] > sentiment
+🎭 Analyzing sentiment with Azure OpenAI...
+
+  😞 Overall Sentiment: NEGATIVE
+  📊 Score:      0.38 (0=negative → 1=positive)
+  📈 Confidence: 89%
+  📉 Trend:      declining
+  
+  ⏰ COMPLIANCE STATUS: BREACH
+     Days since last note: 10.0
 ```
 
 ## Project Structure
