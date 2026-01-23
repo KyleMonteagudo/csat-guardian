@@ -729,7 +729,7 @@ resource devBoxVm 'Microsoft.Compute/virtualMachines@2023-09-01' = if (deployDev
   tags: commonTags
   properties: {
     hardwareProfile: {
-      vmSize: 'Standard_DS2_v2'
+      vmSize: 'Standard_B2ms'  // B-series is more widely available and cheaper
     }
     osProfile: {
       computerName: 'devbox'
@@ -746,7 +746,7 @@ resource devBoxVm 'Microsoft.Compute/virtualMachines@2023-09-01' = if (deployDev
       osDisk: {
         createOption: 'FromImage'
         managedDisk: {
-          storageAccountType: 'Premium_LRS'
+          storageAccountType: 'Standard_LRS'  // Standard storage for dev box
         }
       }
     }
