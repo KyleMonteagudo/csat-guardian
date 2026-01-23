@@ -35,10 +35,7 @@ What becomes easier or more difficult to do because of this change?
 
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
-| [0001](0001-azure-government-cloud.md) | Azure Government Cloud Selection | Accepted | 2026-01-23 |
 | [0002](0002-key-vault-secrets-management.md) | Azure Key Vault for Secrets Management | Accepted | 2026-01-23 |
-| [0003](0003-azure-container-apps-hosting.md) | Azure Container Apps for Application Hosting | **Superseded** | 2026-01-23 |
-| [0004](0004-app-service-private-networking.md) | App Service with Private Networking | **Accepted** | 2026-01-24 |
 
 ## Creating a New ADR
 

@@ -1,75 +1,74 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 23, 2026, 12:45 PM EST
-> **Sprint**: Sprint 0 (Infrastructure) → Sprint 1 (API & UI)
-> **Status**: ✅ FastAPI Backend Complete, Ready for UI or Deployment
+> **Last Updated**: January 23, 2026
+> **Status**: ✅ Ready for Deployment to Commercial Azure
 
 ---
 
 ## Quick Context for AI Assistant
 
-When starting a new session, say:
-
 ```
-Read the SESSION_STATE.md file in the csat-guardian project to understand where we left off and what to do next.
+Read the SESSION_STATE.md file in the csat-guardian project to understand the current state.
 ```
 
 ---
 
-## Current State Summary
+## Current State
 
-### ✅ Completed (Sprint 0 + Sprint 1 Backend)
+### ✅ Completed
 
-1. **Private Networking Infrastructure** - All deployed and tested
-   - VNet: `vnet-csatguardian-dev` (10.100.0.0/16)
-   - App Service: `app-csatguardian-dev.azurewebsites.us` (VNet integrated)
-   - Private Endpoints: SQL (10.100.2.4), Key Vault (10.100.2.5), OpenAI (10.100.2.6)
-   - Private DNS Zones: 3 zones configured with VNet links
-
-2. **Azure OpenAI** - Deployed and working with real sentiment analysis
-   - Resource: `oai-csatguardian-dev.openai.azure.us`
-   - Model: gpt-4o (version 2024-11-20)
-   - Deployment: `gpt-4o`
-   - **Real sentiment analysis working** ✅
-
-3. **Azure SQL Database** - Connected and populated
-   - Server: `sql-csatguardian-dev.database.usgovcloudapi.net`
-   - Database: `sqldb-csatguardian-dev`
-   - Data: 3 engineers, 6 cases, 17 timeline entries
-
-4. **FastAPI Backend** - Production-ready REST API (replaced Streamlit)
+1. **FastAPI Backend** - Production-ready REST API
    - File: `src/api.py`
    - All endpoints working with Azure SQL and Azure OpenAI
    - Swagger docs at `/docs`
 
-5. **Documentation** - Fully updated with diagrams
-   - ARCHITECTURE.md, README.md, AZURE_GOVERNMENT.md
-   - `docs/diagrams/infrastructure.md` - Mermaid diagrams
+2. **Azure SQL Integration**
+   - `src/db_sync.py` - Synchronous SQL client
+   - `src/clients/azure_sql_adapter.py` - Async wrapper
 
-### ⏳ In Progress / Next Steps
+3. **Azure OpenAI Sentiment Analysis**
+   - Real GPT-4o integration
+   - `src/services/sentiment_service.py`
 
-1. **Create Web UI** (HIGH PRIORITY)
-   - Simple HTML/JS frontend served by FastAPI
-   - Dashboard: case overview, sentiment, alerts
+4. **Deployment Package**
+   - `infrastructure/main-commercial.bicep` - Complete IaC
+   - `infrastructure/deploy-all.ps1` - One-click deployment
+   - `infrastructure/DEPLOYMENT_GUIDE.md` - Step-by-step instructions
 
-2. **Deploy to App Service**
-   - Package FastAPI app
-   - Deploy to `app-csatguardian-dev.azurewebsites.us`
+5. **Documentation** - Clean and updated
 
-3. **Disable Public Access** (after deployment)
+### ⏳ Next Steps
+
+1. **Deploy to Azure** - Run `deploy-all.ps1` from deployment PC
+2. **Create Web UI** - Simple dashboard (optional)
+3. **Disable Public Access** - After deployment verified
 
 ---
 
-## Key Files to Know
+## Deployment Info
+
+**Target Environment:**
+- Cloud: Commercial Azure
+- Region: East US
+- Subscription: `a20d761d-cb36-4f83-b827-58ccdb166f39`
+- Resource Group: `KMonteagudo_CSAT_Guardian`
+
+**Deploy Command:**
+```powershell
+cd infrastructure
+.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!"
+```
+
+---
+
+## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/api.py` | **FastAPI REST backend** (main entry point) |
-| `src/db_sync.py` | Synchronous Azure SQL client |
-| `src/clients/azure_sql_adapter.py` | Async wrapper for FastAPI |
-| `src/main.py` | CLI entry point (scan, chat, monitor) |
-| `src/config.py` | Configuration management |
-| `src/services/sentiment_service.py` | Azure OpenAI sentiment analysis |
+| `src/api.py` | FastAPI REST backend |
+| `src/db_sync.py` | Azure SQL client |
+| `infrastructure/deploy-all.ps1` | Deployment script |
+| `infrastructure/bicep/main-commercial.bicep` | Azure IaC |
 
 ---
 
@@ -77,11 +76,9 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand where 
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | API info |
 | `/api/health` | GET | Health check |
-| `/api/engineers` | GET | List all engineers |
-| `/api/cases` | GET | List cases (with filters) |
-| `/api/cases/{id}` | GET | Case details with timeline |
+| `/api/engineers` | GET | List engineers |
+| `/api/cases` | GET | List cases |
 | `/api/analyze/{id}` | POST | Sentiment analysis |
 | `/api/chat` | POST | Chat with agent |
 | `/api/alerts` | GET | Active alerts |
@@ -91,25 +88,13 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand where 
 ## Test Commands
 
 ```powershell
-# Start API server
-cd csat-guardian/src
-..\env\Scripts\Activate.ps1
+# Start API locally
+cd src
 python -m uvicorn api:app --host 0.0.0.0 --port 8000
 
 # Test endpoints
 Invoke-RestMethod -Uri "http://localhost:8000/api/health" | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8000/api/engineers" | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8000/api/analyze/case-001" -Method POST -Body '{}' -ContentType "application/json" | ConvertTo-Json
 ```
-
----
-
-## ⚠️ CRITICAL GUARDRAILS
-
-- ✅ Only work within: `rg-csatguardian-dev`
-- ❌ **NEVER** modify resources in other resource groups
-- ❌ Don't commit `.env.local` or secrets
-- ❌ Don't disable public access until app is deployed
 
 ---
 

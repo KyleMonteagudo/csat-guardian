@@ -5,10 +5,8 @@
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial architecture document |
-| 1.1 | 2026-01-23 | Kyle Monteagudo | Updated for Azure Government |
-| 1.2 | 2026-01-23 | Kyle Monteagudo | Added actual deployed resource names and endpoints |
-| 2.0 | 2026-01-23 | Kyle Monteagudo | **Major update**: Private networking architecture with VNet, Private Endpoints, App Service |
-| 2.1 | 2026-01-23 | Kyle Monteagudo | Added Mermaid diagrams, linked to infrastructure diagrams document |
+| 2.0 | 2026-01-24 | Kyle Monteagudo | **Major update**: Private networking architecture with VNet, Private Endpoints, App Service |
+| 3.0 | 2026-01-25 | Kyle Monteagudo | Updated for Commercial Azure (East US) |
 
 ---
 
@@ -26,19 +24,17 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 - Ensuring timely case updates (7-day compliance)
 - Providing engineers with actionable coaching recommendations
 
-> **⚠️ IMPORTANT: Azure Government Cloud with Private Networking**
+> **⚠️ IMPORTANT: Commercial Azure with Private Networking**
 > 
-> This application is deployed in **Azure Government** cloud with **private endpoints**.
+> This application is deployed in **Commercial Azure** (East US) with **private endpoints**.
 > All Azure-to-Azure communication is private (no public internet).
-> See [AZURE_GOVERNMENT.md](AZURE_GOVERNMENT.md) for details.
 
 **Key Architectural Principles:**
-1. **Cloud-First**: All components run in Azure Government, no local hosting
+1. **Cloud-First**: All components run in Azure Commercial, no local hosting
 2. **Private by Default**: All backend services use Private Endpoints
 3. **No Secrets in Code**: All credentials stored in Azure Key Vault
 4. **API-Based Access**: Even sample data accessed via API patterns
 5. **VNet Integration**: App Service routes all traffic through VNet
-6. **FedRAMP Compliant**: Azure Government meets federal compliance requirements
 
 ---
 
@@ -46,21 +42,21 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────┐
-│             CSAT GUARDIAN ARCHITECTURE (AZURE GOVERNMENT - PRIVATE NETWORKING)      │
+│             CSAT GUARDIAN ARCHITECTURE (AZURE COMMERCIAL - PRIVATE NETWORKING)      │
 └────────────────────────────────────────────────────────────────────────────────────┘
 
                             ┌─────────────────────────────┐
-                            │        GitHub Actions       │
-                            │       (CI/CD Pipeline)      │
+                            │         Manual Deploy       │
+                            │     (deploy-all.ps1)        │
                             └─────────────┬───────────────┘
                                           │ Deploy
                                           ▼
 ┌────────────────────────────────────────────────────────────────────────────────────┐
-│                       AZURE GOVERNMENT CLOUD (USGov Virginia)                       │
-│                           Resource Group: rg-csatguardian-dev                       │
+│                       AZURE COMMERCIAL CLOUD (East US)                              │
+│                        Resource Group: KMonteagudo_CSAT_Guardian                    │
 │                                                                                     │
 │  ┌────────────────────────────────────────────────────────────────────────────┐    │
-│  │                    VIRTUAL NETWORK (vnet-csatguardian-dev)                  │    │
+│  │                    VIRTUAL NETWORK (vnet-csatguardian)                      │    │
 │  │                           Address Space: 10.100.0.0/16                      │    │
 │  │                                                                             │    │
 │  │  ┌─────────────────────────────┐   ┌──────────────────────────────────┐   │    │
@@ -69,7 +65,7 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 │  │  │                             │   │                                  │   │    │
 │  │  │  ┌───────────────────────┐  │   │  ┌─────────────────────────┐    │   │    │
 │  │  │  │    App Service        │  │   │  │  Private Endpoints      │    │   │    │
-│  │  │  │    (Streamlit POC)    │──┼───┼──│  ├─ pep-sql (10.100.2.4) │    │   │    │
+│  │  │  │    (FastAPI POC)      │──┼───┼──│  ├─ pep-sql (10.100.2.4) │    │   │    │
 │  │  │  │    VNet Integration   │  │   │  │  ├─ pep-kv  (10.100.2.5) │    │   │    │
 │  │  │  └───────────────────────┘  │   │  │  └─ pep-oai (10.100.2.6) │    │   │    │
 │  │  │                             │   │  └─────────────────────────┘    │   │    │
@@ -77,9 +73,9 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 │  │                                                                             │    │
 │  └─────────────────────────────────────────────────────────────────────────────┘    │
 │                                          │                                          │
-│         ┌────────────────────────────────┼────────────────────────────────┐        │
-│         │                                │                                │        │
-│         ▼                                ▼                                ▼        │
+│         ┌────────────────────────────────┼────────────────────────────────────┐    │
+│         │                                │                                    │    │
+│         ▼                                ▼                                    ▼    │
 │  ┌───────────────┐               ┌───────────────┐               ┌───────────────┐ │
 │  │   Azure SQL   │               │   Key Vault   │               │  Azure OpenAI │ │
 │  │   (Private)   │               │   (Private)   │               │   (Private)   │ │
@@ -90,9 +86,9 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 │                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐ │
 │  │                         PRIVATE DNS ZONES                                      │ │
-│  │  privatelink.database.usgovcloudapi.net  ← SQL Server                         │ │
-│  │  privatelink.vaultcore.usgovcloudapi.net ← Key Vault                          │ │
-│  │  privatelink.openai.azure.us             ← Azure OpenAI                       │ │
+│  │  privatelink.database.windows.net        ← SQL Server                         │ │
+│  │  privatelink.vaultcore.azure.net         ← Key Vault                          │ │
+│  │  privatelink.openai.azure.com            ← Azure OpenAI                       │ │
 │  └───────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                     │
 └────────────────────────────────────────────────────────────────────────────────────┘
@@ -110,27 +106,27 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 
 ## 3. Deployed Resources
 
-### Resource Group: `rg-csatguardian-dev`
+### Resource Group: `KMonteagudo_CSAT_Guardian`
 
 | Resource | Name | Type | Notes |
 |----------|------|------|-------|
-| **VNet** | `vnet-csatguardian-dev` | Virtual Network | 10.100.0.0/16 |
-| **App Service Plan** | `asp-csatguardian-dev` | Linux B1 | Python 3.12 |
-| **App Service** | `app-csatguardian-dev` | Web App | Streamlit POC with VNet integration |
-| **Azure OpenAI** | `oai-csatguardian-dev` | Cognitive Services | GPT-4o deployment |
-| **SQL Server** | `sql-csatguardian-dev` | Azure SQL | Logical server |
-| **SQL Database** | `sqldb-csatguardian-dev` | Azure SQL DB | Basic tier |
-| **Key Vault** | `kv-csatguardian-dev` | Key Vault | RBAC-enabled |
-| **App Insights** | `appi-csatguardian-dev` | Application Insights | Logging/monitoring |
-| **Log Analytics** | `log-csatguardian-dev` | Log Analytics | Central logs |
+| **VNet** | `vnet-csatguardian` | Virtual Network | 10.100.0.0/16 |
+| **App Service Plan** | `asp-csatguardian` | Linux B1 | Python 3.12 |
+| **App Service** | `app-csatguardian` | Web App | FastAPI POC with VNet integration |
+| **Azure OpenAI** | `oai-csatguardian` | Cognitive Services | GPT-4o deployment |
+| **SQL Server** | `sql-csatguardian` | Azure SQL | Logical server |
+| **SQL Database** | `sqldb-csatguardian` | Azure SQL DB | Basic tier |
+| **Key Vault** | `kv-csatguardian` | Key Vault | RBAC-enabled |
+| **App Insights** | `appi-csatguardian` | Application Insights | Logging/monitoring |
+| **Log Analytics** | `log-csatguardian` | Log Analytics | Central logs |
 
 ### Private Endpoints
 
 | Endpoint | Target | Private IP | DNS Zone |
 |----------|--------|-----------|----------|
-| `pep-csatguardian-dev-sql` | SQL Server | 10.100.2.4 | privatelink.database.usgovcloudapi.net |
-| `pep-csatguardian-dev-kv` | Key Vault | 10.100.2.5 | privatelink.vaultcore.usgovcloudapi.net |
-| `pep-csatguardian-dev-oai` | Azure OpenAI | 10.100.2.6 | privatelink.openai.azure.us |
+| `pep-csatguardian-sql` | SQL Server | 10.100.2.4 | privatelink.database.windows.net |
+| `pep-csatguardian-kv` | Key Vault | 10.100.2.5 | privatelink.vaultcore.azure.net |
+| `pep-csatguardian-oai` | Azure OpenAI | 10.100.2.6 | privatelink.openai.azure.com |
 
 ### Subnets
 
@@ -145,21 +141,20 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 
 ### 4.1 App Service (POC Frontend)
 
-**Purpose**: Hosts the Streamlit web UI for POC demonstration
+**Purpose**: Hosts the FastAPI backend for POC demonstration
 
-**Why App Service (not Container Apps)?**
+**Why App Service?**
 - Simpler deployment for Python apps
 - Native VNet integration support
 - Easier for single-app scenarios
-- Well-supported in Azure Government
 
 **Configuration:**
 ```
-Plan: asp-csatguardian-dev (Linux B1)
+Plan: asp-csatguardian (Linux B1)
 Runtime: Python 3.12
 VNet Integration: snet-appservice
 Route All: Enabled (all outbound through VNet)
-URL: https://app-csatguardian-dev.azurewebsites.us
+URL: https://app-csatguardian.azurewebsites.net
 ```
 
 **Note**: This is a temporary POC frontend. Production will use Teams Bot integration.
@@ -168,7 +163,7 @@ URL: https://app-csatguardian-dev.azurewebsites.us
 
 **Purpose**: Securely stores all secrets and credentials
 
-**Deployed Instance:** `kv-csatguardian-dev.vault.usgovcloudapi.net`
+**Deployed Instance:** `kv-csatguardian.vault.azure.net`
 **Private Endpoint IP:** 10.100.2.5
 
 **Secrets Stored:**
@@ -199,8 +194,8 @@ Application Config
 **Purpose**: Stores case data, alert history, and analytics
 
 **Deployed Instances:**
-- Server: `sql-csatguardian-dev.database.usgovcloudapi.net`
-- Database: `sqldb-csatguardian-dev`
+- Server: `sql-csatguardian.database.windows.net`
+- Database: `sqldb-csatguardian`
 - Private Endpoint IP: 10.100.2.4
 - Admin: `sqladmin`
 
@@ -221,11 +216,11 @@ Alerts        -- Sent alert history (for deduplication)
 **Purpose**: Provides AI capabilities for sentiment analysis and recommendations
 
 **Deployed Instance:**
-- Resource: `oai-csatguardian-dev`
-- Endpoint: `https://oai-csatguardian-dev.openai.azure.us/`
+- Resource: `oai-csatguardian`
+- Endpoint: `https://oai-csatguardian.openai.azure.com/`
 - Deployment: `gpt-4o` (version 2024-11-20)
 - Private Endpoint IP: 10.100.2.6
-- Region: USGov Virginia
+- Region: East US
 
 **Use Cases:**
 1. **Sentiment Analysis**: Classify customer communications as positive/neutral/negative
@@ -234,9 +229,9 @@ Alerts        -- Sent alert history (for deduplication)
 
 ---
 
-## 4. Data Flow
+## 5. Data Flow
 
-### 4.1 Case Monitoring Flow
+### 5.1 Case Monitoring Flow
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -258,7 +253,7 @@ Alerts        -- Sent alert history (for deduplication)
 4. Alert Service checks thresholds and sends alerts via Teams
 5. Metrics recorded to database
 
-### 4.2 Conversational Flow
+### 5.2 Conversational Flow
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -283,9 +278,9 @@ Alerts        -- Sent alert history (for deduplication)
 
 ---
 
-## 5. Security Architecture
+## 6. Security Architecture
 
-### 5.1 Authentication & Authorization
+### 6.1 Authentication & Authorization
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -296,7 +291,7 @@ App Service
     │
     │ System Managed Identity
     ▼
-Azure AD
+Entra ID
     │
     │ Token
     ▼
@@ -305,7 +300,7 @@ Target Service (Key Vault, SQL, OpenAI)
 
 **No credentials in code or config** - all authentication via Managed Identity
 
-### 5.2 Network Security (Production)
+### 6.2 Network Security (Production)
 
 ```
                     Internet
@@ -334,7 +329,7 @@ Target Service (Key Vault, SQL, OpenAI)
             └───────────────────────┘
 ```
 
-### 5.3 Secrets Management
+### 6.3 Secrets Management
 
 | Environment | Secret Source | How Accessed |
 |-------------|---------------|--------------|
@@ -349,9 +344,9 @@ Target Service (Key Vault, SQL, OpenAI)
 
 ---
 
-## 6. Deployment Architecture
+## 7. Deployment Architecture
 
-### 6.1 Environment Strategy
+### 7.1 Environment Strategy
 
 | Environment | Purpose | Data | API |
 |-------------|---------|------|-----|
@@ -359,72 +354,39 @@ Target Service (Key Vault, SQL, OpenAI)
 | **Test** | Integration testing | Sample data | Mock |
 | **Prod** | Production | Real DfM | Real |
 
-### 6.2 Infrastructure as Code
+### 7.2 Infrastructure as Code
 
-All Azure resources defined in Bicep (private networking):
+All Azure resources defined in Bicep:
 
 ```
 infrastructure/
 ├── bicep/
-│   ├── main-private.bicep       # Main orchestrator
-│   ├── main-private.bicepparam  # Parameters
-│   ├── modules/
-│   │   ├── networking.bicep     # VNet and subnets
-│   │   ├── private-dns.bicep    # Private DNS zones
-│   │   ├── keyvault.bicep       # Key Vault
-│   │   ├── sql.bicep            # Azure SQL
-│   │   ├── openai.bicep         # Azure OpenAI
-│   │   ├── appservice.bicep     # App Service + Plan
-│   │   ├── private-endpoints.bicep # SQL, KV, OpenAI endpoints
-│   │   └── monitoring.bicep     # App Insights
-│   └── parameters/
-│       └── dev.json
-└── scripts/
-    └── deploy-private-infra.ps1  # Deployment script
+│   ├── main-commercial.bicep       # Complete Bicep template
+│   └── main-commercial.bicepparam  # Parameters
+├── deploy-all.ps1                  # All-in-one deployment script
+└── DEPLOYMENT_GUIDE.md             # Step-by-step guide
 ```
 
-### 6.3 CI/CD Pipeline
+### 7.3 Deployment Process
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CI/CD PIPELINE                          │
-└─────────────────────────────────────────────────────────────────┘
+Deployment is manual via PowerShell script:
 
-Push to Feature Branch
-    │
-    ▼
-┌─────────────┐
-│ CI: Build   │──▶ Run tests, linting, security scan
-│    & Test   │
-└──────┬──────┘
-       │ PR to develop
-       ▼
-┌─────────────┐
-│ Review &    │──▶ Code review, approval
-│   Merge     │
-└──────┬──────┘
-       │ Merge
-       ▼
-┌─────────────┐
-│ CD: Deploy  │──▶ Run Bicep, deploy to App Service
-│   to Dev    │
-└──────┬──────┘
-       │ PR to main
-       ▼
-┌─────────────┐
-│ CD: Deploy  │──▶ Deploy to Production (with approval)
-│   to Prod   │
-└─────────────┘
+```powershell
+# Deploy everything
+.\infrastructure\deploy-all.ps1 `
+    -SubscriptionId "a20d761d-cb36-4f83-b827-58ccdb166f39" `
+    -ResourceGroup "KMonteagudo_CSAT_Guardian" `
+    -Location "eastus"
 ```
 
 ---
 
-## 7. Scalability
+## 8. Scalability
 
-### 7.1 App Service Scaling
+### 8.1 App Service Scaling
 
 ```
-Plan: asp-csatguardian-dev
+Plan: asp-csatguardian
 Tier: B1 (Basic)
 Scale: Manual (1 instance for POC)
 Future: Can scale to P1v3 or Premium for auto-scale
@@ -435,7 +397,7 @@ Future: Can scale to P1v3 or Premium for auto-scale
 - Scale Out: Multiple instances with load balancing
 - Auto-scale: Based on CPU, memory, or HTTP requests
 
-### 7.2 Database Scaling
+### 8.2 Database Scaling
 
 | Load | Tier | DTUs | Est. Cost |
 |------|------|------|-----------|
@@ -444,7 +406,7 @@ Future: Can scale to P1v3 or Premium for auto-scale
 | Medium | Standard S2 | 50 | $75/month |
 | High | Premium P1 | 125 | $465/month |
 
-### 7.3 OpenAI Rate Limits
+### 8.3 OpenAI Rate Limits
 
 Managed via Azure OpenAI deployment capacity:
 - POC: 10K tokens/min
@@ -452,9 +414,9 @@ Managed via Azure OpenAI deployment capacity:
 
 ---
 
-## 8. Monitoring & Observability
+## 9. Monitoring & Observability
 
-### 8.1 Logging Strategy
+### 9.1 Logging Strategy
 
 | Log Level | Usage |
 |-----------|-------|
@@ -464,7 +426,7 @@ Managed via Azure OpenAI deployment capacity:
 | ERROR | Failed operations, exceptions |
 | CRITICAL | System failures |
 
-### 8.2 Key Metrics
+### 9.2 Key Metrics
 
 | Metric | Description | Alert Threshold |
 |--------|-------------|-----------------|
@@ -473,7 +435,7 @@ Managed via Azure OpenAI deployment capacity:
 | `alerts_sent_count` | Alerts sent per scan | N/A (informational) |
 | `error_count` | Errors per hour | > 10/hour |
 
-### 8.3 Dashboards
+### 9.3 Dashboards
 
 Azure Monitor workbook displaying:
 - Scan execution history
@@ -483,7 +445,7 @@ Azure Monitor workbook displaying:
 
 ---
 
-## 9. Disaster Recovery
+## 10. Disaster Recovery
 
 | Aspect | Strategy |
 |--------|----------|
@@ -494,7 +456,7 @@ Azure Monitor workbook displaying:
 
 ---
 
-## 10. Cost Estimate (POC)
+## 11. Cost Estimate (POC)
 
 | Resource | SKU | Monthly Cost |
 |----------|-----|--------------|
@@ -513,5 +475,5 @@ Azure Monitor workbook displaying:
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: January 23, 2026*
+*Document Version: 3.0*  
+*Last Updated: January 25, 2026*

@@ -4,18 +4,31 @@ CSAT Guardian - Database Seeding Script
 Creates tables and populates sample data in Azure SQL Database.
 
 Usage:
+    # Using environment variables:
+    export SQL_SERVER=sql-csatguardian.database.windows.net
+    export SQL_DATABASE=sqldb-csatguardian
+    export KEY_VAULT_NAME=kv-csatguardian
     python scripts/seed_database.py
+    
+    # Or set defaults for Commercial Azure in the script
 """
+import os
 import subprocess
 import sys
 import pyodbc
 from datetime import datetime, timedelta
 import uuid
 
+# Configuration - Override via environment variables
+SQL_SERVER = os.environ.get('SQL_SERVER', 'sql-csatguardian.database.windows.net')
+SQL_DATABASE = os.environ.get('SQL_DATABASE', 'sqldb-csatguardian')
+KEY_VAULT_NAME = os.environ.get('KEY_VAULT_NAME', 'kv-csatguardian')
+SQL_USERNAME = os.environ.get('SQL_USERNAME', 'sqladmin')
+
 def get_password_from_keyvault():
     """Retrieve SQL password from Key Vault."""
     result = subprocess.run(
-        'az keyvault secret show --vault-name kv-csatguardian-dev --name SqlServer--AdminPassword --query value -o tsv',
+        f'az keyvault secret show --vault-name {KEY_VAULT_NAME} --name SqlServer--AdminPassword --query value -o tsv',
         capture_output=True, text=True, shell=True
     )
     return result.stdout.strip()
@@ -25,9 +38,9 @@ def get_connection():
     password = get_password_from_keyvault()
     conn_str = (
         "Driver={ODBC Driver 18 for SQL Server};"
-        "Server=tcp:sql-csatguardian-dev.database.usgovcloudapi.net,1433;"
-        "Database=sqldb-csatguardian-dev;"
-        "Uid=sqladmin;"
+        f"Server=tcp:{SQL_SERVER},1433;"
+        f"Database={SQL_DATABASE};"
+        f"Uid={SQL_USERNAME};"
         f"Pwd={password};"
         "Encrypt=yes;"
         "TrustServerCertificate=no;"

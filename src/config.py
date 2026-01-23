@@ -4,14 +4,10 @@
 # This module handles all application configuration, loading settings from
 # environment variables, Azure Key Vault, and providing typed access.
 #
-# IMPORTANT: This application runs in AZURE GOVERNMENT cloud.
-# All Azure endpoints use .us domains (e.g., .openai.azure.us)
-#
 # Key Features:
 # - Type-safe configuration with Pydantic validation
 # - Environment variable loading with python-dotenv
 # - Azure Key Vault integration for secrets (production)
-# - Azure Government endpoint support
 # - Default values for development/POC mode
 # - Feature flags for gradual rollout
 #
@@ -38,40 +34,16 @@ load_dotenv(_project_root / ".env")
 
 
 # -----------------------------------------------------------------------------
-# Azure Cloud Configuration (Government vs Commercial)
+# Azure Commercial Cloud Configuration
 # -----------------------------------------------------------------------------
-# Detect which Azure cloud to use based on AZURE_CLOUD environment variable.
-# Default to Commercial Azure if not specified.
 
-AZURE_CLOUD = os.getenv("AZURE_CLOUD", "AzureCommercial").lower()
-IS_AZURE_GOVERNMENT = AZURE_CLOUD in ["azureusgovernment", "azuregov", "government", "gov"]
-
-if IS_AZURE_GOVERNMENT:
-    # Azure Government endpoints
-    AZURE_AUTHORITY = "https://login.microsoftonline.us"
-    AZURE_KEYVAULT_SUFFIX = "vault.usgovcloudapi.net"
-    AZURE_SQL_SUFFIX = "database.usgovcloudapi.net"
-    AZURE_OPENAI_SUFFIX = "openai.azure.us"
-    AZURE_GRAPH_ENDPOINT = "https://graph.microsoft.us/v1.0"
-    AZURE_CONTAINER_REGISTRY_SUFFIX = "azurecr.us"
-    AZURE_WEBAPP_SUFFIX = "azurewebsites.us"
-else:
-    # Commercial Azure endpoints (default)
-    AZURE_AUTHORITY = "https://login.microsoftonline.com"
-    AZURE_KEYVAULT_SUFFIX = "vault.azure.net"
-    AZURE_SQL_SUFFIX = "database.windows.net"
-    AZURE_OPENAI_SUFFIX = "openai.azure.com"
-    AZURE_GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0"
-    AZURE_CONTAINER_REGISTRY_SUFFIX = "azurecr.io"
-    AZURE_WEBAPP_SUFFIX = "azurewebsites.net"
-
-# Legacy aliases for backward compatibility
-AZURE_GOV_AUTHORITY = AZURE_AUTHORITY
-AZURE_GOV_KEYVAULT_SUFFIX = AZURE_KEYVAULT_SUFFIX
-AZURE_GOV_SQL_SUFFIX = AZURE_SQL_SUFFIX
-AZURE_GOV_OPENAI_SUFFIX = AZURE_OPENAI_SUFFIX
-AZURE_GOV_GRAPH_ENDPOINT = AZURE_GRAPH_ENDPOINT
-AZURE_GOV_CONTAINER_REGISTRY_SUFFIX = AZURE_CONTAINER_REGISTRY_SUFFIX
+AZURE_AUTHORITY = "https://login.microsoftonline.com"
+AZURE_KEYVAULT_SUFFIX = "vault.azure.net"
+AZURE_SQL_SUFFIX = "database.windows.net"
+AZURE_OPENAI_SUFFIX = "openai.azure.com"
+AZURE_GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0"
+AZURE_CONTAINER_REGISTRY_SUFFIX = "azurecr.io"
+AZURE_WEBAPP_SUFFIX = "azurewebsites.net"
 
 
 # -----------------------------------------------------------------------------

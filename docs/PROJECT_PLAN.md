@@ -549,37 +549,37 @@ jobs:
 - [ ] Set up GitHub Projects board ⚠️ (requires `gh auth refresh -s project,read:project`)
 - [x] Create issue templates ✅ (bug_report.md, feature_request.md, task.md)
 - [x] Create PR template ✅ (PULL_REQUEST_TEMPLATE.md)
-- [x] Set up GitHub Actions workflows ✅ (CI/CD files created)
+- [x] Set up GitHub Actions workflows ✅ (CI workflow created)
 
-### 8.2 Azure Setup Tasks
+### 8.2 Azure Setup Tasks (Commercial Azure - East US)
 
-- [x] Create Azure Resource Group ✅ `rg-csatguardian-dev` (usgovvirginia)
-- [x] Deploy Virtual Network ✅ `vnet-csatguardian-dev` (10.100.0.0/16)
-- [x] Deploy Key Vault ✅ `kv-csatguardian-dev.vault.usgovcloudapi.net`
-- [x] Deploy Azure SQL Database ✅ `sql-csatguardian-dev.database.usgovcloudapi.net`
-- [x] Deploy Azure OpenAI ✅ `oai-csatguardian-dev.openai.azure.us` (gpt-4o)
-- [x] Deploy App Service ✅ `app-csatguardian-dev.azurewebsites.us` (Python 3.12, Linux)
-- [x] Deploy App Service Plan ✅ `asp-csatguardian-dev` (Linux B1)
-- [x] Configure Private Endpoints ✅ (SQL: 10.100.2.4, Key Vault: 10.100.2.5, OpenAI: 10.100.2.6)
-- [x] Configure Private DNS Zones ✅ (3 zones with VNet links)
-- [x] Configure VNet Integration ✅ (App Service → snet-appservice)
-- [x] Configure Managed Identities ✅ (App Service has system-assigned identity)
-- [x] Store secrets in Key Vault ✅ (Azure OpenAI + SQL + App Insights)
-- [x] Seed sample data ✅ (6 cases, 17 timeline entries, 3 engineers, 6 customers)
+- [ ] Create Azure Resource Group → `KMonteagudo_CSAT_Guardian` (eastus)
+- [ ] Deploy Virtual Network → `vnet-csatguardian` (10.100.0.0/16)
+- [ ] Deploy Key Vault → `kv-csatguardian.vault.azure.net`
+- [ ] Deploy Azure SQL Database → `sql-csatguardian.database.windows.net`
+- [ ] Deploy Azure OpenAI → `oai-csatguardian.openai.azure.com` (gpt-4o)
+- [ ] Deploy App Service → `app-csatguardian.azurewebsites.net` (Python 3.12, Linux)
+- [ ] Deploy App Service Plan → `asp-csatguardian` (Linux B1)
+- [ ] Configure Private Endpoints (SQL: 10.100.2.4, Key Vault: 10.100.2.5, OpenAI: 10.100.2.6)
+- [ ] Configure Private DNS Zones (3 zones with VNet links)
+- [ ] Configure VNet Integration (App Service → snet-appservice)
+- [ ] Configure Managed Identities (App Service has system-assigned identity)
+- [ ] Store secrets in Key Vault (Azure OpenAI + SQL + App Insights)
+- [ ] Seed sample data (6 cases, 17 timeline entries, 3 engineers, 6 customers)
 
 ### 8.3 Documentation Tasks
 
 - [x] Finalize PROJECT_PLAN.md ✅
 - [x] Create FILE_REFERENCE.md structure ✅
 - [x] Create ARCHITECTURE.md ✅
-- [x] Set up ADR folder ✅ (3 ADRs: Azure Gov, Key Vault, Container Apps)
+- [x] Set up ADR folder ✅ (Key Vault ADR)
 - [x] Create initial README files ✅
 
 ### 8.4 Development Environment
 
 - [x] Document local setup process ✅
 - [x] Create .env.example ✅
-- [x] Test Azure CLI authentication ✅ (Azure Government)
+- [x] Test Azure CLI authentication ✅ (Commercial Azure)
 - [x] Verify Key Vault access ✅ (Secrets Officer role assigned)
 - [x] Test database connectivity ✅ (via scripts/test_db_connection.py)
 

@@ -64,8 +64,7 @@ Examples:
 
 **Local Development Access:**
 ```bash
-# Authenticate to Azure Government
-az cloud set --name AzureUSGovernment
+# Authenticate to Azure (Commercial)
 az login
 
 # Retrieve secret
@@ -91,5 +90,4 @@ az keyvault secret show --vault-name kv-csatguardian-dev --name AzureOpenAI--Api
 
 ## Related
 
-- ADR 0001: Azure Government Cloud Selection
 - [Azure Key Vault Documentation](https://docs.microsoft.com/azure/key-vault/)

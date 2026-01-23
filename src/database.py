@@ -235,7 +235,7 @@ class DatabaseManager:
         Args:
             connection_string: Either a SQLite path or an Azure SQL connection string
                 - SQLite: "data/csat_guardian.db" or "sqlite+aiosqlite:///path/to/db"
-                - Azure SQL: "Server=tcp:xxx.database.usgovcloudapi.net,1433;..."
+                - Azure SQL: "Server=tcp:xxx.database.windows.net,1433;..."
         """
         logger.info(f"Initializing database manager with path: {connection_string}")
         
@@ -243,7 +243,7 @@ class DatabaseManager:
         self.is_azure_sql = False
         
         # Detect if this is an Azure SQL connection string or SQLite
-        if connection_string.startswith("Server=") or "database.usgovcloudapi.net" in connection_string:
+        if connection_string.startswith("Server=") or "database.windows.net" in connection_string:
             # Azure SQL connection string - convert to SQLAlchemy format
             # Parse the ADO.NET style connection string
             logger.info("Detected Azure SQL connection string, using aioodbc driver")

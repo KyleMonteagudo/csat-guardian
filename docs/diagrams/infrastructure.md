@@ -1,6 +1,6 @@
 # CSAT Guardian - Infrastructure Diagrams
 
-> **Last Updated**: January 23, 2026  
+> **Last Updated**: January 25, 2026  
 > **Purpose**: Visual documentation for stakeholder and security reviews
 
 ---
@@ -11,16 +11,15 @@
 flowchart TB
     subgraph Internet["☁️ Internet"]
         DevMachine["💻 Developer Machine<br/>(Local Development)"]
-        GitHubActions["🔄 GitHub Actions<br/>(CI/CD Pipeline)"]
     end
 
-    subgraph AzureGov["🏛️ Azure Government (USGov Virginia)"]
-        subgraph RG["📦 Resource Group: rg-csatguardian-dev"]
+    subgraph AzureCommercial["☁️ Azure Commercial (East US)"]
+        subgraph RG["📦 Resource Group: KMonteagudo_CSAT_Guardian"]
             
-            subgraph VNet["🔒 Virtual Network: vnet-csatguardian-dev<br/>Address Space: 10.100.0.0/16"]
+            subgraph VNet["🔒 Virtual Network: vnet-csatguardian<br/>Address Space: 10.100.0.0/16"]
                 
                 subgraph AppSubnet["Subnet: snet-appservice<br/>10.100.1.0/24"]
-                    AppService["🌐 App Service<br/>app-csatguardian-dev<br/>(Streamlit POC)<br/>Python 3.12 | Linux B1"]
+                    AppService["🌐 App Service<br/>app-csatguardian<br/>(FastAPI POC)<br/>Python 3.12 | Linux B1"]
                 end
                 
                 subgraph PESubnet["Subnet: snet-privateendpoints<br/>10.100.2.0/24"]
@@ -31,19 +30,19 @@ flowchart TB
             end
             
             subgraph PaaS["PaaS Services (Private Access Only*)"]
-                SQL["🗄️ Azure SQL<br/>sql-csatguardian-dev<br/>.database.usgovcloudapi.net"]
-                KV["🔐 Key Vault<br/>kv-csatguardian-dev<br/>.vault.usgovcloudapi.net"]
-                OAI["🤖 Azure OpenAI<br/>oai-csatguardian-dev<br/>.openai.azure.us<br/>Model: gpt-4o"]
+                SQL["🗄️ Azure SQL<br/>sql-csatguardian<br/>.database.windows.net"]
+                KV["🔐 Key Vault<br/>kv-csatguardian<br/>.vault.azure.net"]
+                OAI["🤖 Azure OpenAI<br/>oai-csatguardian<br/>.openai.azure.com<br/>Model: gpt-4o"]
             end
             
             subgraph DNS["🌐 Private DNS Zones"]
-                DNS_SQL["privatelink.database<br/>.usgovcloudapi.net"]
-                DNS_KV["privatelink.vaultcore<br/>.usgovcloudapi.net"]
-                DNS_OAI["privatelink.openai<br/>.azure.us"]
+                DNS_SQL["privatelink.database<br/>.windows.net"]
+                DNS_KV["privatelink.vaultcore<br/>.azure.net"]
+                DNS_OAI["privatelink.openai<br/>.azure.com"]
             end
             
-            AppInsights["📊 App Insights<br/>appi-csatguardian-dev"]
-            LogAnalytics["📋 Log Analytics<br/>log-csatguardian-dev"]
+            AppInsights["📊 App Insights<br/>appi-csatguardian"]
+            LogAnalytics["📋 Log Analytics<br/>log-csatguardian"]
         end
     end
 
@@ -56,8 +55,6 @@ flowchart TB
     DevMachine -->|"az login<br/>(Public, for now)"| KV
     DevMachine -->|"ODBC<br/>(Public, for now)"| SQL
     DevMachine -->|"REST API<br/>(Public, for now)"| OAI
-    
-    GitHubActions -->|"Bicep Deploy"| RG
     
     AppService -->|"VNet Integration<br/>(All outbound via VNet)"| AppSubnet
     AppService --> PE_SQL
@@ -119,7 +116,7 @@ flowchart LR
 
     subgraph Output["📤 Output"]
         TeamsAlert["Teams Alert<br/>(Mock for POC)"]
-        Dashboard["Streamlit Dashboard<br/>(POC UI)"]
+        Dashboard["FastAPI Dashboard<br/>(POC UI)"]
         SQLResults["Azure SQL<br/>(Alert History)"]
     end
 
@@ -146,7 +143,7 @@ sequenceDiagram
     autonumber
     participant Dev as Developer Machine
     participant AzCLI as Azure CLI
-    participant AAD as Azure AD
+    participant AAD as Entra ID
     participant App as App Service
     participant MI as Managed Identity
     participant KV as Key Vault
@@ -154,7 +151,7 @@ sequenceDiagram
     participant OAI as Azure OpenAI
 
     Note over Dev,OAI: Local Development (Current)
-    Dev->>AzCLI: az login (Azure Gov)
+    Dev->>AzCLI: az login
     AzCLI->>AAD: Authenticate
     AAD-->>AzCLI: Token
     Dev->>KV: Get secrets (DefaultAzureCredential)
@@ -183,7 +180,7 @@ flowchart TB
         Dev["Developer"]
     end
 
-    subgraph AzureGov["🏛️ Azure Government"]
+    subgraph AzureCommercial["☁️ Azure Commercial"]
         subgraph VNet["🔒 VNet: 10.100.0.0/16"]
             AppService["App Service<br/>(VNet Integrated)"]
             
@@ -226,21 +223,21 @@ flowchart TB
 
 | Component | Resource Name | Type | Endpoint/IP | Status |
 |-----------|--------------|------|-------------|--------|
-| **VNet** | vnet-csatguardian-dev | Virtual Network | 10.100.0.0/16 | ✅ Deployed |
-| **App Subnet** | snet-appservice | Subnet | 10.100.1.0/24 | ✅ Deployed |
-| **PE Subnet** | snet-privateendpoints | Subnet | 10.100.2.0/24 | ✅ Deployed |
-| **App Service** | app-csatguardian-dev | Web App | .azurewebsites.us | ✅ Deployed |
-| **App Service Plan** | asp-csatguardian-dev | Plan | Linux B1 | ✅ Deployed |
-| **Azure OpenAI** | oai-csatguardian-dev | Cognitive Services | .openai.azure.us | ✅ Deployed |
-| **SQL Server** | sql-csatguardian-dev | SQL Server | .database.usgovcloudapi.net | ✅ Deployed |
-| **SQL Database** | sqldb-csatguardian-dev | SQL Database | (on server) | ✅ Deployed |
-| **Key Vault** | kv-csatguardian-dev | Key Vault | .vault.usgovcloudapi.net | ✅ Deployed |
-| **PE - SQL** | pep-csatguardian-dev-sql | Private Endpoint | 10.100.2.4 | ✅ Deployed |
-| **PE - Key Vault** | pep-csatguardian-dev-kv | Private Endpoint | 10.100.2.5 | ✅ Deployed |
-| **PE - OpenAI** | pep-csatguardian-dev-oai | Private Endpoint | 10.100.2.6 | ✅ Deployed |
-| **DNS - SQL** | privatelink.database.usgovcloudapi.net | Private DNS Zone | - | ✅ Deployed |
-| **DNS - KV** | privatelink.vaultcore.usgovcloudapi.net | Private DNS Zone | - | ✅ Deployed |
-| **DNS - OAI** | privatelink.openai.azure.us | Private DNS Zone | - | ✅ Deployed |
+| **VNet** | vnet-csatguardian | Virtual Network | 10.100.0.0/16 | ⏳ Pending |
+| **App Subnet** | snet-appservice | Subnet | 10.100.1.0/24 | ⏳ Pending |
+| **PE Subnet** | snet-privateendpoints | Subnet | 10.100.2.0/24 | ⏳ Pending |
+| **App Service** | app-csatguardian | Web App | .azurewebsites.net | ⏳ Pending |
+| **App Service Plan** | asp-csatguardian | Plan | Linux B1 | ⏳ Pending |
+| **Azure OpenAI** | oai-csatguardian | Cognitive Services | .openai.azure.com | ⏳ Pending |
+| **SQL Server** | sql-csatguardian | SQL Server | .database.windows.net | ⏳ Pending |
+| **SQL Database** | sqldb-csatguardian | SQL Database | (on server) | ⏳ Pending |
+| **Key Vault** | kv-csatguardian | Key Vault | .vault.azure.net | ⏳ Pending |
+| **PE - SQL** | pep-csatguardian-sql | Private Endpoint | 10.100.2.4 | ⏳ Pending |
+| **PE - Key Vault** | pep-csatguardian-kv | Private Endpoint | 10.100.2.5 | ⏳ Pending |
+| **PE - OpenAI** | pep-csatguardian-oai | Private Endpoint | 10.100.2.6 | ⏳ Pending |
+| **DNS - SQL** | privatelink.database.windows.net | Private DNS Zone | - | ⏳ Pending |
+| **DNS - KV** | privatelink.vaultcore.azure.net | Private DNS Zone | - | ⏳ Pending |
+| **DNS - OAI** | privatelink.openai.azure.com | Private DNS Zone | - | ⏳ Pending |
 
 ---
 
@@ -263,4 +260,4 @@ For formal security reviews, consider recreating in:
 
 ---
 
-*Last Updated: January 23, 2026*
+*Last Updated: January 25, 2026*
