@@ -123,7 +123,6 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 | **Key Vault** | `kv-csatguardian-dev` | Key Vault | RBAC-enabled |
 | **App Insights** | `appi-csatguardian-dev` | Application Insights | Logging/monitoring |
 | **Log Analytics** | `log-csatguardian-dev` | Log Analytics | Central logs |
-| **Container Registry** | `acrcsatguardiandev` | ACR | For future containers |
 
 ### Private Endpoints
 
