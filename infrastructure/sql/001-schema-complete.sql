@@ -17,6 +17,17 @@
 -- =============================================================================
 -- DROP EXISTING TABLES (for clean rebuild)
 -- =============================================================================
+-- Drop all foreign key constraints first
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql += N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id)) 
+    + '.' + QUOTENAME(OBJECT_NAME(parent_object_id)) 
+    + ' DROP CONSTRAINT ' + QUOTENAME(name) + ';'
+FROM sys.foreign_keys;
+EXEC sp_executesql @sql;
+GO
+
+-- Now drop tables in reverse dependency order
+IF OBJECT_ID('manager_alert_queue', 'U') IS NOT NULL DROP TABLE manager_alert_queue;
 IF OBJECT_ID('conversation_messages', 'U') IS NOT NULL DROP TABLE conversation_messages;
 IF OBJECT_ID('conversations', 'U') IS NOT NULL DROP TABLE conversations;
 IF OBJECT_ID('engineer_metrics', 'U') IS NOT NULL DROP TABLE engineer_metrics;
@@ -28,6 +39,7 @@ IF OBJECT_ID('timeline_entries', 'U') IS NOT NULL DROP TABLE timeline_entries;
 IF OBJECT_ID('cases', 'U') IS NOT NULL DROP TABLE cases;
 IF OBJECT_ID('customers', 'U') IS NOT NULL DROP TABLE customers;
 IF OBJECT_ID('engineers', 'U') IS NOT NULL DROP TABLE engineers;
+IF OBJECT_ID('vw_data_retention', 'V') IS NOT NULL DROP VIEW vw_data_retention;
 GO
 
 -- =============================================================================
