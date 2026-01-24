@@ -182,10 +182,11 @@ class SyncDatabaseManager:
         
         return entries
     
-    def _map_status(self, status_str: str) -> CaseStatus:
-        """Map database status string to CaseStatus enum."""
-        if not status_str:
+    def _map_status(self, status_val) -> CaseStatus:
+        """Map database status to CaseStatus enum."""
+        if not status_val:
             return CaseStatus.ACTIVE
+        status_str = str(status_val).lower()
         status_map = {
             "active": CaseStatus.ACTIVE,
             "in_progress": CaseStatus.IN_PROGRESS,
@@ -197,16 +198,24 @@ class SyncDatabaseManager:
             # Map escalated to active since ESCALATED doesn't exist in enum
             "escalated": CaseStatus.ACTIVE,
         }
-        return status_map.get(status_str.lower(), CaseStatus.ACTIVE)
+        return status_map.get(status_str, CaseStatus.ACTIVE)
     
-    def _map_priority(self, priority_str: str) -> CasePriority:
-        """Map database priority string to CasePriority enum."""
+    def _map_priority(self, priority_val) -> CasePriority:
+        """Map database priority/severity to CasePriority enum."""
+        if not priority_val:
+            return CasePriority.MEDIUM
+        priority_str = str(priority_val).lower()
         priority_map = {
             "low": CasePriority.LOW,
+            "1": CasePriority.LOW,
             "medium": CasePriority.MEDIUM,
+            "2": CasePriority.MEDIUM,
             "high": CasePriority.HIGH,
+            "3": CasePriority.HIGH,
+            "critical": CasePriority.HIGH,
+            "4": CasePriority.HIGH,
         }
-        return priority_map.get(priority_str.lower(), CasePriority.MEDIUM)
+        return priority_map.get(priority_str, CasePriority.MEDIUM)
     
     def get_cases_for_engineer(self, engineer_id: str) -> List[Case]:
         """Get all cases assigned to an engineer."""
