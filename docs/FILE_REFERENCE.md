@@ -2,25 +2,27 @@
 
 > **Purpose:** Quick reference guide explaining what every file in the project does.
 > 
-> **Last Updated:** January 25, 2026
+> **Last Updated:** January 24, 2026
 
 ---
 
-## 🌐 Deployed Azure Resources (Commercial Azure - East US)
+## 🌐 Deployed Azure Resources (Commercial Azure - Central US)
 
-All resources deployed with **private endpoints** in VNet `vnet-csatguardian` (10.100.0.0/16).
+All resources deployed with **private endpoints** in VNet `vnet-csatguardian-dev` (10.100.0.0/16).
 
-| Resource | Name | Endpoint / Private IP |
-|----------|------|----------------------|
-| **Resource Group** | `KMonteagudo_CSAT_Guardian` | East US |
-| **Virtual Network** | `vnet-csatguardian` | 10.100.0.0/16 |
-| **Key Vault** | `kv-csatguardian` | PE: 10.100.2.5 |
-| **SQL Server** | `sql-csatguardian` | PE: 10.100.2.4 |
-| **SQL Database** | `csatdb` | (on above server) |
-| **Azure OpenAI** | `oai-csatguardian` | PE: 10.100.2.6 |
-| **App Service** | `app-csatguardian` | `https://app-csatguardian.azurewebsites.net` |
-| **App Service Plan** | `asp-csatguardian` | Linux B1, Python 3.12 |
-| **App Insights** | `appi-csatguardian` | (connection string in Key Vault) |
+| Resource | Name | Notes |
+|----------|------|-------|
+| **Resource Group** | `CSAT_Guardian_Dev` | Central US |
+| **Virtual Network** | `vnet-csatguardian-dev` | 10.100.0.0/16 |
+| **Key Vault** | `kv-csatguard-dev` | Note: shorter name due to soft-delete conflict |
+| **SQL Server** | `sql-csatguardian-dev` | Private endpoint |
+| **SQL Database** | `sqldb-csatguardian-dev` | Seeded with test data |
+| **AI Services** | `ais-csatguardian-dev` | gpt-4o deployment |
+| **AI Hub** | `aihub-csatguardian-dev` | AI Foundry |
+| **App Service** | `app-csatguardian-dev` | `https://app-csatguardian-dev.azurewebsites.net` |
+| **App Service Plan** | `asp-csatguardian-dev` | Linux B1, Python 3.11 |
+| **Bastion** | `bas-csatguardian-dev` | Secure VM access |
+| **Dev-box VM** | `vm-devbox-csatguardian` | Windows 11 (testadmin/Password1!) |
 
 ### Private DNS Zones
 
@@ -28,18 +30,15 @@ All resources deployed with **private endpoints** in VNet `vnet-csatguardian` (1
 |------|---------|
 | `privatelink.database.windows.net` | SQL Server private resolution |
 | `privatelink.vaultcore.azure.net` | Key Vault private resolution |
-| `privatelink.openai.azure.com` | Azure OpenAI private resolution |
+| `privatelink.cognitiveservices.azure.com` | AI Services private resolution |
 
 ### Key Vault Secrets
 
 | Secret Name | Description |
 |-------------|-------------|
-| `AzureOpenAI--ApiKey` | Azure OpenAI API key |
-| `AzureOpenAI--Endpoint` | `https://oai-csatguardian.openai.azure.com/` |
-| `AzureOpenAI--DeploymentName` | `gpt-4o` |
-| `AzureOpenAI--ApiVersion` | `2025-01-01-preview` |
-| `SqlServer--ConnectionString` | SQL connection string (auto-generated) |
-| `AppInsights--ConnectionString` | App Insights connection (auto-generated) |
+| `AzureOpenAI--ApiKey` | AI Services API key |
+| `AzureOpenAI--Endpoint` | AI Services endpoint URL |
+| `SqlServer--ConnectionString` | SQL connection string |
 
 ---
 

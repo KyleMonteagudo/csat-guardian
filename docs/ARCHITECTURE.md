@@ -6,7 +6,7 @@
 |---------|------|--------|---------|
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial architecture document |
 | 2.0 | 2026-01-24 | Kyle Monteagudo | **Major update**: Private networking architecture with VNet, Private Endpoints, App Service |
-| 3.0 | 2026-01-25 | Kyle Monteagudo | Updated for Commercial Azure (East US) |
+| 3.0 | 2026-01-24 | Kyle Monteagudo | Updated for Commercial Azure (Central US), AI Foundry (AI Services + AI Hub) |
 
 ---
 
@@ -26,7 +26,7 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 
 > **⚠️ IMPORTANT: Commercial Azure with Private Networking**
 > 
-> This application is deployed in **Commercial Azure** (East US) with **private endpoints**.
+> This application is deployed in **Commercial Azure** (Central US) with **private endpoints**.
 > All Azure-to-Azure communication is private (no public internet).
 
 **Key Architectural Principles:**
@@ -34,7 +34,7 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 2. **Private by Default**: All backend services use Private Endpoints
 3. **No Secrets in Code**: All credentials stored in Azure Key Vault
 4. **API-Based Access**: Even sample data accessed via API patterns
-5. **VNet Integration**: App Service routes all traffic through VNet
+5. **AI Foundry**: Uses AI Hub + AI Services instead of standalone Azure OpenAI
 
 ---
 
@@ -46,17 +46,17 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 └────────────────────────────────────────────────────────────────────────────────────┘
 
                             ┌─────────────────────────────┐
-                            │         Manual Deploy       │
-                            │     (deploy-all.ps1)        │
+                            │       Cloud Shell Deploy    │
+                            │     (az webapp up)          │
                             └─────────────┬───────────────┘
                                           │ Deploy
                                           ▼
 ┌────────────────────────────────────────────────────────────────────────────────────┐
-│                       AZURE COMMERCIAL CLOUD (East US)                              │
-│                        Resource Group: KMonteagudo_CSAT_Guardian                    │
+│                       AZURE COMMERCIAL CLOUD (Central US)                           │
+│                        Resource Group: CSAT_Guardian_Dev                            │
 │                                                                                     │
 │  ┌────────────────────────────────────────────────────────────────────────────┐    │
-│  │                    VIRTUAL NETWORK (vnet-csatguardian)                      │    │
+│  │                    VIRTUAL NETWORK (vnet-csatguardian-dev)                  │    │
 │  │                           Address Space: 10.100.0.0/16                      │    │
 │  │                                                                             │    │
 │  │  ┌─────────────────────────────┐   ┌──────────────────────────────────┐   │    │
@@ -65,9 +65,9 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 │  │  │                             │   │                                  │   │    │
 │  │  │  ┌───────────────────────┐  │   │  ┌─────────────────────────┐    │   │    │
 │  │  │  │    App Service        │  │   │  │  Private Endpoints      │    │   │    │
-│  │  │  │    (FastAPI POC)      │──┼───┼──│  ├─ pep-sql (10.100.2.4) │    │   │    │
-│  │  │  │    VNet Integration   │  │   │  │  ├─ pep-kv  (10.100.2.5) │    │   │    │
-│  │  │  └───────────────────────┘  │   │  │  └─ pep-oai (10.100.2.6) │    │   │    │
+│  │  │  │    (FastAPI POC)      │──┼───┼──│  ├─ pep-sql              │    │   │    │
+│  │  │  │    Python 3.11        │  │   │  │  ├─ pep-kv               │    │   │    │
+│  │  │  └───────────────────────┘  │   │  │  └─ pep-ais              │    │   │    │
 │  │  │                             │   │  └─────────────────────────┘    │   │    │
 │  │  └─────────────────────────────┘   └──────────────────────────────────┘   │    │
 │  │                                                                             │    │
@@ -77,18 +77,17 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 │         │                                │                                    │    │
 │         ▼                                ▼                                    ▼    │
 │  ┌───────────────┐               ┌───────────────┐               ┌───────────────┐ │
-│  │   Azure SQL   │               │   Key Vault   │               │  Azure OpenAI │ │
+│  │   Azure SQL   │               │   Key Vault   │               │  AI Services  │ │
 │  │   (Private)   │               │   (Private)   │               │   (Private)   │ │
 │  │               │               │               │               │               │ │
-│  │ sql-csat...   │               │ kv-csat...    │               │ oai-csat...   │ │
-│  │ 10.100.2.4    │               │ 10.100.2.5    │               │ 10.100.2.6    │ │
+│  │ sql-csat...   │               │ kv-csatguard  │               │ ais-csat...   │ │
 │  └───────────────┘               └───────────────┘               └───────────────┘ │
 │                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐ │
 │  │                         PRIVATE DNS ZONES                                      │ │
 │  │  privatelink.database.windows.net        ← SQL Server                         │ │
 │  │  privatelink.vaultcore.azure.net         ← Key Vault                          │ │
-│  │  privatelink.openai.azure.com            ← Azure OpenAI                       │ │
+│  │  privatelink.cognitiveservices.azure.com ← AI Services                        │ │
 │  └───────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                     │
 └────────────────────────────────────────────────────────────────────────────────────┘

@@ -2,96 +2,62 @@
 
 ## Overview
 
-This guide explains how to deploy CSAT Guardian to **Commercial Azure** from a locked-down PC.
+This guide explains how to deploy CSAT Guardian to **Commercial Azure** using Cloud Shell.
 
-**Target Environment:**
+**Current Deployed Environment:**
 - Subscription ID: `a20d761d-cb36-4f83-b827-58ccdb166f39`
-- Resource Group: `KMonteagudo_CSAT_Guardian`
-- Region: East US
+- Resource Group: `CSAT_Guardian_Dev`
+- Region: Central US
 
 ---
 
 ## Prerequisites
 
-Before starting, ensure the locked-down PC has:
-
-1. **Azure CLI** installed
-   - Download: https://aka.ms/installazurecliwindows
-   - Verify: `az --version`
-
-2. **PowerShell 5.1+** (pre-installed on Windows)
-   - Verify: `$PSVersionTable.PSVersion`
-
-3. **Git** installed
-   - Download: https://git-scm.com/download/win
-   - Verify: `git --version`
-
-**Note:** ODBC Driver is NOT required on the deployment machine. Database seeding is done via Azure Portal.
+- Access to Azure Portal with Cloud Shell
+- Git repository access: `https://github.com/kmonteagudo_microsoft/csat-guardian.git`
 
 ---
 
-## Step-by-Step Deployment
+## Deployment Workflow
 
-### Step 1: Clone the Repository
+### Initial Setup (One-time in Cloud Shell)
 
-```powershell
-cd C:\Projects  # or wherever you want
+```bash
+# Clone the repo
 git clone https://github.com/kmonteagudo_microsoft/csat-guardian.git
 cd csat-guardian
-git checkout develop
 ```
 
-### Step 2: Login to Azure
+### Deploy/Update Application
 
-```powershell
-az login
-az account set --subscription "a20d761d-cb36-4f83-b827-58ccdb166f39"
-
-# Verify
-az account show --query "{Name:name, SubscriptionId:id}" -o table
+```bash
+cd ~/csat-guardian
+git pull
+cd src
+az webapp up --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev --runtime "PYTHON:3.11"
 ```
 
-### Step 3: Create Resource Group (if needed)
+This takes 3-5 minutes to build and deploy.
 
-```powershell
-az group create --name KMonteagudo_CSAT_Guardian --location eastus
-```
+---
 
-### Step 4: Run the Deployment Script
+## Current Resource Names
 
-```powershell
-cd infrastructure
+| Resource | Name |
+|----------|------|
+| Resource Group | `CSAT_Guardian_Dev` |
+| App Service | `app-csatguardian-dev` |
+| App Service Plan | `asp-csatguardian-dev` |
+| SQL Server | `sql-csatguardian-dev` |
+| SQL Database | `sqldb-csatguardian-dev` |
+| AI Services | `ais-csatguardian-dev` |
+| Key Vault | `kv-csatguard-dev` |
+| Bastion | `bas-csatguardian-dev` |
+| Dev-box VM | `vm-devbox-csatguardian` |
 
-# Deploy infrastructure and app (skip database seeding)
-.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!" -SkipDatabase
-```
+---
 
-**This takes approximately 15-20 minutes** (Bastion alone takes ~10 min).
-
-The script deploys:
-- Virtual Network with private subnets
-- Azure Bastion (for secure VM access)
-- Dev-box VM (Windows 11, no public IP)
-- Azure SQL Server + Database
-- Azure OpenAI with GPT-4o
-- Azure Key Vault
-- App Service with VNet integration
-- Private Endpoints for all backend services
-- Private DNS Zones
-
-### Step 5: Seed the Database (via Azure Portal)
-
-Since we can't install ODBC on the locked-down PC, seed the database using Azure Portal:
-
-1. Go to **Azure Portal** → **SQL databases** → `sqldb-csatguardian-dev`
-2. Click **Query editor (preview)** in the left menu
-3. Login with:
-   - Username: `sqladmin`
-   - Password: (the password you used in Step 4)
-4. Copy the contents of `infrastructure/seed-database.sql`
-5. Paste into Query editor and click **Run**
-
-### Step 6: Verify Deployment
+## Verify Deployment
 
 Connect to the dev-box VM via Bastion to test:
 
