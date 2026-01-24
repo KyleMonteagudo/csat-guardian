@@ -20,7 +20,7 @@ All resources deployed with **private endpoints** in VNet `vnet-csatguardian-dev
 | **AI Services** | `ais-csatguardian-dev` | gpt-4o deployment |
 | **AI Hub** | `aihub-csatguardian-dev` | AI Foundry |
 | **App Service** | `app-csatguardian-dev` | `https://app-csatguardian-dev.azurewebsites.net` |
-| **App Service Plan** | `asp-csatguardian-dev` | Linux B1, Python 3.11 |
+| **App Service Plan** | `asp-csatguardian-dev` | Linux P1v3 (Premium), Python 3.11 |
 | **Bastion** | `bas-csatguardian-dev` | Secure VM access |
 | **Dev-box VM** | `vm-devbox-csatguardian` | Windows 11 (testadmin/Password1!) |
 
