@@ -575,8 +575,8 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   tags: commonTags
   kind: 'linux'
   sku: {
-    name: 'B1'
-    tier: 'Basic'
+    name: 'P1v3'
+    tier: 'PremiumV3'
   }
   properties: {
     reserved: true // Required for Linux
@@ -617,6 +617,10 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
           value: 'gpt-4o'
         }
         {
+          name: 'AZURE_OPENAI_DEPLOYMENT_NAME'
+          value: 'gpt-4o'
+        }
+        {
           name: 'AZURE_OPENAI_API_VERSION'
           value: '2024-10-21'
         }
@@ -635,6 +639,14 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
           value: '0'
+        }
+        {
+          name: 'AZURE_OPENAI_API_KEY'
+          value: '@Microsoft.KeyVault(SecretUri=${keyVault.properties.vaultUri}secrets/AzureOpenAI--ApiKey/)'
+        }
+        {
+          name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
+          value: '600'
         }
       ]
       appCommandLine: 'python -m uvicorn api:app --host 0.0.0.0 --port 8000'
