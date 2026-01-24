@@ -526,6 +526,7 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
     """
     Seed the database with test data.
     Requires secret key for basic protection.
+    Uses actual database schema (lowercase columns).
     """
     # Simple secret check - in production use proper auth
     expected_secret = os.environ.get("ADMIN_SECRET", "csat-seed-2026")
@@ -539,86 +540,75 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
         conn = app_state.dfm_client.db.connect()
         cursor = conn.cursor()
         
-        # Clear existing data
+        # Clear existing data (order matters for foreign keys)
         cursor.execute("DELETE FROM TimelineEntries")
-        cursor.execute("DELETE FROM Alerts")
         cursor.execute("DELETE FROM Cases")
         cursor.execute("DELETE FROM Customers")
         cursor.execute("DELETE FROM Engineers")
         conn.commit()
         
-        # Insert Engineers
+        # Insert Engineers (actual schema: id, name, email, team)
         engineers = [
-            ("eng-001", "John Smith", "john.smith@microsoft.com", "john.smith"),
-            ("eng-002", "Sarah Johnson", "sarah.johnson@microsoft.com", "sarah.johnson"),
-            ("eng-003", "Mike Chen", "mike.chen@microsoft.com", "mike.chen"),
+            ("eng-001", "John Smith", "john.smith@microsoft.com", "Support"),
+            ("eng-002", "Sarah Johnson", "sarah.johnson@microsoft.com", "Support"),
+            ("eng-003", "Mike Chen", "mike.chen@microsoft.com", "Support"),
         ]
         for e in engineers:
-            cursor.execute("INSERT INTO Engineers (Id, Name, Email, TeamsId) VALUES (?, ?, ?, ?)", e)
+            cursor.execute("INSERT INTO Engineers (id, name, email, team) VALUES (?, ?, ?, ?)", e)
         
-        # Insert Customers
+        # Insert Customers (actual schema: id, name, company, tier)
         customers = [
-            ("cust-001", "Contoso Ltd"),
-            ("cust-002", "Fabrikam Inc"),
-            ("cust-003", "Northwind Traders"),
-            ("cust-004", "Adventure Works"),
-            ("cust-005", "Woodgrove Bank"),
-            ("cust-006", "Tailspin Toys"),
+            ("cust-001", "Contoso Contact", "Contoso Ltd", "enterprise"),
+            ("cust-002", "Fabrikam Contact", "Fabrikam Inc", "enterprise"),
+            ("cust-003", "Northwind Contact", "Northwind Traders", "standard"),
+            ("cust-004", "Adventure Contact", "Adventure Works", "premium"),
+            ("cust-005", "Woodgrove Contact", "Woodgrove Bank", "enterprise"),
+            ("cust-006", "Tailspin Contact", "Tailspin Toys", "standard"),
         ]
         for c in customers:
-            cursor.execute("INSERT INTO Customers (Id, Company) VALUES (?, ?)", c)
+            cursor.execute("INSERT INTO Customers (id, name, company, tier) VALUES (?, ?, ?, ?)", c)
         
-        # Insert Cases with historical dates
-        cursor.execute("""
-            INSERT INTO Cases (Id, Title, Description, Status, Priority, OwnerId, CustomerId, CreatedOn, ModifiedOn) VALUES
-            ('case-001', 'Azure VM Performance Optimization', 'Customer reports slow VM performance', 'active', 'medium', 'eng-001', 'cust-001', DATEADD(day, -10, GETUTCDATE()), DATEADD(day, -3, GETUTCDATE()))
-        """)
-        cursor.execute("""
-            INSERT INTO Cases (Id, Title, Description, Status, Priority, OwnerId, CustomerId, CreatedOn, ModifiedOn) VALUES
-            ('case-002', 'Storage Account Access Issues', 'Getting 403 errors', 'active', 'high', 'eng-001', 'cust-002', DATEADD(day, -5, GETUTCDATE()), DATEADD(day, -1, GETUTCDATE()))
-        """)
-        cursor.execute("""
-            INSERT INTO Cases (Id, Title, Description, Status, Priority, OwnerId, CustomerId, CreatedOn, ModifiedOn) VALUES
-            ('case-003', 'Azure SQL Query Performance', 'Queries taking longer', 'active', 'medium', 'eng-002', 'cust-003', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, -2, GETUTCDATE()))
-        """)
-        cursor.execute("""
-            INSERT INTO Cases (Id, Title, Description, Status, Priority, OwnerId, CustomerId, CreatedOn, ModifiedOn) VALUES
-            ('case-004', 'Billing Discrepancy Investigation', 'Customer disputes charges', 'active', 'high', 'eng-001', 'cust-004', DATEADD(day, -14, GETUTCDATE()), DATEADD(day, -10, GETUTCDATE()))
-        """)
-        cursor.execute("""
-            INSERT INTO Cases (Id, Title, Description, Status, Priority, OwnerId, CustomerId, CreatedOn, ModifiedOn) VALUES
-            ('case-005', 'App Service Deployment Failures', 'CI/CD pipeline failing', 'active', 'medium', 'eng-002', 'cust-005', DATEADD(day, -8, GETUTCDATE()), DATEADD(day, -6, GETUTCDATE()))
-        """)
-        cursor.execute("""
-            INSERT INTO Cases (Id, Title, Description, Status, Priority, OwnerId, CustomerId, CreatedOn, ModifiedOn) VALUES
-            ('case-006', 'Network Connectivity Problems', 'VMs cannot communicate', 'active', 'critical', 'eng-003', 'cust-006', DATEADD(day, -12, GETUTCDATE()), DATEADD(day, -8, GETUTCDATE()))
-        """)
+        # Insert Cases (actual schema: id, title, customer_id, engineer_id, status, severity, created_at)
+        # Using severity as int: 1=low, 2=medium, 3=high, 4=critical
+        cases = [
+            ("case-001", "Azure VM Performance Optimization", "cust-001", "eng-001", 1, 2, -10),
+            ("case-002", "Storage Account Access Issues", "cust-002", "eng-001", 1, 3, -5),
+            ("case-003", "Azure SQL Query Performance", "cust-003", "eng-002", 1, 2, -7),
+            ("case-004", "Billing Discrepancy Investigation", "cust-004", "eng-001", 1, 3, -14),
+            ("case-005", "App Service Deployment Failures", "cust-005", "eng-002", 1, 2, -8),
+            ("case-006", "Network Connectivity Problems", "cust-006", "eng-003", 1, 4, -12),
+        ]
+        for c in cases:
+            cursor.execute(f"""
+                INSERT INTO Cases (id, title, customer_id, engineer_id, status, severity, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, DATEADD(day, {c[6]}, GETUTCDATE()))
+            """, (c[0], c[1], c[2], c[3], c[4], c[5]))
         
-        # Insert Timeline Entries with historical dates
+        # Insert Timeline Entries (actual schema: id, case_id, entry_type, content, sentiment_score, created_at)
         timeline = [
-            ("tl-001-01", "case-001", "email", "RE: VM Performance", "Thanks for looking into this.", -9, "Customer", 1),
-            ("tl-001-02", "case-001", "note", "Initial Analysis", "Reviewed VM metrics. CPU peaks at 95%.", -8, "John Smith", 0),
-            ("tl-001-03", "case-001", "email", "RE: VM Performance", "Thank you so much for the quick response!", -3, "Customer", 1),
-            ("tl-002-01", "case-002", "email", "URGENT: Storage Access", "This is URGENT! Our production application is DOWN!", -4, "Customer", 1),
-            ("tl-002-02", "case-002", "note", "Troubleshooting", "Checking storage account configuration.", -3, "John Smith", 0),
-            ("tl-002-03", "case-002", "email", "RE: Storage Access", "We have been waiting 2 days. This is unacceptable!", -1, "Customer", 1),
-            ("tl-003-01", "case-003", "email", "Query Performance", "Some queries slower than expected.", -6, "Customer", 1),
-            ("tl-003-02", "case-003", "note", "Analysis", "Requested query execution plans.", -5, "Sarah Johnson", 0),
-            ("tl-003-03", "case-003", "email", "RE: Query Performance", "Here are the execution plans.", -2, "Customer", 1),
-            ("tl-004-01", "case-004", "email", "Billing Question", "We noticed unexpected charges.", -13, "Customer", 1),
-            ("tl-004-02", "case-004", "note", "Reviewing charges", "Looking into billing details.", -12, "John Smith", 0),
-            ("tl-004-03", "case-004", "email", "RE: Billing", "It has been a week! This is frustrating!", -10, "Customer", 1),
-            ("tl-005-01", "case-005", "email", "Deployment Issues", "Deployments failing randomly.", -7, "Customer", 1),
-            ("tl-005-02", "case-005", "note", "Initial review", "Requested deployment logs.", -6, "Sarah Johnson", 0),
-            ("tl-006-01", "case-006", "email", "Network Issue", "VMs cannot communicate across subnets.", -11, "Customer", 1),
-            ("tl-006-02", "case-006", "note", "Checking NSGs", "NSG rules appear correct.", -10, "Mike Chen", 0),
-            ("tl-006-03", "case-006", "email", "RE: Network Issue", "Stuck for over a week. Please escalate!", -8, "Customer", 1),
+            ("tl-001-01", "case-001", "email", "Thanks for looking into this. We are seeing slow response times.", 0.6, -9),
+            ("tl-001-02", "case-001", "note", "Reviewed VM metrics. CPU peaks at 95%. Recommend scaling.", 0.5, -8),
+            ("tl-001-03", "case-001", "email", "Thank you so much for the quick response! Very helpful.", 0.9, -3),
+            ("tl-002-01", "case-002", "email", "This is URGENT! Our production application is DOWN!", -0.8, -4),
+            ("tl-002-02", "case-002", "note", "Checking storage account configuration and access policies.", 0.5, -3),
+            ("tl-002-03", "case-002", "email", "We have been waiting 2 days. This is completely unacceptable!", -0.9, -1),
+            ("tl-003-01", "case-003", "email", "Some queries are slower than expected. Can you help?", 0.3, -6),
+            ("tl-003-02", "case-003", "note", "Requested query execution plans for analysis.", 0.5, -5),
+            ("tl-003-03", "case-003", "email", "Here are the execution plans as requested.", 0.4, -2),
+            ("tl-004-01", "case-004", "email", "We noticed some unexpected charges. Can you clarify?", 0.2, -13),
+            ("tl-004-02", "case-004", "note", "Looking into billing details for the customer account.", 0.5, -12),
+            ("tl-004-03", "case-004", "email", "It has been a week! This is getting very frustrating!", -0.7, -10),
+            ("tl-005-01", "case-005", "email", "Deployments are failing randomly. Sometimes work, sometimes dont.", 0.1, -7),
+            ("tl-005-02", "case-005", "note", "Requested deployment logs and pipeline configuration.", 0.5, -6),
+            ("tl-006-01", "case-006", "email", "VMs cannot communicate across subnets. Blocking our project!", -0.3, -11),
+            ("tl-006-02", "case-006", "note", "NSG rules appear correct. Need deeper investigation.", 0.4, -10),
+            ("tl-006-03", "case-006", "email", "Stuck for over a week now. Very worried. Please escalate!", -0.6, -8),
         ]
         for t in timeline:
             cursor.execute(f"""
-                INSERT INTO TimelineEntries (Id, CaseId, EntryType, Subject, Content, CreatedOn, CreatedBy, IsCustomerCommunication) 
-                VALUES (?, ?, ?, ?, ?, DATEADD(day, {t[5]}, GETUTCDATE()), ?, ?)
-            """, (t[0], t[1], t[2], t[3], t[4], t[6], t[7]))
+                INSERT INTO TimelineEntries (id, case_id, entry_type, content, sentiment_score, created_at) 
+                VALUES (?, ?, ?, ?, ?, DATEADD(day, {t[5]}, GETUTCDATE()))
+            """, (t[0], t[1], t[2], t[3], t[4]))
         
         conn.commit()
         
