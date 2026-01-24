@@ -29,64 +29,125 @@ logger = get_logger(__name__)
 
 
 # =============================================================================
+# CSAT Domain Knowledge - Business Rules
+# =============================================================================
+# These rules are the foundation of CSAT Guardian's coaching intelligence.
+# They encode CSS support best practices and SLA requirements.
+
+CSAT_BUSINESS_RULES = """
+CSAT GOLDEN RULES - You MUST apply these in every analysis:
+
+1. 2-DAY COMMUNICATION RULE
+   - Customers should NEVER go more than 2 days without hearing from their engineer
+   - Even a brief "still investigating, will update you by X" counts as communication
+   - Silence creates customer anxiety and is the #1 driver of low CSAT
+
+2. 7-DAY NOTES RULE
+   - Case notes must be updated at least every 7 days
+   - Anyone picking up the case should understand current status from notes
+   - Notes should document: current status, blockers, next steps, action owner
+
+3. 5-HOUR EMAIL-TO-NOTES RULE
+   - When an engineer emails a customer, case notes should be added within 5 hours
+   - Notes should document: what was communicated, action items, who owns next action
+   - This ensures case handoffs don't lose context
+
+KEY CSAT DRIVERS (in priority order):
+1. Setting right expectations - Be honest about timelines, under-promise and over-deliver
+2. Resolution time - Track days open, identify blockers early, escalate when needed
+3. Communication frequency - Regular touchpoints build trust, silence creates anxiety
+
+COACHING STANDARDS - Your advice MUST be:
+- SPECIFIC to THIS case using actual timeline events (not generic advice)
+- ACTIONABLE with clear next steps
+- INSIGHTFUL - catch things the engineer might have missed
+- SUPPORTIVE - never make the engineer feel bad, always offer constructive guidance
+
+THINGS YOU MUST NEVER DO:
+- Never promise specific resolution timelines
+- Never give generic advice like "communicate more frequently" without specifics
+- Never make the engineer feel bad about past performance
+- Never suggest shortcuts that compromise quality
+"""
+
+# =============================================================================
 # Prompts for Sentiment Analysis
 # =============================================================================
 
-SENTIMENT_ANALYSIS_PROMPT = """You are an expert customer sentiment analyst for a technical support organization.
-Analyze the following customer communication and provide a sentiment assessment.
+SENTIMENT_ANALYSIS_PROMPT = """You are an expert CSAT analyst for Microsoft CSS (Customer Service & Support).
+Your job is to analyze customer communications and identify sentiment patterns that affect CSAT scores.
 
-Customer Communication:
+{csat_rules}
+
+Customer Communication to Analyze:
 ---
 {content}
 ---
 
-Analyze this communication and respond in the following JSON format:
+Analyze this communication considering the CSAT rules above. Respond in the following JSON format:
 {{
     "score": <float between 0.0 and 1.0, where 0.0 is very negative and 1.0 is very positive>,
     "label": "<positive|neutral|negative>",
     "confidence": <float between 0.0 and 1.0>,
-    "key_phrases": ["<phrase 1>", "<phrase 2>", ...],
-    "concerns": ["<specific concern 1>", "<specific concern 2>", ...],
-    "recommendations": ["<recommended action 1>", "<recommended action 2>", ...]
+    "key_phrases": ["<exact quote 1>", "<exact quote 2>", ...],
+    "concerns": ["<specific concern from this message>", ...],
+    "csat_risk_factors": ["<specific factor that could affect CSAT>", ...],
+    "recommendations": ["<specific action based on this message>", ...]
 }}
 
-Key phrases should be direct quotes from the text that indicate sentiment.
-Concerns should summarize what the customer is worried about.
-Recommendations should be specific actions the support engineer can take.
+Key phrases: Direct quotes showing sentiment (frustration, satisfaction, urgency)
+Concerns: What specifically is worrying the customer in THIS message
+CSAT risk factors: Anything that could lead to low CSAT (delays mentioned, expectations misset, etc.)
+Recommendations: Specific actions to address THIS message's concerns
 
 Respond ONLY with the JSON object, no additional text."""
 
-CASE_SUMMARY_PROMPT = """You are an expert customer support analyst. 
-Summarize the following support case for a support engineer who needs a quick briefing.
+CASE_SUMMARY_PROMPT = """You are a CSAT coach for Microsoft CSS support engineers.
+Provide a case briefing that helps the engineer understand CSAT risk and recommended actions.
 
-Case Title: {title}
+{csat_rules}
+
+Case Details:
+- Title: {title}
+- Days Open: {days_open}
+- Days Since Last Customer Communication: {days_since_customer_contact}
+- Days Since Last Case Notes Update: {days_since_notes}
 
 Case Description:
 ---
 {description}
 ---
 
-Timeline (most recent activity):
+Recent Timeline (chronological):
 ---
 {timeline}
 ---
 
-Provide a brief summary (2-3 sentences) that includes:
-1. What the customer's issue is
-2. Current status/sentiment
-3. Any urgent concerns
+Provide a briefing that includes:
+1. ONE-SENTENCE SUMMARY: What is the customer's core issue?
+2. CSAT RISK ASSESSMENT: Based on the rules above, what specific risks exist?
+   - Is the 2-day communication rule being met?
+   - Is the 7-day notes rule being met?
+   - Any emails without follow-up notes within 5 hours?
+3. SENTIMENT TRAJECTORY: Is the customer getting more or less frustrated?
+4. IMMEDIATE ACTION: What should the engineer do TODAY?
 
-Keep the summary concise and actionable."""
+Be specific. Reference actual events from the timeline. Don't give generic advice."""
 
-RECOMMENDATION_PROMPT = """You are an expert customer support coach.
-Based on the following case analysis, provide specific recommendations for the support engineer.
+RECOMMENDATION_PROMPT = """You are a CSAT coach for Microsoft CSS support engineers.
+Based on the case analysis below, provide specific coaching for this engineer.
 
-Case Title: {title}
-Overall Sentiment: {sentiment_label} (score: {sentiment_score})
-Days Since Creation: {days_since_creation}
-Days Since Last Update: {days_since_update}
+{csat_rules}
 
-Recent Customer Communications:
+Case Context:
+- Title: {title}
+- Days Open: {days_since_creation}
+- Days Since Last Update: {days_since_update}
+- Days Since Customer Contact: {days_since_customer_contact}
+- Overall Sentiment: {sentiment_label} (score: {sentiment_score})
+- Sentiment Trend: {sentiment_trend}
+
+Recent Timeline (with timestamps):
 ---
 {recent_communications}
 ---
@@ -94,8 +155,24 @@ Recent Customer Communications:
 Concerns Identified:
 {concerns}
 
-Provide 3-5 specific, actionable recommendations for the engineer to improve this customer's experience.
-Format as a numbered list."""
+Rule Violations Detected:
+{rule_violations}
+
+Provide 3-5 SPECIFIC recommendations. Each recommendation must:
+1. Reference a specific event or pattern from the timeline
+2. Explain WHY this matters for CSAT
+3. Give a concrete action the engineer can take TODAY
+
+Format:
+1. [OBSERVATION from timeline] → [WHY it matters] → [SPECIFIC ACTION]
+
+Example of GOOD recommendation:
+"The customer mentioned a 'board meeting on Friday' in their Jan 15 email, but no update was sent before that date. Unmet deadlines damage trust. Send an acknowledgment today and provide a realistic timeline for next steps."
+
+Example of BAD recommendation (too generic):
+"Communicate more frequently with the customer."
+
+Be the coach that notices what the engineer might have missed."""
 
 
 class SentimentAnalysisService:
@@ -175,15 +252,18 @@ class SentimentAnalysisService:
             )
         
         try:
-            # Build the prompt
-            prompt = SENTIMENT_ANALYSIS_PROMPT.format(content=content)
+            # Build the prompt with CSAT domain knowledge
+            prompt = SENTIMENT_ANALYSIS_PROMPT.format(
+                csat_rules=CSAT_BUSINESS_RULES,
+                content=content
+            )
             
             # Call Azure OpenAI
             logger.debug("Calling Azure OpenAI for sentiment analysis...")
             response = await self.client.chat.completions.create(
                 model=self.deployment,
                 messages=[
-                    {"role": "system", "content": "You are a sentiment analysis expert. Respond only with valid JSON."},
+                    {"role": "system", "content": "You are a CSAT analyst for Microsoft CSS. Apply the CSAT rules strictly. Respond only with valid JSON."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,  # Lower temperature for more consistent results
@@ -425,29 +505,45 @@ class SentimentAnalysisService:
     
     async def _generate_summary(self, case: Case, sentiment: SentimentResult) -> str:
         """
-        Generate a brief case summary using Azure OpenAI.
+        Generate a CSAT-focused case summary using Azure OpenAI.
         
         Args:
             case: The case to summarize
             sentiment: The overall sentiment result
             
         Returns:
-            str: A brief case summary
+            str: A CSAT-focused case briefing
         """
         # If Azure OpenAI is not configured, return a simple summary
         if self.client is None:
             return f"Case '{case.title}' - Sentiment: {sentiment.label.value}"
         
         try:
-            # Build timeline text (last 3 entries)
-            recent_timeline = case.timeline[-3:] if case.timeline else []
+            # Build timeline text with timestamps (last 5 entries for better context)
+            recent_timeline = case.timeline[-5:] if case.timeline else []
             timeline_text = "\n".join(
-                f"[{entry.entry_type.value}] {entry.created_by}: {entry.content[:200]}..."
+                f"[{entry.created_on.strftime('%Y-%m-%d %H:%M')}] [{entry.entry_type.value}] {entry.created_by}: {entry.content[:300]}"
                 for entry in recent_timeline
             )
             
+            # Calculate key metrics for CSAT rules
+            days_open = case.days_since_creation
+            days_since_notes = case.days_since_last_note
+            
+            # Calculate days since last customer communication
+            customer_comms = [e for e in case.timeline if e.is_customer_communication]
+            if customer_comms:
+                last_customer_comm = max(customer_comms, key=lambda e: e.created_on)
+                days_since_customer_contact = (datetime.now() - last_customer_comm.created_on).days
+            else:
+                days_since_customer_contact = days_open
+            
             prompt = CASE_SUMMARY_PROMPT.format(
+                csat_rules=CSAT_BUSINESS_RULES,
                 title=case.title,
+                days_open=days_open,
+                days_since_customer_contact=days_since_customer_contact,
+                days_since_notes=days_since_notes,
                 description=case.description[:500],
                 timeline=timeline_text or "No timeline entries yet.",
             )
@@ -455,11 +551,11 @@ class SentimentAnalysisService:
             response = await self.client.chat.completions.create(
                 model=self.deployment,
                 messages=[
-                    {"role": "system", "content": "You are a concise technical writer."},
+                    {"role": "system", "content": "You are a CSAT coach for Microsoft CSS. Be specific, reference the timeline, and apply the CSAT rules."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
-                max_tokens=200,
+                max_tokens=400,  # More tokens for richer analysis
             )
             
             return response.choices[0].message.content.strip()

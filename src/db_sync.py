@@ -91,7 +91,7 @@ class SyncDatabaseManager:
         
         cursor.execute("""
             SELECT id, name, email, team
-            FROM Engineers
+            FROM engineers
         """)
         
         engineers = []
@@ -100,7 +100,7 @@ class SyncDatabaseManager:
                 id=row.id,
                 name=row.name,
                 email=row.email,
-                teams_id=row.team
+                team=row.team
             ))
         
         return engineers
@@ -112,7 +112,7 @@ class SyncDatabaseManager:
         
         cursor.execute("""
             SELECT id, name, email, team
-            FROM Engineers
+            FROM engineers
             WHERE id = ?
         """, (engineer_id,))
         
@@ -122,7 +122,7 @@ class SyncDatabaseManager:
                 id=row.id,
                 name=row.name,
                 email=row.email,
-                teams_id=row.team
+                team=row.team
             )
         return None
     
@@ -132,8 +132,8 @@ class SyncDatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT id, name, company, tier
-            FROM Customers
+            SELECT id, company, tier
+            FROM customers
             WHERE id = ?
         """, (customer_id,))
         
@@ -141,7 +141,8 @@ class SyncDatabaseManager:
         if row:
             return Customer(
                 id=row.id,
-                company=row.company
+                company=row.company,
+                tier=row.tier
             )
         return None
     
@@ -151,10 +152,11 @@ class SyncDatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT id, case_id, entry_type, content, sentiment_score, created_at
-            FROM TimelineEntries
+            SELECT id, case_id, entry_type, subject, content, created_by, 
+                   created_on, direction, is_customer_communication
+            FROM timeline_entries
             WHERE case_id = ?
-            ORDER BY created_at ASC
+            ORDER BY created_on ASC
         """, (case_id,))
         
         entries = []
@@ -163,21 +165,25 @@ class SyncDatabaseManager:
             entry_type = TimelineEntryType.NOTE
             if row.entry_type:
                 entry_type_str = row.entry_type.lower()
-                if entry_type_str == "email":
-                    entry_type = TimelineEntryType.EMAIL
+                if entry_type_str == "email_sent":
+                    entry_type = TimelineEntryType.EMAIL_SENT
+                elif entry_type_str == "email_received":
+                    entry_type = TimelineEntryType.EMAIL_RECEIVED
                 elif entry_type_str == "phone_call":
                     entry_type = TimelineEntryType.PHONE_CALL
+                elif entry_type_str == "note":
+                    entry_type = TimelineEntryType.NOTE
             
             entries.append(TimelineEntry(
                 id=row.id,
                 case_id=row.case_id,
                 entry_type=entry_type,
-                subject="",
+                subject=row.subject or "",
                 content=row.content or "",
-                created_on=row.created_at,
-                created_by="Unknown",
-                direction=None,
-                is_customer_communication=False
+                created_on=row.created_on,
+                created_by=row.created_by or "Unknown",
+                direction=row.direction,
+                is_customer_communication=bool(row.is_customer_communication)
             ))
         
         return entries
@@ -228,11 +234,11 @@ class SyncDatabaseManager:
             return []
         
         cursor.execute("""
-            SELECT c.id, c.title, c.status, c.severity,
-                   c.created_at, c.engineer_id, c.customer_id
-            FROM Cases c
-            WHERE c.engineer_id = ?
-            ORDER BY c.created_at DESC
+            SELECT c.id, c.title, c.description, c.status, c.priority,
+                   c.created_on, c.modified_on, c.owner_id, c.customer_id
+            FROM cases c
+            WHERE c.owner_id = ?
+            ORDER BY c.created_on DESC
         """, (engineer_id,))
         
         cases = []
@@ -248,11 +254,11 @@ class SyncDatabaseManager:
             cases.append(Case(
                 id=row.id,
                 title=row.title,
-                description="",
+                description=row.description or "",
                 status=self._map_status(row.status),
-                priority=self._map_priority(row.severity or "medium"),
-                created_on=row.created_at,
-                modified_on=row.created_at,
+                priority=self._map_priority(row.priority or "medium"),
+                created_on=row.created_on,
+                modified_on=row.modified_on or row.created_on,
                 owner=engineer,
                 customer=customer,
                 timeline=timeline
@@ -266,19 +272,19 @@ class SyncDatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT c.id, c.title, c.status, c.severity,
-                   c.created_at, c.engineer_id, c.customer_id
-            FROM Cases c
+            SELECT c.id, c.title, c.description, c.status, c.priority,
+                   c.created_on, c.modified_on, c.owner_id, c.customer_id
+            FROM cases c
             WHERE c.status NOT IN ('resolved', 'cancelled')
-            ORDER BY c.created_at DESC
+            ORDER BY c.created_on DESC
         """)
         
         cases = []
         for row in cursor.fetchall():
             # Get engineer
-            engineer = self.get_engineer(row.engineer_id)
+            engineer = self.get_engineer(row.owner_id)
             if not engineer:
-                engineer = Engineer(id=row.engineer_id, name="Unknown", email="unknown@contoso.com")
+                engineer = Engineer(id=row.owner_id, name="Unknown", email="unknown@contoso.com")
             
             # Get customer
             customer = self.get_customer(row.customer_id)
@@ -291,11 +297,11 @@ class SyncDatabaseManager:
             cases.append(Case(
                 id=row.id,
                 title=row.title,
-                description="",
+                description=row.description or "",
                 status=self._map_status(row.status),
-                priority=self._map_priority(row.severity or "medium"),
-                created_on=row.created_at,
-                modified_on=row.created_at,
+                priority=self._map_priority(row.priority or "medium"),
+                created_on=row.created_on,
+                modified_on=row.modified_on or row.created_on,
                 owner=engineer,
                 customer=customer,
                 timeline=timeline

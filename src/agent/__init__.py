@@ -10,8 +10,19 @@ from .guardian_agent import (
     create_agent,
 )
 
+from .csat_rules_plugin import (
+    CSATRulesPlugin,
+    CSATRuleViolation,
+    RuleViolation,
+    TimelineAnalysis,
+)
+
 __all__ = [
     "CSATGuardianAgent",
     "CasePlugin",
+    "CSATRulesPlugin",
+    "CSATRuleViolation",
+    "RuleViolation",
+    "TimelineAnalysis",
     "create_agent",
 ]

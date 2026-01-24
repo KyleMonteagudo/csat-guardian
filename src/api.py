@@ -79,6 +79,7 @@ class ChatRequest(BaseModel):
     message: str
     case_id: Optional[str] = None
     engineer_id: Optional[str] = None
+    session_id: Optional[str] = None  # For maintaining conversation context
 
 
 class ChatResponse(BaseModel):
@@ -123,20 +124,27 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to load full configuration: {e}")
         logger.info("Continuing with default settings for POC")
     
-    # Initialize DfM client - try Azure SQL adapter first, then mock
+    # Initialize DfM client - try Azure SQL adapter first, then in-memory mock
     try:
         from clients.azure_sql_adapter import get_azure_sql_adapter
         app_state.dfm_client = await get_azure_sql_adapter()
         logger.info("DfM client initialized (Azure SQL)")
     except Exception as e:
         logger.warning(f"Azure SQL adapter failed: {e}")
-        logger.info("Falling back to mock DfM client")
+        logger.info("Falling back to in-memory mock client with rich sample data")
         try:
-            from clients.dfm_client import get_dfm_client
-            app_state.dfm_client = await get_dfm_client(app_state.config)
-            logger.info("DfM client initialized (Mock)")
+            from clients.dfm_client_memory import get_in_memory_dfm_client
+            app_state.dfm_client = get_in_memory_dfm_client()
+            logger.info("DfM client initialized (In-Memory Mock - 8 test cases loaded)")
         except Exception as e2:
-            logger.warning(f"Mock DfM client also failed: {e2}")
+            logger.warning(f"In-memory mock client also failed: {e2}")
+            # Last resort: try the SQLite mock
+            try:
+                from clients.dfm_client import get_dfm_client
+                app_state.dfm_client = await get_dfm_client(app_state.config)
+                logger.info("DfM client initialized (SQLite Mock)")
+            except Exception as e3:
+                logger.error(f"All DfM client options failed: {e3}")
     
     # Initialize sentiment service
     try:
@@ -402,29 +410,81 @@ async def analyze_case(case_id: str, request: AnalyzeRequest = None):
 
 
 # =============================================================================
-# Chat Endpoint
+# Chat Endpoint - Powered by Semantic Kernel Agent
 # =============================================================================
+
+# Store active agent sessions (in production, use Redis or similar)
+_agent_sessions: dict = {}
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
     Chat with the CSAT Guardian agent.
     
-    The agent can:
-    - Answer questions about cases
-    - Provide recommendations for improving CSAT
-    - Offer coaching based on case analysis
+    The agent uses Semantic Kernel with Azure OpenAI to:
+    - Check CSAT rule compliance
+    - Analyze case communication timelines
+    - Provide specific, actionable coaching
+    - Reference actual case events and patterns
     
     Optionally provide case_id for case-specific context.
     """
     try:
-        # For POC, implement simple response logic
-        # In production, this would use Semantic Kernel with Azure OpenAI
+        from agent.guardian_agent import CSATGuardianAgent
         
-        message = request.message.lower()
+        # Get or create an agent for this session/engineer
+        # For POC, use a default engineer - in production, get from auth context
+        engineer_id = request.engineer_id or "eng-001"
+        
+        # Get engineer info
+        if app_state.dfm_client:
+            engineer = await app_state.dfm_client.get_engineer(engineer_id)
+            if not engineer:
+                # Create a default engineer for POC
+                from models import Engineer
+                engineer = Engineer(
+                    id=engineer_id,
+                    name="POC Engineer",
+                    email="engineer@contoso.com",
+                    team="CSS Support"
+                )
+        else:
+            from models import Engineer
+            engineer = Engineer(
+                id=engineer_id,
+                name="POC Engineer", 
+                email="engineer@contoso.com",
+                team="CSS Support"
+            )
+        
+        # Get or create agent session
+        session_key = f"{engineer_id}_{request.session_id or 'default'}"
+        
+        if session_key not in _agent_sessions:
+            # Create new agent
+            from services.sentiment_service import get_sentiment_service
+            
+            agent = CSATGuardianAgent(
+                engineer=engineer,
+                dfm_client=app_state.dfm_client,
+                sentiment_service=get_sentiment_service(),
+                config=app_state.config,
+            )
+            _agent_sessions[session_key] = agent
+            logger.info(f"Created new agent session: {session_key}")
+        else:
+            agent = _agent_sessions[session_key]
+        
+        # Build the message with case context if provided
+        message = request.message
+        if request.case_id:
+            message = f"[Context: Discussing case {request.case_id}] {message}"
+        
+        # Get response from agent
+        response_text = await agent.chat(message)
+        
+        # Get case context if case_id was provided
         case_context = None
-        
-        # If case_id provided, get case context
         if request.case_id and app_state.dfm_client:
             case = await app_state.dfm_client.get_case(request.case_id)
             if case:
@@ -432,32 +492,59 @@ async def chat(request: ChatRequest):
                     "id": case.id,
                     "title": case.title,
                     "status": case.status.value,
-                    "days_since_last_note": case.days_since_last_note
+                    "days_since_last_note": case.days_since_last_note,
+                    "days_open": case.days_since_creation
                 }
         
-        # Simple keyword-based responses for POC
-        # Will be replaced with Semantic Kernel agent
-        if any(word in message for word in ["risk", "csat", "concern", "worry"]):
-            response = "Based on the case analysis, I recommend checking cases that haven't been updated in over 5 days, as they have higher CSAT risk."
-            suggestions = ["View at-risk cases", "Run sentiment analysis", "Set up alerts"]
-        elif any(word in message for word in ["recommend", "suggest", "advice", "help"]):
-            response = "I suggest proactive communication with the customer, providing regular updates even when there's no new information to share."
-            suggestions = ["Send status update", "Schedule call", "Review similar cases"]
-        elif any(word in message for word in ["coach", "improve", "better", "feedback"]):
-            response = "Key areas for improvement: ensure timely responses within SLA, document all customer interactions, and set clear expectations."
-            suggestions = ["Review response times", "Update case notes", "Check SLA compliance"]
-        else:
-            response = "I'm here to help you manage CSAT risk. Ask me about case risks, recommendations, or coaching tips."
-            suggestions = ["What cases are at risk?", "How can I improve CSAT?", "Analyze my cases"]
+        # Generate contextual suggestions based on the conversation
+        suggestions = _generate_suggestions(request.message, request.case_id)
         
         return ChatResponse(
-            response=response,
+            response=response_text,
             case_context=case_context,
             suggestions=suggestions
         )
+        
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Chat error: {e}", exc_info=True)
+        
+        # Fallback to simple response if agent fails
+        return ChatResponse(
+            response=f"I encountered an issue processing your request. Please try again or ask a different question. (Error: {str(e)[:100]})",
+            case_context=None,
+            suggestions=["Check CSAT rules", "List my cases", "What cases need attention?"]
+        )
+
+
+def _generate_suggestions(message: str, case_id: Optional[str]) -> list:
+    """Generate contextual follow-up suggestions."""
+    message_lower = message.lower()
+    
+    if case_id:
+        # Case-specific suggestions
+        return [
+            f"Check CSAT rules for {case_id}",
+            f"Analyze timeline for {case_id}",
+            f"Get coaching for {case_id}"
+        ]
+    elif any(word in message_lower for word in ["rule", "compliance", "sla"]):
+        return [
+            "Explain the 2-day rule",
+            "Explain the 7-day rule",
+            "Check all my cases for compliance"
+        ]
+    elif any(word in message_lower for word in ["risk", "concern", "worry"]):
+        return [
+            "Which cases are high risk?",
+            "What are the CSAT risk factors?",
+            "How can I reduce CSAT risk?"
+        ]
+    else:
+        return [
+            "List my cases",
+            "Which cases need attention?",
+            "Explain CSAT rules"
+        ]
 
 
 # =============================================================================
