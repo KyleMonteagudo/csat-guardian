@@ -26,7 +26,6 @@
 | DfM API Integration | High | Replace seed data with real case sync |
 | Teams Notifications | Medium | Alert managers on CSAT risks |
 | Manager Dashboard | Medium | Aggregate view of team CSAT health |
-| Dashboard UI | Low | React/Power BI dashboard (Streamlit evaluated, deferred due to Azure App Service complexity) |
 | GitHub Actions CI/CD | Low | Automated deployments |
 
 ---

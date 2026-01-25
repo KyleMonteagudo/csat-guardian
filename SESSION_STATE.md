@@ -59,8 +59,7 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 1. **DfM Integration** - Replace seed data with real Dynamics case sync
 2. **Teams Notifications** - Webhook alerts for managers on CSAT risks
 3. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
-4. **Dashboard UI** - React or Power BI frontend (Streamlit evaluated Jan 2026, deferred due to Azure deployment complexity)
-5. **Authentication** - Azure AD integration
+4. **Authentication** - Azure AD integration
 
 ---
 

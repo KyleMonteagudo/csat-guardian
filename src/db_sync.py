@@ -1,8 +1,8 @@
 # =============================================================================
-# CSAT Guardian - Synchronous Database Module for Streamlit
+# CSAT Guardian - Synchronous Database Module
 # =============================================================================
 # This module provides synchronous database access using pyodbc.
-# Streamlit has issues with async libraries (aioodbc), so we use sync pyodbc.
+# Uses per-query connections for thread safety with async FastAPI.
 #
 # Usage:
 #   from db_sync import SyncDatabaseManager
@@ -35,8 +35,8 @@ from models import Case, Engineer, Customer, TimelineEntry, CaseStatus, CasePrio
 
 class SyncDatabaseManager:
     """
-    Synchronous database manager for Streamlit compatibility.
-    Uses pyodbc instead of aioodbc to avoid event loop conflicts.
+    Synchronous database manager with per-query connections.
+    Uses pyodbc with fresh connections per query for thread safety.
     """
     
     def __init__(self, connection_string: Optional[str] = None):
