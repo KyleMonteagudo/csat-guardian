@@ -1,7 +1,7 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 24, 2026
-> **Status**: ✅ Deployed to Commercial Azure (Central US)
+> **Last Updated**: January 25, 2026
+> **Status**: ✅ Deployed to Commercial Azure (Central US) - All Features Working
 
 ---
 
@@ -15,7 +15,7 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 
 ## Current State
 
-### ✅ Completed
+### ✅ Completed (Production-Ready POC)
 
 1. **FastAPI Backend** - Production-ready REST API
    - File: `src/api.py`
@@ -23,13 +23,15 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
    - Swagger docs at `/docs`
 
 2. **Azure SQL Integration**
-   - `src/db_sync.py` - Synchronous SQL client
+   - `src/db_sync.py` - Synchronous SQL client (per-query connections for thread safety)
    - `src/clients/azure_sql_adapter.py` - Async wrapper
-   - Database seeded with test cases
+   - Database seeded with 8 test cases and timeline data
 
-3. **Azure AI Services Sentiment Analysis**
-   - AI Foundry (AI Hub + AI Services) with GPT-4o deployment
-   - `src/services/sentiment_service.py`
+3. **AI-Powered Analysis**
+   - **Sentiment Analysis**: GPT-4o powered sentiment scoring (0-1 scale)
+   - **Timeline Analysis**: Detects communication gaps and patterns
+   - **CSAT Rules Engine**: Semantic Kernel agent with function calling
+   - **Coaching Recommendations**: AI-generated actionable advice
 
 4. **Infrastructure as Code**
    - `infrastructure/bicep/main-commercial.bicep` - Complete template
@@ -37,20 +39,28 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
    - All backend services use Private Endpoints (no public access)
 
 5. **Deployed to Azure**
-   - App Service deployed via `az webapp up`
-   - Database seeded via Cloud Shell sqlcmd
-   - Key Vault secrets configured
+   - App Service running with VNet integration
+   - Database accessible via private endpoint
+   - Key Vault secrets auto-resolved via managed identity
+   - **Deployment method**: Kudu drag-and-drop (standard az commands have MSI scope issues)
 
-6. **Documentation** - Updated for Commercial Azure (Central US)
+6. **Documentation** - Comprehensive guides for deployment, architecture, and troubleshooting
+
+### ✅ Recent Fixes (January 2026)
+
+| Date | Fix | Details |
+|------|-----|---------|
+| Jan 25 | Database concurrency | Changed to per-query connections to fix "Connection is busy" errors |
+| Jan 25 | Agent analysis | Full sentiment, timeline, and coaching now working in production |
+| Jan 24 | Deployment method | Documented Kudu drag-drop as working approach |
 
 ### ⏳ Next Steps (Development Backlog)
 
-1. **VNet Integration** - Enable App Service VNet integration to reach private endpoints
-2. **Real AI Integration** - Test sentiment analysis with AI Services endpoint
-3. **DfM Integration** - Build real Dynamics Field Management client
-4. **Teams Notifications** - Webhook setup for alert delivery
-5. **Dashboard UI** - Streamlit or React frontend
-6. **Authentication** - Azure AD integration
+1. **DfM Integration** - Replace seed data with real Dynamics case sync
+2. **Teams Notifications** - Webhook alerts for managers on CSAT risks
+3. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
+4. **Dashboard UI** - React or Power BI frontend (Streamlit evaluated Jan 2026, deferred due to Azure deployment complexity)
+5. **Authentication** - Azure AD integration
 
 ---
 
@@ -72,15 +82,15 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 | AI Hub | `aihub-csatguardian-dev` |
 | Key Vault | `kv-csatguard-dev` (note: shorter name due to soft-delete conflict) |
 | Bastion | `bas-csatguardian-dev` |
-| Dev-box VM | `vm-devbox-csatguardian` (testadmin/Password1!) |
+| Dev-box VM | `vm-devbox-csatguardian` |
 | VNet | `vnet-csatguardian-dev` |
 
 **Key Vault Secrets:**
 | Secret | Description |
 |--------|-------------|
-| `SqlServer--ConnectionString` | Azure SQL connection string |
-| `AzureOpenAI--ApiKey` | AI Services API key |
-| `AzureOpenAI--Endpoint` | AI Services endpoint URL |
+| `azure-openai-key` | AI Services API key |
+| `sql-admin-password` | Azure SQL admin password |
+| `devbox-password` | Dev-box VM password |
 
 **Network:**
 - VNet: 10.100.0.0/16 (Central US)
@@ -97,12 +107,18 @@ cd src
 python -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-**Deploy to Azure (via Cloud Shell):**
+**Deploy to Azure (Kudu Method - Working):**
 ```bash
-cd ~/csat-guardian
-git pull
-cd src
-az webapp up --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev --runtime "PYTHON:3.11"
+# Cloud Shell
+cd ~/csat-guardian && git pull origin develop
+rm -f deploy.zip && zip -r deploy.zip src requirements.txt
+download deploy.zip
+
+# Then in browser:
+# 1. Go to https://app-csatguardian-dev.scm.azurewebsites.net/DebugConsole
+# 2. Drag-drop deploy.zip to /home
+# 3. In SSH: cd /home/site/wwwroot && rm -rf src requirements.txt && mv /home/src . && mv /home/requirements.txt .
+# 4. Restart App Service
 ```
 
 ---
@@ -114,7 +130,7 @@ csat-guardian/
 ├── src/                    # Python source code
 │   ├── api.py              # FastAPI backend
 │   ├── config.py           # Configuration
-│   ├── db_sync.py          # Azure SQL client
+│   ├── db_sync.py          # Azure SQL client (per-query connections)
 │   └── services/           # Business logic
 ├── infrastructure/
 │   ├── bicep/              # IaC templates

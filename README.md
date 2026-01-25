@@ -26,7 +26,7 @@
 | DfM API Integration | High | Replace seed data with real case sync |
 | Teams Notifications | Medium | Alert managers on CSAT risks |
 | Manager Dashboard | Medium | Aggregate view of team CSAT health |
-| Streamlit UI | Low | Visual interface for engineers |
+| Dashboard UI | Low | React/Power BI dashboard (Streamlit evaluated, deferred due to Azure App Service complexity) |
 | GitHub Actions CI/CD | Low | Automated deployments |
 
 ---
@@ -325,7 +325,7 @@ Ensure startup command includes `pip install -r requirements.txt`
 
 1. **DfM Integration**: Replace seed data with real case sync
 2. **Teams Notifications**: Alert managers on CSAT risks
-3. **Streamlit Dashboard**: Visual engineer interface
+3. **Dashboard UI**: React or Power BI dashboard for engineers
 4. **Manager Mode**: Aggregate team CSAT metrics
 5. **CI/CD Pipeline**: GitHub Actions for automated deployment
 

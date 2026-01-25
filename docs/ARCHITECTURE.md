@@ -7,6 +7,7 @@
 | 1.0 | 2026-01-23 | Kyle Monteagudo | Initial architecture document |
 | 2.0 | 2026-01-24 | Kyle Monteagudo | **Major update**: Private networking architecture with VNet, Private Endpoints, App Service |
 | 3.0 | 2026-01-24 | Kyle Monteagudo | Updated for Commercial Azure (Central US), AI Foundry (AI Services + AI Hub) |
+| 4.0 | 2026-01-25 | Kyle Monteagudo | Fixed database concurrency, all analysis features working, Kudu deployment method |
 
 ---
 

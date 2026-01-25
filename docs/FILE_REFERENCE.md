@@ -2,7 +2,7 @@
 
 > **Purpose:** Quick reference guide explaining what every file in the project does.
 > 
-> **Last Updated:** January 24, 2026
+> **Last Updated:** January 25, 2026
 
 ---
 
@@ -276,7 +276,8 @@ USE_MOCK_TEAMS            # true = print to console
 | Attribute | Value |
 |-----------|-------|
 | **Purpose** | Direct Azure SQL access using pyodbc (sync) |
-| **Pattern** | Synchronous database operations |
+| **Pattern** | Per-query connections for thread safety |
+| **Fixed** | Jan 25, 2026 - Connection concurrency issue |
 
 **Key Classes:**
 | Class | Purpose |
@@ -286,14 +287,17 @@ USE_MOCK_TEAMS            # true = print to console
 **Key Methods:**
 | Method | Purpose |
 |--------|---------|
-| `connect()` | Get/create database connection |
+| `connect()` | Create new database connection (per-query) |
+| `_get_new_connection()` | Internal connection factory |
 | `get_engineers()` | Get all engineers |
 | `get_cases_for_engineer(id)` | Get cases for an engineer |
 | `get_all_active_cases()` | Get all active cases |
 | `get_timeline_entries(case_id)` | Get timeline for a case |
 
-**Why synchronous?**
-- pyodbc is synchronous-only
+**Why per-query connections?**
+- pyodbc connections are not thread-safe
+- Agent makes parallel async calls (sentiment, timeline, rules)
+- Each query gets fresh connection, closed after use
 - Wrapped by `azure_sql_adapter.py` for async FastAPI
 
 ---
