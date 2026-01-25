@@ -468,7 +468,7 @@ Be the coach that notices what the engineer might have missed. Reference specifi
                 response = self._generate_fallback_response(message)
             else:
                 # Use Semantic Kernel to generate response with function calling
-                from semantic_kernel.connectors.ai.open_ai import OpenAIChatPromptExecutionSettings
+                from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatPromptExecutionSettings
                 from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
                 
                 settings = OpenAIChatPromptExecutionSettings(
@@ -477,13 +477,15 @@ Be the coach that notices what the engineer might have missed. Reference specifi
                     temperature=0.7,
                 )
                 
-                result = await self.kernel.invoke_prompt(
-                    prompt="{{$chat_history}}",
-                    settings=settings,
+                # Get the chat completion service and invoke directly with chat history
+                chat_service = self.kernel.get_service(type=AzureChatCompletion)
+                result = await chat_service.get_chat_message_contents(
                     chat_history=self.chat_history,
+                    settings=settings,
+                    kernel=self.kernel,
                 )
                 
-                response = str(result)
+                response = str(result[0].content) if result else "I couldn't generate a response."
             
             # Add response to session
             self.session.add_message("agent", response)
