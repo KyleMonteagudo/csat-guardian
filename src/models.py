@@ -72,6 +72,8 @@ class TimelineEntryType(str, Enum):
     """
     NOTE = "note"
     EMAIL = "email"
+    EMAIL_SENT = "email_sent"
+    EMAIL_RECEIVED = "email_received"
     PHONE_CALL = "phone_call"
     TASK = "task"
     APPOINTMENT = "appointment"
