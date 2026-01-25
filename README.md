@@ -332,4 +332,4 @@ Ensure startup command includes `pip install -r requirements.txt`
 
 ## 📜 License
 
-Internal Microsoft Use Only - CSS Escalations Team POC
+Internal Microsoft Use Only
