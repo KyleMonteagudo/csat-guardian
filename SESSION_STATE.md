@@ -1,7 +1,7 @@
 # CSAT Guardian - Session State
 
 > **Last Updated**: January 25, 2026
-> **Status**: ✅ Deployed to Commercial Azure (Central US) - All Features Working
+> **Status**: ⚠️ ON HOLD - Security Remediation Required
 
 ---
 
@@ -13,9 +13,55 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 
 ---
 
+## 🚨 CRITICAL: Security Breaking Changes (January 25, 2026)
+
+The following security hardening changes have been applied to comply with enterprise guardrails.
+**The application is currently non-functional until code changes are made to support Managed Identity authentication.**
+
+### Security Changes Applied
+
+| # | Resource | Change | Impact |
+|---|----------|--------|--------|
+| 1 | **Key Vault** | Disabled public network access | App may not resolve `@Microsoft.KeyVault(...)` references |
+| 2 | **Bastion + Public IP** | Deleted | No way to access Devbox VM for testing |
+| 3 | **AI Services** (`ais-csatguardian-dev`) | Disabled local auth | API key authentication stops working |
+| 4 | **OpenAI** (`oai-csatguardian-dev`) | Disabled local auth | API key authentication stops working |
+| 5 | **Azure SQL** | AD-only auth enabled | SQL username/password stops working |
+| 6 | **Storage Account** | Disable shared key access | Shared key access stops working |
+| 7 | **Storage Account** | Disable SFTP/Local Users | SFTP local user access stops |
+
+### Code Changes Required to Remediate
+
+| Component | Current Auth | Required Auth |
+|-----------|-------------|---------------|
+| Azure OpenAI | API Key from Key Vault | `DefaultAzureCredential` (MSI) |
+| Azure SQL | Connection string with password | Access token from MSI |
+| Key Vault | App setting reference | Code-based access with MSI (if PE issues) |
+| Storage | Shared key (if used) | MSI + RBAC |
+
+### Azure RBAC/Permissions Required
+
+| Resource | Principal | Role/Permission |
+|----------|-----------|-----------------|
+| AI Services | App Service MSI | `Cognitive Services User` |
+| SQL Database | App Service MSI | `db_datareader`, `db_datawriter` (via T-SQL) |
+| Key Vault | App Service MSI | `Key Vault Secrets User` (already configured) |
+| Storage Account | App Service MSI | `Storage Blob Data Contributor` (if needed) |
+
+### SQL Database Setup Required
+
+Run as Azure AD admin (Kyle Monteagudo):
+```sql
+CREATE USER [app-csatguardian-dev] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [app-csatguardian-dev];
+ALTER ROLE db_datawriter ADD MEMBER [app-csatguardian-dev];
+```
+
+---
+
 ## Current State
 
-### ✅ Completed (Production-Ready POC)
+### ✅ Completed (Production-Ready POC - Pre-Security Hardening)
 
 1. **FastAPI Backend** - Production-ready REST API
    - File: `src/api.py`
@@ -35,7 +81,8 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 
 4. **Infrastructure as Code**
    - `infrastructure/bicep/main-commercial.bicep` - Complete template
-   - Deploys: VNet, Bastion, Dev-box VM, SQL, AI Hub, AI Services, Key Vault, App Service
+   - ⚠️ **Note**: Bicep template does NOT reflect current security state - manual changes were made
+   - Deploys: VNet, ~~Bastion~~, ~~Dev-box VM~~, SQL, AI Hub, AI Services, Key Vault, App Service
    - All backend services use Private Endpoints (no public access)
 
 5. **Deployed to Azure**
@@ -50,16 +97,19 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 
 | Date | Fix | Details |
 |------|-----|---------|
+| Jan 25 | Security hardening | Disabled local auth on AI Services, SQL, Storage |
 | Jan 25 | Database concurrency | Changed to per-query connections to fix "Connection is busy" errors |
 | Jan 25 | Agent analysis | Full sentiment, timeline, and coaching now working in production |
 | Jan 24 | Deployment method | Documented Kudu drag-drop as working approach |
 
-### ⏳ Next Steps (Development Backlog)
+### ⏳ Next Steps (Blocked Until Security Remediation Complete)
 
-1. **DfM Integration** - Replace seed data with real Dynamics case sync
-2. **Teams Notifications** - Webhook alerts for managers on CSAT risks
-3. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
-4. **Authentication** - Azure AD integration
+1. **🔴 BLOCKED: MSI Auth Migration** - Update code to use DefaultAzureCredential
+2. **🔴 BLOCKED: Grant MSI Permissions** - RBAC roles for AI Services, SQL user creation
+3. **DfM Integration** - Replace seed data with real Dynamics case sync
+4. **Teams Notifications** - Webhook alerts for managers on CSAT risks
+5. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
+6. **User Authentication** - Azure AD integration for API access
 
 ---
 
