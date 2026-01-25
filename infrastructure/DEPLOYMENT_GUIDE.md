@@ -124,8 +124,9 @@ az webapp restart --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev
 ### Deploy Schema (Cloud Shell)
 
 ```bash
+# Get SQL password from Key Vault first
 sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
-  -U sqladmin -P 'YourSecureP@ssword123!' \
+  -U sqladmin -P '<password-from-keyvault>' \
   -i infrastructure/sql/001-schema-complete.sql
 ```
 
@@ -133,7 +134,7 @@ sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
 
 ```bash
 sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
-  -U sqladmin -P 'YourSecureP@ssword123!' \
+  -U sqladmin -P '<password-from-keyvault>' \
   -i infrastructure/sql/002-seed-data.sql
 ```
 
@@ -161,7 +162,7 @@ sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
 
 1. **Azure Portal** → **Virtual machines** → `vm-devbox-csatguardian`
 2. Click **Connect** → **Bastion**
-3. Credentials: `testadmin` / `Password1!`
+3. Credentials: `testadmin` / (password from Key Vault)
 4. Open PowerShell and test:
 
 ```powershell

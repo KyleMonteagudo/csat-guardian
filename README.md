@@ -146,14 +146,14 @@ az account set --subscription a20d761d-cb36-4f83-b827-58ccdb166f39
 cd ~/csat-guardian
 git pull origin develop
 
-# Deploy schema
+# Deploy schema (get password from Key Vault)
 sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
-  -U sqladmin -P 'YourSecureP@ssword123!' \
+  -U sqladmin -P '<password-from-keyvault>' \
   -i infrastructure/sql/001-schema-complete.sql
 
 # Deploy seed data
 sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
-  -U sqladmin -P 'YourSecureP@ssword123!' \
+  -U sqladmin -P '<password-from-keyvault>' \
   -i infrastructure/sql/002-seed-data.sql
 ```
 
@@ -285,9 +285,9 @@ csat-guardian/
 
 | Resource | Username | Notes |
 |----------|----------|-------|
-| SQL Admin | `sqladmin` | Password in Key Vault & App Settings |
-| Devbox VM | `testadmin` | Password: `Password1!` |
-| Azure OpenAI Key | - | Key Vault: `azure-openai-key` |
+| SQL Admin | `sqladmin` | Password stored in Key Vault |
+| Devbox VM | `testadmin` | Password stored in Key Vault |
+| Azure OpenAI Key | - | Key Vault secret: `azure-openai-key` |
 
 ---
 

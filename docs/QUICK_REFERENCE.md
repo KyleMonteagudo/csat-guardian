@@ -4,8 +4,8 @@
 
 | Resource | Username | Password/Key |
 |----------|----------|--------------|
-| SQL Server | `sqladmin` | Check Key Vault / App Settings |
-| Devbox VM | `testadmin` | `Password1!` |
+| SQL Server | `sqladmin` | Key Vault: `sql-admin-password` |
+| Devbox VM | `testadmin` | Key Vault: `devbox-password` |
 | Azure OpenAI | - | Key Vault: `azure-openai-key` |
 
 ---
@@ -38,8 +38,9 @@ download deploy.zip
 
 ### Deploy Database Schema
 ```bash
+# Get password from Key Vault first
 sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
-  -U sqladmin -P 'PASSWORD' -i infrastructure/sql/001-schema-complete.sql
+  -U sqladmin -P '<password-from-keyvault>' -i infrastructure/sql/001-schema-complete.sql
 ```
 
 ### Restart App Service
