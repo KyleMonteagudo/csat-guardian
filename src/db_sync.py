@@ -71,122 +71,141 @@ class SyncDatabaseManager:
             "TrustServerCertificate=no"
         )
     
+    def _get_new_connection(self) -> pyodbc.Connection:
+        """Create a new database connection (thread-safe)."""
+        odbc_str = self._get_odbc_connection_string()
+        return pyodbc.connect(odbc_str, timeout=30)
+    
     def connect(self) -> pyodbc.Connection:
-        """Get or create database connection."""
-        if self._connection is None:
-            odbc_str = self._get_odbc_connection_string()
-            self._connection = pyodbc.connect(odbc_str, timeout=30)
-        return self._connection
+        """Get or create database connection.
+        
+        Note: For thread-safety with concurrent requests, prefer _get_new_connection().
+        This method is kept for backward compatibility but creates a new connection
+        each time to avoid 'Connection is busy' errors.
+        """
+        # Always create a new connection to avoid concurrency issues
+        return self._get_new_connection()
     
     def close(self):
-        """Close database connection."""
-        if self._connection:
-            self._connection.close()
-            self._connection = None
+        """Close database connection (no-op since we use per-query connections)."""
+        # Connections are now closed after each query
+        pass
     
     def get_engineers(self) -> List[Engineer]:
         """Get all engineers from the database."""
         conn = self.connect()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, name, email, team
-            FROM engineers
-        """)
-        
-        engineers = []
-        for row in cursor.fetchall():
-            engineers.append(Engineer(
-                id=row.id,
-                name=row.name,
-                email=row.email,
-                team=row.team
-            ))
-        
-        return engineers
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, name, email, team
+                FROM engineers
+            """)
+            
+            engineers = []
+            for row in cursor.fetchall():
+                engineers.append(Engineer(
+                    id=row.id,
+                    name=row.name,
+                    email=row.email,
+                    team=row.team
+                ))
+            
+            return engineers
+        finally:
+            conn.close()
     
     def get_engineer(self, engineer_id: str) -> Optional[Engineer]:
         """Get a specific engineer by ID."""
         conn = self.connect()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, name, email, team
-            FROM engineers
-            WHERE id = ?
-        """, (engineer_id,))
-        
-        row = cursor.fetchone()
-        if row:
-            return Engineer(
-                id=row.id,
-                name=row.name,
-                email=row.email,
-                team=row.team
-            )
-        return None
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, name, email, team
+                FROM engineers
+                WHERE id = ?
+            """, (engineer_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return Engineer(
+                    id=row.id,
+                    name=row.name,
+                    email=row.email,
+                    team=row.team
+                )
+            return None
+        finally:
+            conn.close()
     
     def get_customer(self, customer_id: str) -> Optional[Customer]:
         """Get a specific customer by ID."""
         conn = self.connect()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, company, tier
-            FROM customers
-            WHERE id = ?
-        """, (customer_id,))
-        
-        row = cursor.fetchone()
-        if row:
-            return Customer(
-                id=row.id,
-                company=row.company,
-                tier=row.tier
-            )
-        return None
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, company, tier
+                FROM customers
+                WHERE id = ?
+            """, (customer_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return Customer(
+                    id=row.id,
+                    company=row.company,
+                    tier=row.tier
+                )
+            return None
+        finally:
+            conn.close()
     
     def get_timeline_entries(self, case_id: str) -> List[TimelineEntry]:
         """Get timeline entries for a case."""
         conn = self.connect()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, case_id, entry_type, subject, content, created_by, 
-                   created_on, direction, is_customer_communication
-            FROM timeline_entries
-            WHERE case_id = ?
-            ORDER BY created_on ASC
-        """, (case_id,))
-        
-        entries = []
-        for row in cursor.fetchall():
-            # Map entry type string to enum
-            entry_type = TimelineEntryType.NOTE
-            if row.entry_type:
-                entry_type_str = row.entry_type.lower()
-                if entry_type_str == "email_sent":
-                    entry_type = TimelineEntryType.EMAIL_SENT
-                elif entry_type_str == "email_received":
-                    entry_type = TimelineEntryType.EMAIL_RECEIVED
-                elif entry_type_str == "phone_call":
-                    entry_type = TimelineEntryType.PHONE_CALL
-                elif entry_type_str == "note":
-                    entry_type = TimelineEntryType.NOTE
+        try:
+            cursor = conn.cursor()
             
-            entries.append(TimelineEntry(
-                id=row.id,
-                case_id=row.case_id,
-                entry_type=entry_type,
-                subject=row.subject or "",
-                content=row.content or "",
-                created_on=row.created_on,
-                created_by=row.created_by or "Unknown",
-                direction=row.direction,
-                is_customer_communication=bool(row.is_customer_communication)
-            ))
-        
-        return entries
+            cursor.execute("""
+                SELECT id, case_id, entry_type, subject, content, created_by, 
+                       created_on, direction, is_customer_communication
+                FROM timeline_entries
+                WHERE case_id = ?
+                ORDER BY created_on ASC
+            """, (case_id,))
+            
+            entries = []
+            for row in cursor.fetchall():
+                # Map entry type string to enum
+                entry_type = TimelineEntryType.NOTE
+                if row.entry_type:
+                    entry_type_str = row.entry_type.lower()
+                    if entry_type_str == "email_sent":
+                        entry_type = TimelineEntryType.EMAIL_SENT
+                    elif entry_type_str == "email_received":
+                        entry_type = TimelineEntryType.EMAIL_RECEIVED
+                    elif entry_type_str == "phone_call":
+                        entry_type = TimelineEntryType.PHONE_CALL
+                    elif entry_type_str == "note":
+                        entry_type = TimelineEntryType.NOTE
+                
+                entries.append(TimelineEntry(
+                    id=row.id,
+                    case_id=row.case_id,
+                    entry_type=entry_type,
+                    subject=row.subject or "",
+                    content=row.content or "",
+                    created_on=row.created_on,
+                    created_by=row.created_by or "Unknown",
+                    direction=row.direction,
+                    is_customer_communication=bool(row.is_customer_communication)
+                ))
+            
+            return entries
+        finally:
+            conn.close()
     
     def _map_status(self, status_val) -> CaseStatus:
         """Map database status to CaseStatus enum."""
@@ -225,30 +244,36 @@ class SyncDatabaseManager:
     
     def get_cases_for_engineer(self, engineer_id: str) -> List[Case]:
         """Get all cases assigned to an engineer."""
-        conn = self.connect()
-        cursor = conn.cursor()
-        
-        # Get the engineer first
+        # Get the engineer first (uses its own connection)
         engineer = self.get_engineer(engineer_id)
         if not engineer:
             return []
         
-        cursor.execute("""
-            SELECT c.id, c.title, c.description, c.status, c.priority,
-                   c.created_on, c.modified_on, c.owner_id, c.customer_id
-            FROM cases c
-            WHERE c.owner_id = ?
-            ORDER BY c.created_on DESC
-        """, (engineer_id,))
+        conn = self.connect()
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT c.id, c.title, c.description, c.status, c.priority,
+                       c.created_on, c.modified_on, c.owner_id, c.customer_id
+                FROM cases c
+                WHERE c.owner_id = ?
+                ORDER BY c.created_on DESC
+            """, (engineer_id,))
+            
+            # Fetch all rows first to avoid connection busy issues
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
         
         cases = []
-        for row in cursor.fetchall():
-            # Get customer
+        for row in rows:
+            # Get customer (uses its own connection)
             customer = self.get_customer(row.customer_id)
             if not customer:
                 customer = Customer(id=row.customer_id, company="Unknown")
             
-            # Get timeline entries
+            # Get timeline entries (uses its own connection)
             timeline = self.get_timeline_entries(row.id)
             
             cases.append(Case(
@@ -269,29 +294,35 @@ class SyncDatabaseManager:
     def get_all_active_cases(self) -> List[Case]:
         """Get all active cases (not resolved/cancelled)."""
         conn = self.connect()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT c.id, c.title, c.description, c.status, c.priority,
-                   c.created_on, c.modified_on, c.owner_id, c.customer_id
-            FROM cases c
-            WHERE c.status NOT IN ('resolved', 'cancelled')
-            ORDER BY c.created_on DESC
-        """)
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT c.id, c.title, c.description, c.status, c.priority,
+                       c.created_on, c.modified_on, c.owner_id, c.customer_id
+                FROM cases c
+                WHERE c.status NOT IN ('resolved', 'cancelled')
+                ORDER BY c.created_on DESC
+            """)
+            
+            # Fetch all rows first to avoid connection busy issues
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
         
         cases = []
-        for row in cursor.fetchall():
-            # Get engineer
+        for row in rows:
+            # Get engineer (uses its own connection)
             engineer = self.get_engineer(row.owner_id)
             if not engineer:
                 engineer = Engineer(id=row.owner_id, name="Unknown", email="unknown@contoso.com")
             
-            # Get customer
+            # Get customer (uses its own connection)
             customer = self.get_customer(row.customer_id)
             if not customer:
                 customer = Customer(id=row.customer_id, company="Unknown")
             
-            # Get timeline entries
+            # Get timeline entries (uses its own connection)
             timeline = self.get_timeline_entries(row.id)
             
             cases.append(Case(
@@ -313,10 +344,13 @@ class SyncDatabaseManager:
         """Test if database connection works."""
         try:
             conn = self.connect()
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
-            return True
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+                return True
+            finally:
+                conn.close()
         except Exception as e:
             print(f"Database connection test failed: {e}")
             return False
