@@ -93,13 +93,13 @@ Due to enterprise security constraints, development spans three machines:
 | Machine | Purpose | Has Access To |
 |---------|---------|---------------|
 | **Local Machine** | VS Code + GitHub Copilot, code editing | GitHub repo (read/write) |
-| **Private Laptop** | Azure Portal, Cloud Shell | Azure resources, GitHub repo (via Cloud Shell) |
+| **SAW** | Azure Portal, Cloud Shell | Azure resources, GitHub repo (via Cloud Shell) |
 | **Devbox VM** | Testing private endpoints | App Service, Azure SQL (via VNet) |
 
 ### Key Limitations
 
 - **Local Machine**: No Azure CLI, no direct Azure access
-- **Private Laptop**: Azure access but no direct VNet connectivity
+- **SAW**: Azure access but no direct VNet connectivity
 - **Devbox VM**: VNet access but no code editing tools
 - **Cloud Shell**: Can run az commands but has MSI token scope limitations for some operations
 
@@ -187,7 +187,7 @@ zip -r deploy.zip src requirements.txt
 download deploy.zip
 ```
 
-**Step 2: Upload via Kudu (Private Laptop Browser)**
+**Step 2: Upload via Kudu (SAW Browser)**
 1. Go to: `https://app-csatguardian-dev.scm.azurewebsites.net/DebugConsole`
 2. Navigate to `/home`
 3. Drag and drop `deploy.zip` into the file area
