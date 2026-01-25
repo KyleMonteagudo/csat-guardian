@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains how to deploy CSAT Guardian to **Commercial Azure** using Cloud Shell.
+This guide explains how to deploy CSAT Guardian to **Commercial Azure**. Due to enterprise security constraints and Cloud Shell limitations, deployment uses the **Kudu file upload method**.
 
 **Current Deployed Environment:**
 - Subscription ID: `a20d761d-cb36-4f83-b827-58ccdb166f39`
@@ -13,31 +13,129 @@ This guide explains how to deploy CSAT Guardian to **Commercial Azure** using Cl
 
 ## Prerequisites
 
-- Access to Azure Portal with Cloud Shell
-- Git repository access: `https://github.com/kmonteagudo_microsoft/csat-guardian.git`
+1. Access to **Azure Portal** with Cloud Shell
+2. Access to **GitHub repository**: `https://github.com/kmonteagudo_microsoft/csat-guardian.git`
+3. **SCM Basic Auth enabled** on App Service (required for Kudu access)
 
 ---
 
-## Deployment Workflow
+## ⚠️ Important: Why Standard Deployment Methods Don't Work
 
-### Initial Setup (One-time in Cloud Shell)
+| Method | Issue |
+|--------|-------|
+| `az webapp up` | Cloud Shell MSI token scope doesn't support appservice.azure.com |
+| `az webapp deployment source sync` | Caches old builds, often doesn't pick up new code |
+| `az webapp deploy --type zip` | Same MSI token scope issue |
+
+**Solution**: Use the **Kudu file upload method** described below.
+
+---
+
+## Complete Deployment Process
+
+### Step 1: Clone Repository (Cloud Shell - First Time Only)
 
 ```bash
-# Clone the repo
+cd ~
 git clone https://github.com/kmonteagudo_microsoft/csat-guardian.git
 cd csat-guardian
 ```
 
-### Deploy/Update Application
+### Step 2: Create Deployment Package (Cloud Shell)
 
 ```bash
 cd ~/csat-guardian
-git pull
-cd src
-az webapp up --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev --runtime "PYTHON:3.11"
+git pull origin develop
+
+# Remove any old package
+rm -f deploy.zip
+
+# Create deployment ZIP with src and requirements.txt
+zip -r deploy.zip src requirements.txt
+
+# Download to your local machine (browser will prompt)
+download deploy.zip
 ```
 
-This takes 3-5 minutes to build and deploy.
+### Step 3: Upload via Kudu (Browser)
+
+1. Open Kudu Debug Console:
+   ```
+   https://app-csatguardian-dev.scm.azurewebsites.net/DebugConsole
+   ```
+2. Navigate to `/home` in the file browser
+3. **Drag and drop** `deploy.zip` onto the file area
+4. Wait for upload to complete (~30 seconds)
+
+### Step 4: Move Files to wwwroot (Kudu SSH Terminal)
+
+In the Kudu console (or via SSH):
+```bash
+cd /home/site/wwwroot
+
+# Remove old deployment
+rm -rf src requirements.txt
+
+# Move new files from /home
+mv /home/src .
+mv /home/requirements.txt .
+
+# Verify files are in place
+ls -la
+```
+
+### Step 5: Configure Startup Command (Portal)
+
+**Azure Portal → App Service → Configuration → General settings → Startup Command:**
+
+```
+cd /home/site/wwwroot/src && pip install -r requirements.txt && python -m uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+### Step 6: Restart App Service
+
+**Azure Portal → App Service → Overview → Restart**
+
+Or via Cloud Shell:
+```bash
+az webapp restart --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev
+```
+
+---
+
+## Required App Settings
+
+| Setting | Value |
+|---------|-------|
+| `AZURE_OPENAI_ENDPOINT` | `https://ais-csatguardian-dev.cognitiveservices.azure.com/` |
+| `AZURE_OPENAI_API_KEY` | `@Microsoft.KeyVault(VaultName=kv-csatguard-dev;SecretName=azure-openai-key)` |
+| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` |
+| `DATABASE_CONNECTION_STRING` | `Server=tcp:sql-csatguardian-dev.database.windows.net,1433;Initial Catalog=sqldb-csatguardian-dev;User ID=sqladmin;Password=XXXX;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;` |
+| `WEBSITE_VNET_ROUTE_ALL` | `1` |
+| `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true` |
+| `WEBSITES_PORT` | `8000` |
+
+⚠️ **Note**: Use `AZURE_OPENAI_DEPLOYMENT`, NOT `AZURE_OPENAI_DEPLOYMENT_NAME`
+
+---
+
+## Database Deployment
+
+### Deploy Schema (Cloud Shell)
+
+```bash
+sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
+  -U sqladmin -P 'YourSecureP@ssword123!' \
+  -i infrastructure/sql/001-schema-complete.sql
+```
+
+### Deploy Seed Data (Cloud Shell)
+
+```bash
+sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
+  -U sqladmin -P 'YourSecureP@ssword123!' \
+  -i infrastructure/sql/002-seed-data.sql
+```
 
 ---
 
@@ -59,91 +157,77 @@ This takes 3-5 minutes to build and deploy.
 
 ## Verify Deployment
 
-Connect to the dev-box VM via Bastion to test:
+### Option 1: From Devbox VM (via Bastion)
 
-1. Go to **Azure Portal** → **Virtual machines** → `vm-devbox-csatguardian`
+1. **Azure Portal** → **Virtual machines** → `vm-devbox-csatguardian`
 2. Click **Connect** → **Bastion**
-3. Enter credentials:
-   - Username: `testadmin`
-   - Password: `Password1!`
-4. Open browser in VM and go to:
-   - https://app-csatguardian-dev.azurewebsites.net/docs
-
----
-
-## What Gets Deployed
-
-| Resource | Name | Purpose |
-|----------|------|---------|
-| Virtual Network | vnet-csatguardian-dev | Private networking (10.100.0.0/16) |
-| Azure Bastion | bas-csatguardian-dev | Secure VM access |
-| Dev-box VM | vm-devbox-csatguardian | Testing private endpoints |
-| SQL Server | sql-csatguardian-dev | Database server |
-| SQL Database | sqldb-csatguardian-dev | Application data |
-| Azure OpenAI | oai-csatguardian-dev | Sentiment analysis (GPT-4o) |
-| Key Vault | kv-csatguardian-dev | Secrets storage |
-| App Service Plan | asp-csatguardian-dev | Hosting plan (Linux B1) |
-| App Service | app-csatguardian-dev | Web application |
-| Application Insights | appi-csatguardian-dev | Monitoring |
-| Private Endpoints | pe-* | Private connectivity |
-| Private DNS Zones | privatelink.* | DNS resolution |
-
----
-
-## Redeploying Code Changes
-
-After making code changes, redeploy just the app:
+3. Credentials: `testadmin` / `Password1!`
+4. Open PowerShell and test:
 
 ```powershell
-.\deploy-all.ps1 -SqlPassword "YourSecurePassword123!" -SkipInfrastructure -SkipDatabase
+# Health check
+Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/health"
+
+# List cases
+Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/cases"
+
+# Chat with agent
+$body = @{ message = "Check case-001"; engineer_id = "eng-001" } | ConvertTo-Json
+Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/chat" -Method POST -ContentType "application/json" -Body $body
 ```
 
-Or manually:
+### Option 2: Via Browser
 
-```powershell
-# Create zip of src folder
-Compress-Archive -Path "..\src\*" -DestinationPath "app.zip" -Force
-
-# Copy requirements.txt into the zip
-Compress-Archive -Path "..\requirements.txt" -DestinationPath "app.zip" -Update
-
-# Deploy
-az webapp deploy --resource-group KMonteagudo_CSAT_Guardian --name app-csatguardian-dev --src-path app.zip --type zip
-```
+1. Navigate to: `https://app-csatguardian-dev.azurewebsites.net/docs`
+2. Test endpoints via Swagger UI
 
 ---
 
 ## Troubleshooting
 
-### "az: command not found"
-Azure CLI is not installed. Download from https://aka.ms/installazurecliwindows
+### "No module named uvicorn" / "No module named fastapi"
 
-### "Login failed"
-Run `az login` again. Make sure you're using an account with access to the subscription.
-
-### "Resource group does not exist"
-```powershell
-az group create --name KMonteagudo_CSAT_Guardian --location eastus
+The startup command must include pip install:
 ```
-
-### Bastion connection fails
-Wait 5-10 minutes after deployment for Bastion to fully provision.
+cd /home/site/wwwroot/src && pip install -r requirements.txt && python -m uvicorn api:app --host 0.0.0.0 --port 8000
+```
 
 ### App returns 500 errors
-Check logs from dev-box VM:
-```powershell
-az webapp log tail --resource-group KMonteagudo_CSAT_Guardian --name app-csatguardian-dev
-```
 
-### Query editor won't connect
-Make sure you're using the correct SQL admin password from deployment.
+Check logs:
+- **Portal**: App Service → Log stream
+- **Kudu**: `https://app-csatguardian-dev.scm.azurewebsites.net/api/logstream`
+
+### SQL connection fails
+
+1. Verify `WEBSITE_VNET_ROUTE_ALL=1` in App Settings
+2. Verify Private DNS zone is linked to VNet
+3. Restart App Service after changing settings
+
+### Chat endpoint returns error
+
+1. Verify `AZURE_OPENAI_DEPLOYMENT` (not DEPLOYMENT_NAME) is set
+2. Check Key Vault access for managed identity
+3. Verify AZURE_OPENAI_ENDPOINT ends with `/`
+
+### Kudu upload fails
+
+1. Ensure **SCM Basic Auth** is enabled:
+   - Portal → App Service → Configuration → General settings → SCM Basic Auth → **On**
+2. Try refreshing the Kudu page
+
+### Old code still running after deployment
+
+1. Remove all files from wwwroot before deploying
+2. Restart App Service (not just refresh)
+3. Clear browser cache
 
 ---
 
 ## Clean Up (Delete Everything)
 
-```powershell
-az group delete --name KMonteagudo_CSAT_Guardian --yes --no-wait
+```bash
+az group delete --name CSAT_Guardian_Dev --yes --no-wait
 ```
 
 **Warning:** This deletes ALL resources including data!

@@ -105,87 +105,90 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 
 ## 3. Deployed Resources
 
-### Resource Group: `KMonteagudo_CSAT_Guardian`
+### Resource Group: `CSAT_Guardian_Dev`
 
 | Resource | Name | Type | Notes |
 |----------|------|------|-------|
-| **VNet** | `vnet-csatguardian` | Virtual Network | 10.100.0.0/16 |
-| **App Service Plan** | `asp-csatguardian` | Linux B1 | Python 3.12 |
-| **App Service** | `app-csatguardian` | Web App | FastAPI POC with VNet integration |
-| **Azure OpenAI** | `oai-csatguardian` | Cognitive Services | GPT-4o deployment |
-| **SQL Server** | `sql-csatguardian` | Azure SQL | Logical server |
-| **SQL Database** | `sqldb-csatguardian` | Azure SQL DB | Basic tier |
-| **Key Vault** | `kv-csatguardian` | Key Vault | RBAC-enabled |
-| **App Insights** | `appi-csatguardian` | Application Insights | Logging/monitoring |
-| **Log Analytics** | `log-csatguardian` | Log Analytics | Central logs |
+| **VNet** | `vnet-csatguardian-dev` | Virtual Network | 10.100.0.0/16 |
+| **App Service Plan** | `asp-csatguardian-dev` | Linux P1v3 | Python 3.11 |
+| **App Service** | `app-csatguardian-dev` | Web App | FastAPI + Semantic Kernel with VNet integration |
+| **AI Services** | `ais-csatguardian-dev` | AI Services | GPT-4o deployment |
+| **SQL Server** | `sql-csatguardian-dev` | Azure SQL | Logical server (private endpoint only) |
+| **SQL Database** | `sqldb-csatguardian-dev` | Azure SQL DB | 12 tables, 8 test cases |
+| **Key Vault** | `kv-csatguard-dev` | Key Vault | RBAC-enabled, managed identity access |
+| **Bastion** | `bas-csatguardian-dev` | Azure Bastion | Secure VM access |
+| **Dev VM** | `vm-devbox-csatguardian` | Windows 11 VM | Testing from VNet |
 
 ### Private Endpoints
 
 | Endpoint | Target | Private IP | DNS Zone |
 |----------|--------|-----------|----------|
-| `pep-csatguardian-sql` | SQL Server | 10.100.2.4 | privatelink.database.windows.net |
-| `pep-csatguardian-kv` | Key Vault | 10.100.2.5 | privatelink.vaultcore.azure.net |
-| `pep-csatguardian-oai` | Azure OpenAI | 10.100.2.6 | privatelink.openai.azure.com |
+| `pep-csatguardian-sql` | SQL Server | 10.100.2.x | privatelink.database.windows.net |
+| `pep-csatguardian-kv` | Key Vault | 10.100.2.x | privatelink.vaultcore.azure.net |
+| `pep-csatguardian-ais` | AI Services | 10.100.2.x | privatelink.cognitiveservices.azure.com |
 
 ### Subnets
 
 | Subnet | Address Range | Purpose |
 |--------|--------------|---------|
 | `snet-appservice` | 10.100.1.0/24 | App Service VNet integration |
-| `snet-privateendpoints` | 10.100.2.0/24 | Private Endpoints |
+| `snet-private-endpoints` | 10.100.2.0/24 | Private Endpoints |
+| `snet-devbox` | 10.100.3.0/24 | Development VM |
+| `AzureBastionSubnet` | 10.100.4.0/26 | Azure Bastion |
 
 ---
 
 ## 4. Component Details
 
-### 4.1 App Service (POC Frontend)
+### 4.1 App Service (FastAPI + Semantic Kernel)
 
-**Purpose**: Hosts the FastAPI backend for POC demonstration
+**Purpose**: Hosts the FastAPI backend with AI-powered CSAT coaching agent
 
 **Why App Service?**
 - Simpler deployment for Python apps
 - Native VNet integration support
-- Easier for single-app scenarios
+- Managed identity for Key Vault access
 
 **Configuration:**
 ```
-Plan: asp-csatguardian (Linux B1)
-Runtime: Python 3.12
+Plan: asp-csatguardian-dev (Linux P1v3)
+Runtime: Python 3.11
 VNet Integration: snet-appservice
 Route All: Enabled (all outbound through VNet)
-URL: https://app-csatguardian.azurewebsites.net
+URL: https://app-csatguardian-dev.azurewebsites.net
+Startup Command: cd /home/site/wwwroot/src && pip install -r requirements.txt && python -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-**Note**: This is a temporary POC frontend. Production will use Teams Bot integration.
+**Deployed Endpoints:**
+| Endpoint | Status | Description |
+|----------|--------|-------------|
+| `/api/health` | ✅ Working | Health check |
+| `/api/cases` | ✅ Working | List cases from Azure SQL |
+| `/api/analyze/{id}` | ✅ Working | AI sentiment analysis |
+| `/api/chat` | ✅ Working | Semantic Kernel agent chat |
 
 ### 4.2 Azure Key Vault
 
 **Purpose**: Securely stores all secrets and credentials
 
-**Deployed Instance:** `kv-csatguardian.vault.azure.net`
-**Private Endpoint IP:** 10.100.2.5
+**Deployed Instance:** `kv-csatguard-dev.vault.azure.net`
 
 **Secrets Stored:**
 | Secret Name | Description | Status |
 |-------------|-------------|--------|
-| `AzureOpenAI--Endpoint` | Azure OpenAI endpoint URL | ✅ Stored |
-| `AzureOpenAI--ApiKey` | Azure OpenAI API key | ✅ Stored |
-| `AzureOpenAI--DeploymentName` | GPT-4o deployment name | ✅ Stored |
-| `SqlServer--ConnectionString` | Azure SQL connection string | ✅ Auto-generated |
-| `AppInsights--ConnectionString` | App Insights connection | ✅ Auto-generated |
-| `Teams--WebhookUrl` | Teams incoming webhook | ⏳ Pending |
+| `azure-openai-key` | Azure OpenAI API key | ✅ Stored |
 
 **Access Pattern:**
 ```
-App Service (Managed Identity)
+App Service (Managed Identity: 7b0f0d42-0f23-48cd-b982-41abad5f1927)
     │
     │ VNet Integration → Private Endpoint
     ▼
-Key Vault (10.100.2.5)
+Key Vault (via @Microsoft.KeyVault reference)
     │
     │ RBAC: Key Vault Secrets User
     ▼
-Application Config
+Application Settings (auto-resolved)
 ```
 
 ### 4.3 Azure SQL Database
@@ -193,38 +196,44 @@ Application Config
 **Purpose**: Stores case data, alert history, and analytics
 
 **Deployed Instances:**
-- Server: `sql-csatguardian.database.windows.net`
-- Database: `sqldb-csatguardian`
-- Private Endpoint IP: 10.100.2.4
+- Server: `sql-csatguardian-dev.database.windows.net`
+- Database: `sqldb-csatguardian-dev`
 - Admin: `sqladmin`
+- Access: Private endpoint only (no public access)
 
-**Tables:**
+**Database Schema (12 Tables):**
 ```sql
--- Core data (sample data for POC)
-Engineers     -- Support engineer profiles
-Customers     -- Customer information
-Cases         -- Support cases
-TimelineEntries -- Case notes, emails, calls
+-- Core entities
+engineers           -- Support engineer profiles
+customers           -- Customer information
+cases               -- Support cases (8 test records)
+timeline_entries    -- Case notes, emails, calls
+surveys             -- CSAT survey data
 
--- Analytics (persisted)
-Alerts        -- Sent alert history (for deduplication)
+-- Configuration
+csat_rules          -- Compliance rules
+alerts              -- Alert history
+escalations         -- Escalation tracking
+
+-- Authentication
+roles, permissions, role_permissions
+engineer_roles
 ```
 
-### 4.4 Azure OpenAI
+### 4.4 Azure AI Services (GPT-4o)
 
-**Purpose**: Provides AI capabilities for sentiment analysis and recommendations
+**Purpose**: Provides AI capabilities for sentiment analysis and conversational coaching
 
 **Deployed Instance:**
-- Resource: `oai-csatguardian`
-- Endpoint: `https://oai-csatguardian.openai.azure.com/`
-- Deployment: `gpt-4o` (version 2024-11-20)
-- Private Endpoint IP: 10.100.2.6
-- Region: East US
+- Resource: `ais-csatguardian-dev`
+- Endpoint: `https://ais-csatguardian-dev.cognitiveservices.azure.com/`
+- Deployment: `gpt-4o`
+- Region: Central US
 
 **Use Cases:**
 1. **Sentiment Analysis**: Classify customer communications as positive/neutral/negative
-2. **Recommendations**: Generate coaching tips for engineers
-3. **Conversational AI**: Interactive case Q&A (via Semantic Kernel)
+2. **CSAT Coaching**: Proactive guidance via Semantic Kernel agent with function calling
+3. **Timeline Analysis**: Detect response gaps and communication patterns
 
 ---
 
