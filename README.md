@@ -12,8 +12,9 @@
 |-----------|--------|---------|
 | Azure SQL Database | ✅ Deployed | 12 tables, 8 test cases with timelines |
 | App Service | ✅ Running | Python 3.11, VNet integrated, private endpoints |
-| Azure OpenAI | ✅ Connected | GPT-4o via Key Vault integration |
+| Azure OpenAI | ✅ Connected | GPT-4o via MSI authentication |
 | Semantic Kernel Agent | ✅ Working | Function calling with CSAT rules plugin |
+| MSI Authentication | ✅ Working | No API keys - SQL and OpenAI both use managed identity |
 | `/api/health` | ✅ Working | Health check endpoint |
 | `/api/cases` | ✅ Working | Lists cases from Azure SQL |
 | `/api/analyze/{id}` | ✅ Working | Sentiment analysis (AI-powered) |
@@ -21,12 +22,13 @@
 
 ### 🔄 Pending (For Production)
 
-| Item | Priority | Notes |
-|------|----------|-------|
-| DfM API Integration | High | Replace seed data with real case sync |
-| Teams Notifications | Medium | Alert managers on CSAT risks |
-| Manager Dashboard | Medium | Aggregate view of team CSAT health |
-| GitHub Actions CI/CD | Low | Automated deployments |
+| Item | Priority | Status | Notes |
+|------|----------|--------|-------|
+| DfM API Integration | High | ⏳ Waiting on DfM team | Request sent Jan 26, 2026 |
+| Teams Bot Integration | High | ⏳ Awaiting security approval | Need approval for public bot endpoint |
+| Directory Readers Role | Medium | ⏳ Awaiting Entra admin | SQL Server MSI needs this for least-privilege |
+| Manager Dashboard | Medium | Not started | Aggregate view of team CSAT health |
+| CI/CD Pipeline | Low | Blocked | Network restrictions prevent GitHub Actions |
 
 ---
 
@@ -163,9 +165,10 @@ sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
 | Setting | Value |
 |---------|-------|
 | `AZURE_OPENAI_ENDPOINT` | `https://ais-csatguardian-dev.cognitiveservices.azure.com/` |
-| `AZURE_OPENAI_API_KEY` | `@Microsoft.KeyVault(VaultName=kv-csatguard-dev;SecretName=azure-openai-key)` |
 | `AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` |
 | `DATABASE_CONNECTION_STRING` | `Server=tcp:sql-csatguardian-dev.database.windows.net,1433;...` |
+| `USE_SQL_MANAGED_IDENTITY` | `true` |
+| `USE_OPENAI_MANAGED_IDENTITY` | `true` |
 | `WEBSITE_VNET_ROUTE_ALL` | `1` |
 | `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true` |
 | `WEBSITES_PORT` | `8000` |
@@ -332,4 +335,4 @@ Ensure startup command includes `pip install -r requirements.txt`
 
 ## 📜 License
 
-Internal Microsoft Use Only - CSS Escalations Team POC
+Internal Microsoft Use Only

@@ -14,6 +14,10 @@
 # - Case data (via DfM client)
 # - Sentiment analysis
 # - Recommendation generation
+#
+# Supports two authentication modes for Azure OpenAI:
+# - API Key: Uses AZURE_OPENAI_API_KEY (for local development)
+# - Managed Identity: Uses DefaultAzureCredential (for Azure production)
 # =============================================================================
 
 import uuid
@@ -36,6 +40,10 @@ from logger import get_logger, log_case_event
 
 # Get logger for this module
 logger = get_logger(__name__)
+
+
+# Azure OpenAI scope for token-based auth
+AZURE_OPENAI_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 
 # =============================================================================
@@ -352,14 +360,34 @@ class CSATGuardianAgent:
         # Add Azure OpenAI service if configured
         if self.config.azure_openai.endpoint:
             logger.debug("Adding Azure OpenAI chat completion service...")
-            self.kernel.add_service(
-                AzureChatCompletion(
-                    deployment_name=self.config.azure_openai.deployment,
-                    endpoint=self.config.azure_openai.endpoint,
-                    api_key=self.config.azure_openai.api_key,
-                    api_version=self.config.azure_openai.api_version,
+            
+            if self.config.azure_openai.use_managed_identity:
+                # Use Managed Identity (MSI) for authentication
+                logger.info("  → Using Managed Identity for Semantic Kernel")
+                from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+                
+                credential = DefaultAzureCredential()
+                token_provider = get_bearer_token_provider(credential, AZURE_OPENAI_SCOPE)
+                
+                self.kernel.add_service(
+                    AzureChatCompletion(
+                        deployment_name=self.config.azure_openai.deployment,
+                        endpoint=self.config.azure_openai.endpoint,
+                        ad_token_provider=token_provider,
+                        api_version=self.config.azure_openai.api_version,
+                    )
                 )
-            )
+            else:
+                # Use API key authentication
+                logger.info("  → Using API key for Semantic Kernel")
+                self.kernel.add_service(
+                    AzureChatCompletion(
+                        deployment_name=self.config.azure_openai.deployment,
+                        endpoint=self.config.azure_openai.endpoint,
+                        api_key=self.config.azure_openai.api_key,
+                        api_version=self.config.azure_openai.api_version,
+                    )
+                )
         else:
             logger.warning("Azure OpenAI not configured - agent will have limited functionality")
         

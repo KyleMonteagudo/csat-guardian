@@ -1,7 +1,7 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 25, 2026
-> **Status**: ⚠️ ON HOLD - Security Remediation Required
+> **Last Updated**: January 26, 2026 (11:30 PM)
+> **Status**: ✅ MSI Auth Complete | ⏳ Waiting on DfM + Security Approvals
 
 ---
 
@@ -13,71 +13,183 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 
 ---
 
-## 🚨 CRITICAL: Security Breaking Changes (January 25, 2026)
+## 🎉 MILESTONE: MSI Authentication Working (January 26, 2026)
 
-The following security hardening changes have been applied to comply with enterprise guardrails.
-**The application is currently non-functional until code changes are made to support Managed Identity authentication.**
+**All services are now authenticating via Managed Identity:**
 
-### Security Changes Applied
+| Service | Status | Auth Method |
+|---------|--------|-------------|
+| Azure SQL | ✅ Working | MSI token via `DefaultAzureCredential` |
+| Azure OpenAI | ✅ Working | MSI token via `get_bearer_token_provider` |
+| Key Vault | ✅ Working | `@Microsoft.KeyVault` references with MSI |
+| API Health | ✅ Working | All services reporting "healthy" |
 
-| # | Resource | Change | Impact |
+### Key Finding: Directory Readers Workaround
+
+**Root Cause**: Azure SQL Server MSI (`04199892-389c-4531-97a7-42eda6734c28`) does not have Directory Readers role in Azure AD, which is required to validate incoming AAD tokens from non-admin users.
+
+**Current Workaround**: Made App Service MSI (`7b0f0d42-0f23-48cd-b982-41abad5f1927`) a SQL Server admin. This bypasses the Directory Readers requirement.
+
+**Production Fix**: Request AAD admin to grant Directory Readers role to SQL Server MSI, then demote App Service to database user with least privilege.
+
+---
+
+## ⏳ Pending Approvals / External Dependencies
+
+| Item | Owner | Status | Notes |
+|------|-------|--------|-------|
+| **DfM API Access** | DfM Team | ⏳ Email sent Jan 26 | Need API endpoint, auth method, field mappings |
+| **Teams Bot Security** | Security Lead | ⏳ Email sent Jan 26 | Need approval for public bot endpoint (Azure Function gateway approach) |
+| **Directory Readers Role** | Entra Admin | ⏳ Not yet requested | SQL Server MSI needs this for least-privilege |
+
+---
+
+## Code Changes Made Today (January 26, 2026)
+
+| Change | Files | Details |
+|--------|-------|---------|
+| MSI auth for Azure SQL | `db_sync.py` | Token-based auth via `DefaultAzureCredential` |
+| MSI auth for Azure OpenAI | `sentiment_service.py`, `guardian_agent.py` | `get_bearer_token_provider()` and `ad_token_provider` |
+| Renamed priority → severity | `models.py`, `api.py`, `dfm_client.py` | Now uses Sev A/B/C/D to match DfM terminology |
+| Debug endpoints removed | `api.py` | Cleaned up `/api/debug/*` endpoints |
+| Health endpoint fix | `api.py` | Restored missing return statement |
+| DfM request doc | `docs/DFM_INTEGRATION_REQUEST.md` | Formal request for DfM team |
+
+---
+
+## Security Configuration Summary
+
+### Security Hardening Applied (January 25, 2026)
+
+| # | Resource | Change | Status |
 |---|----------|--------|--------|
-| 1 | **Key Vault** | Disabled public network access | App may not resolve `@Microsoft.KeyVault(...)` references |
-| 2 | **Bastion + Public IP** | Deleted | No way to access Devbox VM for testing |
-| 3 | **AI Services** (`ais-csatguardian-dev`) | Disabled local auth | API key authentication stops working |
-| 4 | **OpenAI** (`oai-csatguardian-dev`) | Disabled local auth | API key authentication stops working |
-| 5 | **Azure SQL** | AD-only auth enabled | SQL username/password stops working |
-| 6 | **Storage Account** | Disable shared key access | Shared key access stops working |
-| 7 | **Storage Account** | Disable SFTP/Local Users | SFTP local user access stops |
+| 1 | **Key Vault** | Disabled public network access | ✅ Working via PE |
+| 2 | **Bastion + Public IP** | Deleted | N/A - use VM run-command |
+| 3 | **AI Services** | Disabled local auth | ✅ MSI working |
+| 4 | **Azure SQL** | AD-only auth enabled | ✅ MSI working |
+| 5 | **Storage Account** | Disabled shared key access | N/A |
 
-### Code Changes Required to Remediate
+### MSI Authentication Implementation
 
-| Component | Current Auth | Required Auth |
-|-----------|-------------|---------------|
-| Azure OpenAI | API Key from Key Vault | `DefaultAzureCredential` (MSI) |
-| Azure SQL | Connection string with password | Access token from MSI |
-| Key Vault | App setting reference | Code-based access with MSI (if PE issues) |
-| Storage | Shared key (if used) | MSI + RBAC |
+| File | Changes |
+|------|---------|
+| `src/config.py` | Added `use_managed_identity` flag to `AzureOpenAIConfig`, `use_sql_managed_identity` to `FeatureFlags` |
+| `src/db_sync.py` | Added `_get_msi_access_token()` using `DefaultAzureCredential` with struct-packed token |
+| `src/services/sentiment_service.py` | Uses `get_bearer_token_provider()` for Azure OpenAI |
+| `src/agent/guardian_agent.py` | Uses `ad_token_provider` for Semantic Kernel |
+| `requirements.txt` | Added `pyodbc>=5.0.0` |
 
-### Azure RBAC/Permissions Required
+### Environment Variables
 
-| Resource | Principal | Role/Permission |
-|----------|-----------|-----------------|
-| AI Services | App Service MSI | `Cognitive Services User` |
-| SQL Database | App Service MSI | `db_datareader`, `db_datawriter` (via T-SQL) |
-| Key Vault | App Service MSI | `Key Vault Secrets User` (already configured) |
-| Storage Account | App Service MSI | `Storage Blob Data Contributor` (if needed) |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_OPENAI_MANAGED_IDENTITY` | `true` | MSI for Azure OpenAI |
+| `USE_SQL_MANAGED_IDENTITY` | `true` | MSI for Azure SQL |
 
-### SQL Database Setup Required
+### Azure RBAC Configuration
 
-Run as Azure AD admin (Kyle Monteagudo):
-```sql
-CREATE USER [app-csatguardian-dev] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [app-csatguardian-dev];
-ALTER ROLE db_datawriter ADD MEMBER [app-csatguardian-dev];
-```
+| Resource | Principal | Role/Permission | Status |
+|----------|-----------|-----------------|--------|
+| SQL Server | App Service MSI | **SQL Admin** (workaround) | ✅ Configured |
+| AI Services | App Service MSI | `Cognitive Services User` | ✅ Configured |
+| Key Vault | App Service MSI | `Key Vault Secrets User` | ✅ Configured |
 
 ---
 
 ## Current State
 
-### ✅ Completed (Production-Ready POC - Pre-Security Hardening)
+### ✅ Completed Features
 
-1. **FastAPI Backend** - Production-ready REST API
-   - File: `src/api.py`
-   - All endpoints working with Azure SQL and Azure AI Services
-   - Swagger docs at `/docs`
+1. **FastAPI Backend** - Production-ready REST API (`src/api.py`)
+2. **Azure SQL Integration** - Thread-safe per-query connections with MSI auth
+3. **AI-Powered Analysis** - GPT-4o sentiment, timeline analysis, coaching
+4. **Semantic Kernel Agent** - Function-calling conversational agent
+5. **MSI Authentication** - No API keys or passwords in code/config
+6. **Private Networking** - All services via Private Endpoints
 
-2. **Azure SQL Integration**
-   - `src/db_sync.py` - Synchronous SQL client (per-query connections for thread safety)
-   - `src/clients/azure_sql_adapter.py` - Async wrapper
-   - Database seeded with 8 test cases and timeline data
+### ✅ Recent Changes (January 26, 2026)
 
-3. **AI-Powered Analysis**
-   - **Sentiment Analysis**: GPT-4o powered sentiment scoring (0-1 scale)
-   - **Timeline Analysis**: Detects communication gaps and patterns
-   - **CSAT Rules Engine**: Semantic Kernel agent with function calling
-   - **Coaching Recommendations**: AI-generated actionable advice
+| Change | Details |
+|--------|---------|
+| MSI auth for Azure SQL | Token-based auth via `DefaultAzureCredential` |
+| MSI auth for Azure OpenAI | `get_bearer_token_provider()` and `ad_token_provider` |
+| SQL Admin workaround | App Service MSI set as SQL admin (Directory Readers unavailable) |
+| Renamed priority → severity | Matches DfM terminology (Sev A/B/C/D) |
+| Health endpoint fix | Restored missing return statement |
+| Debug endpoints removed | Cleaned up `/api/debug/*` endpoints |
+| DfM integration request | Created `docs/DFM_INTEGRATION_REQUEST.md`, email sent |
+| Deployed | All changes live on `app-csatguardian-dev` |
+
+### ⏳ Next Steps (Priority Order)
+
+1. **Teams Bot Integration** *(Awaiting security approval)*
+   - Need approval for Azure Function gateway approach
+   - Build notification service with detailed alert messages
+   - Engineer can chat back and forth with Guardian agent
+
+2. **DfM Integration** *(Awaiting DfM team response)*
+   - Replace seed data with real Dynamics for Microsoft case sync
+   - See `docs/DFM_INTEGRATION_REQUEST.md` for details
+
+3. **Directory Readers Fix** *(Awaiting Entra Admin)*
+   - Grant Directory Readers to SQL Server MSI (`04199892-389c-4531-97a7-42eda6734c28`)
+   - Then demote App Service from SQL admin to db_datareader/db_datawriter
+
+---
+
+## Deployment Info
+
+**Target Environment:**
+- Cloud: Commercial Azure (Central US)
+- Subscription: `a20d761d-cb36-4f83-b827-58ccdb166f39`
+- Resource Group: `CSAT_Guardian_Dev`
+
+**Key Resources:**
+
+| Resource | Name | Notes |
+|----------|------|-------|
+| App Service | `app-csatguardian-dev` | MSI: `7b0f0d42-0f23-48cd-b982-41abad5f1927` |
+| SQL Server | `sql-csatguardian-dev` | MSI: `04199892-389c-4531-97a7-42eda6734c28`, AD Admin: App Service |
+| SQL Database | `sqldb-csatguardian-dev` | Contains external user `app-csatguardian-dev` |
+| AI Services | `ais-csatguardian-dev` | GPT-4o deployment |
+| Key Vault | `kv-csatguard-dev` | Private endpoint only |
+| VNet | `vnet-csatguardian-dev` | 10.100.0.0/16 |
+| Dev VM | `vm-devbox-csatguardian` | MSI: `2941775d-fe8f-4ebd-88ef-6852df0eb43b` (former SQL admin) |
+
+**Testing Access:**
+- No Bastion (deleted for security)
+- Use `az vm run-command invoke` to test via VM
+- Or access via Cloud Shell → Kudu console
+
+---
+
+## Development Workflow
+
+**Local Development (API Keys):**
+```powershell
+$env:USE_SQL_MANAGED_IDENTITY = "false"
+$env:USE_OPENAI_MANAGED_IDENTITY = "false"
+cd src
+python -m uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+**Deploy to Azure (Kudu Method):**
+```bash
+# Cloud Shell
+cd ~/csat-guardian && git pull origin develop
+rm -f deploy.zip && zip -r deploy.zip src requirements.txt
+# Upload via https://app-csatguardian-dev.scm.azurewebsites.net/ZipDeployUI
+az webapp restart --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev
+```
+
+**Test via VM:**
+```bash
+az vm run-command invoke \
+    --resource-group CSAT_Guardian_Dev \
+    --name vm-devbox-csatguardian \
+    --command-id RunPowerShellScript \
+    --scripts "Invoke-WebRequest -Uri 'https://app-csatguardian-dev.azurewebsites.net/api/health' -UseBasicParsing | Select-Object -ExpandProperty Content"
+```
 
 4. **Infrastructure as Code**
    - `infrastructure/bicep/main-commercial.bicep` - Complete template
@@ -97,19 +209,21 @@ ALTER ROLE db_datawriter ADD MEMBER [app-csatguardian-dev];
 
 | Date | Fix | Details |
 |------|-----|---------|
+| Jan 26 | **MSI Auth Migration** | Updated code to use `DefaultAzureCredential` for Azure OpenAI and SQL |
 | Jan 25 | Security hardening | Disabled local auth on AI Services, SQL, Storage |
 | Jan 25 | Database concurrency | Changed to per-query connections to fix "Connection is busy" errors |
 | Jan 25 | Agent analysis | Full sentiment, timeline, and coaching now working in production |
 | Jan 24 | Deployment method | Documented Kudu drag-drop as working approach |
 
-### ⏳ Next Steps (Blocked Until Security Remediation Complete)
+### ⏳ Next Steps
 
-1. **🔴 BLOCKED: MSI Auth Migration** - Update code to use DefaultAzureCredential
-2. **🔴 BLOCKED: Grant MSI Permissions** - RBAC roles for AI Services, SQL user creation
-3. **DfM Integration** - Replace seed data with real Dynamics case sync
-4. **Teams Notifications** - Webhook alerts for managers on CSAT risks
-5. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
-6. **User Authentication** - Azure AD integration for API access
+1. **✅ DONE: MSI Auth Migration** - Code updated to use `DefaultAzureCredential`
+2. **🔴 BLOCKING: Grant MSI Permissions** - RBAC roles for AI Services, SQL user creation
+3. **🔴 BLOCKING: Deploy & Test** - Redeploy to App Service and verify MSI auth works
+4. **DfM Integration** - Replace seed data with real Dynamics case sync
+5. **Teams Notifications** - Webhook alerts for managers on CSAT risks
+6. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
+7. **User Authentication** - Azure AD integration for API access
 
 ---
 

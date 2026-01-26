@@ -38,15 +38,16 @@ class CaseStatus(str, Enum):
     WAITING_ON_VENDOR = "waiting_on_vendor"
 
 
-class CasePriority(str, Enum):
+class CaseSeverity(str, Enum):
     """
-    Enumeration of case priority levels.
+    Enumeration of case severity levels.
     
-    These map to the prioritycode field in Dynamics 365 Incident entity.
+    These map to the severitycode field in Dynamics 365 Incident entity.
     """
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+    SEV_A = "sev_a"      # Critical - Production down
+    SEV_B = "sev_b"      # High - Major impact
+    SEV_C = "sev_c"      # Medium - Moderate impact
+    SEV_D = "sev_d"      # Low - Minimal impact
 
 
 class SentimentLabel(str, Enum):
@@ -246,7 +247,7 @@ class Case(BaseModel):
         title: Case title/subject
         description: Initial case description
         status: Current case status
-        priority: Case priority level
+        severity: Case severity level (Sev A/B/C/D)
         created_on: When the case was created
         modified_on: When the case was last modified
         owner: The engineer assigned to this case
@@ -265,8 +266,8 @@ class Case(BaseModel):
     status: CaseStatus = Field(
         description="Current case status"
     )
-    priority: CasePriority = Field(
-        description="Case priority level"
+    severity: CaseSeverity = Field(
+        description="Case severity level (Sev A/B/C/D)"
     )
     created_on: datetime = Field(
         description="Case creation timestamp"
@@ -342,7 +343,7 @@ class Case(BaseModel):
                 "title": "Unable to access shared mailbox after migration",
                 "description": "After the recent mailbox migration, I can no longer access the shared mailbox 'sales@contoso.com'.",
                 "status": "active",
-                "priority": "medium",
+                "severity": "sev_c",
                 "created_on": "2026-01-15T09:00:00Z",
                 "modified_on": "2026-01-20T14:30:00Z",
                 "owner": {

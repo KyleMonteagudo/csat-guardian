@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 
 # Local imports
 from config import get_config, AppConfig
-from models import Case, Engineer, CaseStatus, CasePriority, SentimentResult
+from models import Case, Engineer, CaseStatus, CaseSeverity, SentimentResult
 from logger import get_logger
 
 # Get logger
@@ -267,14 +267,14 @@ async def list_engineers():
 async def list_cases(
     engineer_id: Optional[str] = Query(None, description="Filter by engineer ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    priority: Optional[str] = Query(None, description="Filter by priority")
+    severity: Optional[str] = Query(None, description="Filter by severity (sev_a, sev_b, sev_c, sev_d)")
 ):
     """
     List cases with optional filters.
     
     - **engineer_id**: Filter cases by assigned engineer
     - **status**: Filter by case status (active, resolved, etc.)
-    - **priority**: Filter by priority (high, medium, low)
+    - **severity**: Filter by severity (sev_a, sev_b, sev_c, sev_d)
     """
     if not app_state.dfm_client:
         raise HTTPException(status_code=503, detail="DfM client not available")
@@ -288,8 +288,8 @@ async def list_cases(
         # Apply filters
         if status:
             cases = [c for c in cases if c.status.value == status]
-        if priority:
-            cases = [c for c in cases if c.priority.value == priority]
+        if severity:
+            cases = [c for c in cases if c.severity.value == severity]
         
         return {
             "count": len(cases),
@@ -298,7 +298,7 @@ async def list_cases(
                     "id": c.id,
                     "title": c.title,
                     "status": c.status.value,
-                    "priority": c.priority.value,
+                    "severity": c.severity.value,
                     "customer_company": c.customer.company if c.customer else None,
                     "owner_name": c.owner.name if c.owner else None,
                     "created_on": c.created_on.isoformat() if c.created_on else None,
@@ -329,7 +329,7 @@ async def get_case(case_id: str):
             "title": case.title,
             "description": case.description,
             "status": case.status.value,
-            "priority": case.priority.value,
+            "severity": case.severity.value,
             "customer": {
                 "id": case.customer.id,
                 "company": case.customer.company

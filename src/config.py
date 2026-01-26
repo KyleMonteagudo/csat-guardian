@@ -152,9 +152,10 @@ class AzureOpenAIConfig(BaseModel):
     
     Attributes:
         endpoint: The Azure OpenAI resource endpoint URL
-        api_key: The API key for authentication (use Managed Identity in production)
+        api_key: The API key for authentication (only used if use_managed_identity=False)
         deployment: The model deployment name (e.g., 'gpt-4o')
         api_version: The Azure OpenAI API version to use
+        use_managed_identity: Use Managed Identity (MSI) for authentication instead of API key
     """
     endpoint: str = Field(
         default="",
@@ -162,7 +163,7 @@ class AzureOpenAIConfig(BaseModel):
     )
     api_key: str = Field(
         default="",
-        description="Azure OpenAI API key"
+        description="Azure OpenAI API key (only used if use_managed_identity=False)"
     )
     deployment: str = Field(
         default="gpt-4o",
@@ -171,6 +172,10 @@ class AzureOpenAIConfig(BaseModel):
     api_version: str = Field(
         default="2024-02-15-preview",
         description="Azure OpenAI API version"
+    )
+    use_managed_identity: bool = Field(
+        default=True,
+        description="Use Managed Identity for Azure OpenAI authentication (recommended for production)"
     )
 
 
@@ -333,6 +338,7 @@ class FeatureFlags(BaseModel):
         verbose_logging: Enable detailed debug logging
         enable_sentiment_analysis: Enable AI sentiment analysis
         enable_compliance_tracking: Enable 7-day compliance tracking
+        use_sql_managed_identity: Use Managed Identity for Azure SQL authentication
     """
     use_mock_dfm: bool = Field(
         default=True,
@@ -353,6 +359,10 @@ class FeatureFlags(BaseModel):
     enable_compliance_tracking: bool = Field(
         default=True,
         description="Enable 7-day compliance tracking"
+    )
+    use_sql_managed_identity: bool = Field(
+        default=True,
+        description="Use Managed Identity for Azure SQL authentication (recommended for production)"
     )
 
 
@@ -449,6 +459,9 @@ class AppConfig(BaseModel):
                     None,
                     "2024-02-15-preview"
                 ),
+                use_managed_identity=os.getenv(
+                    "USE_OPENAI_MANAGED_IDENTITY", "true"
+                ).lower() == "true",
             ),
             # -------------------------
             # Database Configuration
@@ -514,6 +527,9 @@ class AppConfig(BaseModel):
                 enable_compliance_tracking=os.getenv(
                     "ENABLE_COMPLIANCE_TRACKING", "true"
                 ).lower() == "true",
+                use_sql_managed_identity=os.getenv(
+                    "USE_SQL_MANAGED_IDENTITY", "true"
+                ).lower() == "true",
             ),
             # -------------------------
             # Logging
@@ -546,8 +562,9 @@ class AppConfig(BaseModel):
         if self.features.enable_sentiment_analysis:
             if not self.azure_openai.endpoint:
                 errors.append("AZURE_OPENAI_ENDPOINT is required for sentiment analysis")
-            if not self.azure_openai.api_key:
-                errors.append("AZURE_OPENAI_API_KEY is required for sentiment analysis")
+            # API key only required if not using Managed Identity
+            if not self.azure_openai.use_managed_identity and not self.azure_openai.api_key:
+                errors.append("AZURE_OPENAI_API_KEY is required when not using Managed Identity")
         
         # Check DfM (required if not using mock)
         if not self.features.use_mock_dfm:
