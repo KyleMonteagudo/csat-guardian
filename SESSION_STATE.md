@@ -91,28 +91,26 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 | MSI auth for Azure SQL | Token-based auth via `DefaultAzureCredential` |
 | MSI auth for Azure OpenAI | `get_bearer_token_provider()` and `ad_token_provider` |
 | SQL Admin workaround | App Service MSI set as SQL admin (Directory Readers unavailable) |
-| Debug endpoints | Added `/api/debug/msi-token` and `/api/debug/sql-users` for troubleshooting |
 | Health endpoint fix | Restored missing return statement |
+| Debug endpoints removed | Cleaned up `/api/debug/*` endpoints |
+| Deployed | All changes live on `app-csatguardian-dev` |
 
 ### ⏳ Next Steps (Priority Order)
 
-1. **Production Fix: Directory Readers**
-   - Request AAD admin to grant Directory Readers to SQL Server MSI
-   - Demote App Service from SQL admin to db_datareader/db_datawriter
-   
-2. **Clean Up Debug Endpoints**
-   - Remove `/api/debug/msi-token` and `/api/debug/sql-users` before production
+1. **Production Fix: Directory Readers** *(Requires Entra Admin)*
+   - Request AAD admin to grant Directory Readers to SQL Server MSI (`04199892-389c-4531-97a7-42eda6734c28`)
+   - Then demote App Service from SQL admin to db_datareader/db_datawriter
 
-3. **DfM Integration**
+2. **DfM Integration**
    - Replace seed data with real Dynamics for Microsoft case sync
    
-4. **Teams Notifications**
+3. **Teams Notifications**
    - Webhook alerts for managers on CSAT risks
 
-5. **CI/CD Pipeline**
+4. **CI/CD Pipeline**
    - GitHub Actions for automated deployment
 
-6. **User Authentication**
+5. **User Authentication**
    - Azure AD integration for API access
 
 ---
