@@ -260,41 +260,42 @@ async def debug_msi_token():
 
 @app.get("/api/debug/sql-users")
 async def debug_sql_users():
-    """Debug endpoint to query database principals."""
+    """Debug endpoint to query database principals - mimics db_sync exactly."""
     try:
         import pyodbc
         import struct
-        import re
         from azure.identity import DefaultAzureCredential
         
-        # Get config
-        config = get_config()
-        conn_string = config.database.connection_string or os.getenv("DATABASE_CONNECTION_STRING", "")
+        # Get connection string exactly like db_sync does
+        conn_string = os.getenv("DATABASE_CONNECTION_STRING", "")
         
-        # Parse server and database from connection string
-        server_match = re.search(r'Server=tcp:([^,;]+)', conn_string, re.IGNORECASE)
-        db_match = re.search(r'(?:Initial Catalog|Database)=([^;]+)', conn_string, re.IGNORECASE)
+        # Parse exactly like db_sync._parse_connection_string
+        parts = {}
+        for part in conn_string.split(';'):
+            if '=' in part:
+                key, value = part.split('=', 1)
+                parts[key.strip()] = value.strip()
         
-        server = server_match.group(1) if server_match else "unknown"
-        database = db_match.group(1) if db_match else "unknown"
+        server = parts.get('Server', 'NOT_FOUND')
+        database = parts.get('Initial Catalog', 'NOT_FOUND')
         
-        # Get MSI token
+        # Get MSI token exactly like db_sync._get_msi_access_token
         credential = DefaultAzureCredential()
         token = credential.get_token("https://database.windows.net/.default")
         token_bytes = token.token.encode("utf-16-le")
         token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
         
-        # Build connection string (without auth info)
+        # Build connection string exactly like db_sync._get_odbc_connection_string_msi
         conn_str = (
-            f"Driver={{ODBC Driver 18 for SQL Server}};"
+            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
             f"Server={server};"
             f"Database={database};"
-            f"Encrypt=yes;"
-            f"TrustServerCertificate=no;"
+            "Encrypt=yes;"
+            "TrustServerCertificate=no"
         )
         
-        SQL_COPT_SS_ACCESS_TOKEN = 1256
-        conn = pyodbc.connect(conn_str, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
+        # Try to connect
+        conn = pyodbc.connect(conn_str, attrs_before={1256: token_struct}, timeout=30)
         cursor = conn.cursor()
         
         # Query database principals (external users)
@@ -323,14 +324,20 @@ async def debug_sql_users():
         return {
             "status": "success",
             "users": users,
-            "server": server,
-            "database": database
+            "parsed_server": server,
+            "parsed_database": database,
+            "odbc_conn_str": conn_str
         }
     except Exception as e:
         import traceback
+        # Include all debug info in error response
         return {
             "status": "error", 
             "message": str(e),
+            "parsed_server": server if 'server' in dir() else "parse_failed",
+            "parsed_database": database if 'database' in dir() else "parse_failed",
+            "odbc_conn_str": conn_str if 'conn_str' in dir() else "not_built",
+            "raw_conn_string_length": len(conn_string) if 'conn_string' in dir() else 0,
             "traceback": traceback.format_exc()
         }
     
