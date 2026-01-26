@@ -260,13 +260,11 @@ async def debug_msi_token():
 
 @app.get("/api/debug/sql-users")
 async def debug_sql_users():
-    """Debug endpoint to query database principals - mimics db_sync exactly."""
+    """Debug endpoint - try ODBC native MSI auth instead of manual token."""
     try:
         import pyodbc
-        import struct
-        from azure.identity import DefaultAzureCredential
         
-        # Get connection string exactly like db_sync does
+        # Get connection string 
         conn_string = os.getenv("DATABASE_CONNECTION_STRING", "")
         
         # Parse exactly like db_sync._parse_connection_string
@@ -279,23 +277,18 @@ async def debug_sql_users():
         server = parts.get('Server', 'NOT_FOUND')
         database = parts.get('Initial Catalog', 'NOT_FOUND')
         
-        # Get MSI token exactly like db_sync._get_msi_access_token
-        credential = DefaultAzureCredential()
-        token = credential.get_token("https://database.windows.net/.default")
-        token_bytes = token.token.encode("utf-16-le")
-        token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
-        
-        # Build connection string exactly like db_sync._get_odbc_connection_string_msi
+        # Try ODBC Driver's NATIVE MSI support (Authentication=ActiveDirectoryMsi)
+        # This lets the driver handle token acquisition instead of us
         conn_str = (
             f"DRIVER={{ODBC Driver 18 for SQL Server}};"
             f"Server={server};"
             f"Database={database};"
+            "Authentication=ActiveDirectoryMsi;"
             "Encrypt=yes;"
             "TrustServerCertificate=no"
         )
         
-        # Try to connect
-        conn = pyodbc.connect(conn_str, attrs_before={1256: token_struct}, timeout=30)
+        conn = pyodbc.connect(conn_str, timeout=30)
         cursor = conn.cursor()
         
         # Query database principals (external users)
@@ -323,21 +316,19 @@ async def debug_sql_users():
         
         return {
             "status": "success",
+            "auth_method": "ActiveDirectoryMsi (native ODBC)",
             "users": users,
             "parsed_server": server,
-            "parsed_database": database,
-            "odbc_conn_str": conn_str
+            "parsed_database": database
         }
     except Exception as e:
         import traceback
-        # Include all debug info in error response
         return {
             "status": "error", 
             "message": str(e),
             "parsed_server": server if 'server' in dir() else "parse_failed",
             "parsed_database": database if 'database' in dir() else "parse_failed",
             "odbc_conn_str": conn_str if 'conn_str' in dir() else "not_built",
-            "raw_conn_string_length": len(conn_string) if 'conn_string' in dir() else 0,
             "traceback": traceback.format_exc()
         }
     
