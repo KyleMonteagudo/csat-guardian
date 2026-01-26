@@ -1,7 +1,7 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 26, 2026 (10:30 PM)
-> **Status**: ✅ MSI Auth Migration Complete - Deployed & Verified Working
+> **Last Updated**: January 26, 2026 (11:30 PM)
+> **Status**: ✅ MSI Auth Complete | ⏳ Waiting on DfM + Security Approvals
 
 ---
 
@@ -31,6 +31,29 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 **Current Workaround**: Made App Service MSI (`7b0f0d42-0f23-48cd-b982-41abad5f1927`) a SQL Server admin. This bypasses the Directory Readers requirement.
 
 **Production Fix**: Request AAD admin to grant Directory Readers role to SQL Server MSI, then demote App Service to database user with least privilege.
+
+---
+
+## ⏳ Pending Approvals / External Dependencies
+
+| Item | Owner | Status | Notes |
+|------|-------|--------|-------|
+| **DfM API Access** | DfM Team | ⏳ Email sent Jan 26 | Need API endpoint, auth method, field mappings |
+| **Teams Bot Security** | Security Lead | ⏳ Email sent Jan 26 | Need approval for public bot endpoint (Azure Function gateway approach) |
+| **Directory Readers Role** | Entra Admin | ⏳ Not yet requested | SQL Server MSI needs this for least-privilege |
+
+---
+
+## Code Changes Made Today (January 26, 2026)
+
+| Change | Files | Details |
+|--------|-------|---------|
+| MSI auth for Azure SQL | `db_sync.py` | Token-based auth via `DefaultAzureCredential` |
+| MSI auth for Azure OpenAI | `sentiment_service.py`, `guardian_agent.py` | `get_bearer_token_provider()` and `ad_token_provider` |
+| Renamed priority → severity | `models.py`, `api.py`, `dfm_client.py` | Now uses Sev A/B/C/D to match DfM terminology |
+| Debug endpoints removed | `api.py` | Cleaned up `/api/debug/*` endpoints |
+| Health endpoint fix | `api.py` | Restored missing return statement |
+| DfM request doc | `docs/DFM_INTEGRATION_REQUEST.md` | Formal request for DfM team |
 
 ---
 
@@ -91,27 +114,26 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 | MSI auth for Azure SQL | Token-based auth via `DefaultAzureCredential` |
 | MSI auth for Azure OpenAI | `get_bearer_token_provider()` and `ad_token_provider` |
 | SQL Admin workaround | App Service MSI set as SQL admin (Directory Readers unavailable) |
+| Renamed priority → severity | Matches DfM terminology (Sev A/B/C/D) |
 | Health endpoint fix | Restored missing return statement |
 | Debug endpoints removed | Cleaned up `/api/debug/*` endpoints |
+| DfM integration request | Created `docs/DFM_INTEGRATION_REQUEST.md`, email sent |
 | Deployed | All changes live on `app-csatguardian-dev` |
 
 ### ⏳ Next Steps (Priority Order)
 
-1. **Production Fix: Directory Readers** *(Requires Entra Admin)*
-   - Request AAD admin to grant Directory Readers to SQL Server MSI (`04199892-389c-4531-97a7-42eda6734c28`)
-   - Then demote App Service from SQL admin to db_datareader/db_datawriter
+1. **Teams Bot Integration** *(Awaiting security approval)*
+   - Need approval for Azure Function gateway approach
+   - Build notification service with detailed alert messages
+   - Engineer can chat back and forth with Guardian agent
 
-2. **DfM Integration**
+2. **DfM Integration** *(Awaiting DfM team response)*
    - Replace seed data with real Dynamics for Microsoft case sync
-   
-3. **Teams Notifications**
-   - Webhook alerts for managers on CSAT risks
+   - See `docs/DFM_INTEGRATION_REQUEST.md` for details
 
-4. **CI/CD Pipeline**
-   - GitHub Actions for automated deployment
-
-5. **User Authentication**
-   - Azure AD integration for API access
+3. **Directory Readers Fix** *(Awaiting Entra Admin)*
+   - Grant Directory Readers to SQL Server MSI (`04199892-389c-4531-97a7-42eda6734c28`)
+   - Then demote App Service from SQL admin to db_datareader/db_datawriter
 
 ---
 
