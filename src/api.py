@@ -218,6 +218,44 @@ async def health_check():
     }
     
     overall_status = "healthy" if all(v == "healthy" for v in services.values()) else "degraded"
+
+
+@app.get("/api/debug/msi-token")
+async def debug_msi_token():
+    """Debug endpoint to check MSI token claims."""
+    try:
+        from azure.identity import DefaultAzureCredential
+        import base64
+        import json
+        
+        credential = DefaultAzureCredential()
+        token = credential.get_token("https://database.windows.net/.default")
+        
+        # Decode JWT payload (middle part)
+        parts = token.token.split('.')
+        if len(parts) >= 2:
+            # Add padding if needed
+            payload = parts[1]
+            padding = 4 - len(payload) % 4
+            if padding != 4:
+                payload += '=' * padding
+            decoded = base64.urlsafe_b64decode(payload)
+            claims = json.loads(decoded)
+            
+            return {
+                "status": "success",
+                "token_acquired": True,
+                "oid": claims.get("oid"),
+                "sub": claims.get("sub"),
+                "appid": claims.get("appid"),
+                "aud": claims.get("aud"),
+                "iss": claims.get("iss"),
+                "exp": claims.get("exp"),
+            }
+        else:
+            return {"status": "error", "message": "Invalid token format"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
     
     # Get environment from env var or default
     environment = os.environ.get("ENVIRONMENT", "dev")
