@@ -260,14 +260,16 @@ async def debug_msi_token():
 
 @app.get("/api/debug/sql-users")
 async def debug_sql_users():
-    """Debug endpoint - try ODBC native MSI auth instead of manual token."""
+    """Debug endpoint - try explicit ManagedIdentityCredential."""
     try:
         import pyodbc
+        import struct
+        from azure.identity import ManagedIdentityCredential
         
         # Get connection string 
         conn_string = os.getenv("DATABASE_CONNECTION_STRING", "")
         
-        # Parse exactly like db_sync._parse_connection_string
+        # Parse connection string
         parts = {}
         for part in conn_string.split(';'):
             if '=' in part:
@@ -277,58 +279,44 @@ async def debug_sql_users():
         server = parts.get('Server', 'NOT_FOUND')
         database = parts.get('Initial Catalog', 'NOT_FOUND')
         
-        # Try ODBC Driver's NATIVE MSI support (Authentication=ActiveDirectoryMsi)
-        # This lets the driver handle token acquisition instead of us
+        # Use ManagedIdentityCredential explicitly (not DefaultAzureCredential)
+        credential = ManagedIdentityCredential()
+        token = credential.get_token("https://database.windows.net/.default")
+        
+        # Encode token for pyodbc
+        token_bytes = token.token.encode("utf-16-le")
+        token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
+        
+        # Build ODBC connection string
         conn_str = (
             f"DRIVER={{ODBC Driver 18 for SQL Server}};"
             f"Server={server};"
             f"Database={database};"
-            "Authentication=ActiveDirectoryMsi;"
             "Encrypt=yes;"
             "TrustServerCertificate=no"
         )
         
-        conn = pyodbc.connect(conn_str, timeout=30)
+        conn = pyodbc.connect(conn_str, attrs_before={1256: token_struct}, timeout=30)
         cursor = conn.cursor()
         
-        # Query database principals (external users)
         cursor.execute("""
-            SELECT 
-                name, 
-                type_desc, 
-                authentication_type_desc,
-                CONVERT(VARCHAR(100), SID, 1) as sid_hex
-            FROM sys.database_principals 
-            WHERE type = 'E' OR name LIKE '%csat%'
+            SELECT name, type_desc, CONVERT(VARCHAR(100), SID, 1) as sid_hex
+            FROM sys.database_principals WHERE type = 'E'
         """)
         
         users = []
         for row in cursor.fetchall():
-            users.append({
-                "name": row[0],
-                "type_desc": row[1],
-                "auth_type": row[2],
-                "sid_hex": row[3]
-            })
+            users.append({"name": row[0], "type": row[1], "sid": row[2]})
         
         cursor.close()
         conn.close()
         
-        return {
-            "status": "success",
-            "auth_method": "ActiveDirectoryMsi (native ODBC)",
-            "users": users,
-            "parsed_server": server,
-            "parsed_database": database
-        }
+        return {"status": "success", "method": "ManagedIdentityCredential", "users": users}
     except Exception as e:
         import traceback
         return {
             "status": "error", 
             "message": str(e),
-            "parsed_server": server if 'server' in dir() else "parse_failed",
-            "parsed_database": database if 'database' in dir() else "parse_failed",
-            "odbc_conn_str": conn_str if 'conn_str' in dir() else "not_built",
             "traceback": traceback.format_exc()
         }
     
