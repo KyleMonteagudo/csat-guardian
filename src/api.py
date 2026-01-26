@@ -218,6 +218,17 @@ async def health_check():
     }
     
     overall_status = "healthy" if all(v == "healthy" for v in services.values()) else "degraded"
+    
+    # Get environment from env var or default
+    environment = os.environ.get("ENVIRONMENT", "dev")
+    
+    return HealthResponse(
+        status=overall_status,
+        version="0.1.0",
+        environment=environment,
+        timestamp=datetime.utcnow().isoformat(),
+        services=services
+    )
 
 
 @app.get("/api/debug/msi-token")
@@ -319,17 +330,6 @@ async def debug_sql_users():
             "message": str(e),
             "traceback": traceback.format_exc()
         }
-    
-    # Get environment from env var or default
-    environment = os.environ.get("ENVIRONMENT", "dev")
-    
-    return HealthResponse(
-        status=overall_status,
-        version="0.1.0",
-        environment=environment,
-        timestamp=datetime.utcnow().isoformat(),
-        services=services
-    )
 
 
 # =============================================================================
