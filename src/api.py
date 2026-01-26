@@ -256,6 +256,51 @@ async def debug_msi_token():
             return {"status": "error", "message": "Invalid token format"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/debug/sql-users")
+async def debug_sql_users():
+    """Debug endpoint to query database principals."""
+    try:
+        from db_sync import get_db_connection
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Query database principals (external users)
+        cursor.execute("""
+            SELECT 
+                name, 
+                type_desc, 
+                authentication_type_desc,
+                CONVERT(VARCHAR(100), SID, 1) as sid_hex
+            FROM sys.database_principals 
+            WHERE type = 'E' OR name LIKE '%csat%'
+        """)
+        
+        users = []
+        for row in cursor.fetchall():
+            users.append({
+                "name": row[0],
+                "type_desc": row[1],
+                "auth_type": row[2],
+                "sid_hex": row[3]
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        return {
+            "status": "success",
+            "users": users
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error", 
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
     
     # Get environment from env var or default
     environment = os.environ.get("ENVIRONMENT", "dev")
