@@ -9,7 +9,9 @@
 # - Identifies key phrases indicating customer frustration
 # - Generates recommendations based on detected sentiment
 #
-# This is the REAL Azure OpenAI integration - not mocked!
+# Supports two authentication modes:
+# - API Key: Uses AZURE_OPENAI_API_KEY (for local development)
+# - Managed Identity: Uses DefaultAzureCredential (for Azure production)
 # =============================================================================
 
 import time
@@ -26,6 +28,10 @@ from logger import get_logger, log_api_call, log_case_event
 
 # Get logger for this module
 logger = get_logger(__name__)
+
+
+# Azure OpenAI scope for token-based auth
+AZURE_OPENAI_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 
 # =============================================================================
@@ -211,11 +217,28 @@ class SentimentAnalysisService:
         else:
             # Initialize Azure OpenAI client
             logger.info(f"  → Connecting to Azure OpenAI: {self.config.azure_openai.endpoint}")
-            self.client = AsyncAzureOpenAI(
-                azure_endpoint=self.config.azure_openai.endpoint,
-                api_key=self.config.azure_openai.api_key,
-                api_version=self.config.azure_openai.api_version,
-            )
+            
+            if self.config.azure_openai.use_managed_identity:
+                # Use Managed Identity (MSI) for authentication
+                logger.info("  → Using Managed Identity for authentication")
+                from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+                
+                credential = DefaultAzureCredential()
+                token_provider = get_bearer_token_provider(credential, AZURE_OPENAI_SCOPE)
+                
+                self.client = AsyncAzureOpenAI(
+                    azure_endpoint=self.config.azure_openai.endpoint,
+                    azure_ad_token_provider=token_provider,
+                    api_version=self.config.azure_openai.api_version,
+                )
+            else:
+                # Use API key authentication
+                logger.info("  → Using API key for authentication")
+                self.client = AsyncAzureOpenAI(
+                    azure_endpoint=self.config.azure_openai.endpoint,
+                    api_key=self.config.azure_openai.api_key,
+                    api_version=self.config.azure_openai.api_version,
+                )
             logger.info("  → Azure OpenAI client initialized successfully")
         
         # Store deployment name

@@ -1,7 +1,7 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 25, 2026
-> **Status**: ⚠️ ON HOLD - Security Remediation Required
+> **Last Updated**: January 26, 2026
+> **Status**: ✅ MSI Auth Migration Complete - Ready for Azure Testing
 
 ---
 
@@ -32,12 +32,31 @@ The following security hardening changes have been applied to comply with enterp
 
 ### Code Changes Required to Remediate
 
-| Component | Current Auth | Required Auth |
-|-----------|-------------|---------------|
-| Azure OpenAI | API Key from Key Vault | `DefaultAzureCredential` (MSI) |
-| Azure SQL | Connection string with password | Access token from MSI |
-| Key Vault | App setting reference | Code-based access with MSI (if PE issues) |
-| Storage | Shared key (if used) | MSI + RBAC |
+| Component | Current Auth | Required Auth | Status |
+|-----------|-------------|---------------|--------|
+| Azure OpenAI | API Key from Key Vault | `DefaultAzureCredential` (MSI) | ✅ Done |
+| Azure SQL | Connection string with password | Access token from MSI | ✅ Done |
+| Key Vault | App setting reference | Code-based access with MSI (if PE issues) | N/A |
+| Storage | Shared key (if used) | MSI + RBAC | N/A |
+
+### MSI Authentication - Code Changes (January 26, 2026)
+
+The following files were updated to support Managed Identity authentication:
+
+| File | Changes |
+|------|---------|
+| `src/config.py` | Added `use_managed_identity` flag to `AzureOpenAIConfig`, added `use_sql_managed_identity` to `FeatureFlags` |
+| `src/db_sync.py` | Added `_get_msi_access_token()` function to get SQL access tokens via `DefaultAzureCredential` |
+| `src/services/sentiment_service.py` | Uses `get_bearer_token_provider()` for Azure OpenAI token auth |
+| `src/agent/guardian_agent.py` | Uses `ad_token_provider` for Semantic Kernel Azure OpenAI |
+| `requirements.txt` | Added `pyodbc>=5.0.0` |
+
+### Environment Variables for MSI Control
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_OPENAI_MANAGED_IDENTITY` | `true` | Use MSI for Azure OpenAI (set `false` for local dev with API key) |
+| `USE_SQL_MANAGED_IDENTITY` | `true` | Use MSI for Azure SQL (set `false` for local dev with connection string) |
 
 ### Azure RBAC/Permissions Required
 
@@ -97,19 +116,21 @@ ALTER ROLE db_datawriter ADD MEMBER [app-csatguardian-dev];
 
 | Date | Fix | Details |
 |------|-----|---------|
+| Jan 26 | **MSI Auth Migration** | Updated code to use `DefaultAzureCredential` for Azure OpenAI and SQL |
 | Jan 25 | Security hardening | Disabled local auth on AI Services, SQL, Storage |
 | Jan 25 | Database concurrency | Changed to per-query connections to fix "Connection is busy" errors |
 | Jan 25 | Agent analysis | Full sentiment, timeline, and coaching now working in production |
 | Jan 24 | Deployment method | Documented Kudu drag-drop as working approach |
 
-### ⏳ Next Steps (Blocked Until Security Remediation Complete)
+### ⏳ Next Steps
 
-1. **🔴 BLOCKED: MSI Auth Migration** - Update code to use DefaultAzureCredential
-2. **🔴 BLOCKED: Grant MSI Permissions** - RBAC roles for AI Services, SQL user creation
-3. **DfM Integration** - Replace seed data with real Dynamics case sync
-4. **Teams Notifications** - Webhook alerts for managers on CSAT risks
-5. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
-6. **User Authentication** - Azure AD integration for API access
+1. **✅ DONE: MSI Auth Migration** - Code updated to use `DefaultAzureCredential`
+2. **🔴 BLOCKING: Grant MSI Permissions** - RBAC roles for AI Services, SQL user creation
+3. **🔴 BLOCKING: Deploy & Test** - Redeploy to App Service and verify MSI auth works
+4. **DfM Integration** - Replace seed data with real Dynamics case sync
+5. **Teams Notifications** - Webhook alerts for managers on CSAT risks
+6. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
+7. **User Authentication** - Azure AD integration for API access
 
 ---
 

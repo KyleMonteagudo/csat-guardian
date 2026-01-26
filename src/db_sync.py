@@ -4,6 +4,10 @@
 # This module provides synchronous database access using pyodbc.
 # Uses per-query connections for thread safety with async FastAPI.
 #
+# Supports two authentication modes:
+# 1. SQL Authentication (username/password) - for local development
+# 2. Managed Identity (MSI) - for Azure production (AD-only auth)
+#
 # Usage:
 #   from db_sync import SyncDatabaseManager
 #   db = SyncDatabaseManager()
@@ -11,6 +15,7 @@
 # =============================================================================
 
 import os
+import struct
 import pyodbc
 from datetime import datetime
 from typing import Optional, List
@@ -33,48 +38,113 @@ except ImportError:
 from models import Case, Engineer, Customer, TimelineEntry, CaseStatus, CasePriority, TimelineEntryType
 
 
+# Azure SQL resource scope for access token
+AZURE_SQL_SCOPE = "https://database.windows.net/.default"
+
+
+def _get_msi_access_token() -> bytes:
+    """
+    Get an access token for Azure SQL using Managed Identity.
+    
+    Returns:
+        bytes: The access token encoded for pyodbc SQL_COPT_SS_ACCESS_TOKEN
+    """
+    from azure.identity import DefaultAzureCredential
+    
+    credential = DefaultAzureCredential()
+    token = credential.get_token(AZURE_SQL_SCOPE)
+    
+    # Encode token for pyodbc - must be in specific format
+    # See: https://docs.microsoft.com/en-us/sql/connect/odbc/using-azure-active-directory
+    token_bytes = token.token.encode("utf-16-le")
+    token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
+    return token_struct
+
+
 class SyncDatabaseManager:
     """
     Synchronous database manager with per-query connections.
     Uses pyodbc with fresh connections per query for thread safety.
+    
+    Supports two authentication modes controlled by USE_SQL_MANAGED_IDENTITY env var:
+    - True (default): Uses Managed Identity for Azure AD authentication
+    - False: Uses SQL authentication from connection string (User ID/Password)
     """
     
-    def __init__(self, connection_string: Optional[str] = None):
+    def __init__(self, connection_string: Optional[str] = None, use_managed_identity: Optional[bool] = None):
         """
         Initialize database manager.
         
         Args:
             connection_string: Optional ADO.NET style connection string.
                              If not provided, reads from DATABASE_CONNECTION_STRING env var.
+            use_managed_identity: Whether to use MSI for authentication.
+                                If not provided, reads from USE_SQL_MANAGED_IDENTITY env var (default: True).
         """
         self.connection_string = connection_string or os.getenv("DATABASE_CONNECTION_STRING", "")
         self._connection: Optional[pyodbc.Connection] = None
         
+        # Determine authentication mode
+        if use_managed_identity is not None:
+            self.use_managed_identity = use_managed_identity
+        else:
+            self.use_managed_identity = os.getenv("USE_SQL_MANAGED_IDENTITY", "true").lower() == "true"
+        
         if not self.connection_string:
             raise ValueError("DATABASE_CONNECTION_STRING environment variable not set")
+        
+        # Parse connection string for server/database info
+        self._parse_connection_string()
+        
+        print(f"[OK] Database manager initialized (MSI auth: {self.use_managed_identity})")
     
-    def _get_odbc_connection_string(self) -> str:
-        """Convert ADO.NET connection string to ODBC format."""
+    def _parse_connection_string(self):
+        """Parse ADO.NET connection string to extract server and database."""
         parts = {}
         for part in self.connection_string.split(';'):
             if '=' in part:
                 key, value = part.split('=', 1)
                 parts[key.strip()] = value.strip()
         
+        self._server = parts.get('Server', '')
+        self._database = parts.get('Initial Catalog', '')
+        self._user_id = parts.get('User ID', '')
+        self._password = parts.get('Password', '')
+    
+    def _get_odbc_connection_string(self) -> str:
+        """Convert ADO.NET connection string to ODBC format (for SQL auth)."""
         return (
             f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-            f"Server={parts.get('Server', '')};"
-            f"Database={parts.get('Initial Catalog', '')};"
-            f"UID={parts.get('User ID', '')};"
-            f"PWD={parts.get('Password', '')};"
+            f"Server={self._server};"
+            f"Database={self._database};"
+            f"UID={self._user_id};"
+            f"PWD={self._password};"
+            "Encrypt=yes;"
+            "TrustServerCertificate=no"
+        )
+    
+    def _get_odbc_connection_string_msi(self) -> str:
+        """Get ODBC connection string for MSI authentication (no credentials)."""
+        return (
+            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+            f"Server={self._server};"
+            f"Database={self._database};"
             "Encrypt=yes;"
             "TrustServerCertificate=no"
         )
     
     def _get_new_connection(self) -> pyodbc.Connection:
         """Create a new database connection (thread-safe)."""
-        odbc_str = self._get_odbc_connection_string()
-        return pyodbc.connect(odbc_str, timeout=30)
+        if self.use_managed_identity:
+            # Use MSI access token
+            odbc_str = self._get_odbc_connection_string_msi()
+            access_token = _get_msi_access_token()
+            # SQL_COPT_SS_ACCESS_TOKEN = 1256
+            return pyodbc.connect(odbc_str, attrs_before={1256: access_token}, timeout=30)
+        else:
+            # Use SQL authentication
+            odbc_str = self._get_odbc_connection_string()
+            return pyodbc.connect(odbc_str, timeout=30)
     
     def connect(self) -> pyodbc.Connection:
         """Get or create database connection.
