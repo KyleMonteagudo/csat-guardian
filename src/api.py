@@ -262,9 +262,30 @@ async def debug_msi_token():
 async def debug_sql_users():
     """Debug endpoint to query database principals."""
     try:
-        from db_sync import get_db_connection
+        import pyodbc
+        import struct
+        from azure.identity import DefaultAzureCredential
         
-        conn = get_db_connection()
+        # Get config
+        config = get_config()
+        
+        # Get MSI token
+        credential = DefaultAzureCredential()
+        token = credential.get_token("https://database.windows.net/.default")
+        token_bytes = token.token.encode("utf-16-le")
+        token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
+        
+        # Build connection string (without auth info)
+        conn_str = (
+            f"Driver={{ODBC Driver 18 for SQL Server}};"
+            f"Server={config.database.server};"
+            f"Database={config.database.name};"
+            f"Encrypt=yes;"
+            f"TrustServerCertificate=no;"
+        )
+        
+        SQL_COPT_SS_ACCESS_TOKEN = 1256
+        conn = pyodbc.connect(conn_str, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
         cursor = conn.cursor()
         
         # Query database principals (external users)
@@ -292,7 +313,9 @@ async def debug_sql_users():
         
         return {
             "status": "success",
-            "users": users
+            "users": users,
+            "server": config.database.server,
+            "database": config.database.name
         }
     except Exception as e:
         import traceback
