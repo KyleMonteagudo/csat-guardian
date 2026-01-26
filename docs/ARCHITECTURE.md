@@ -8,6 +8,7 @@
 | 2.0 | 2026-01-24 | Kyle Monteagudo | **Major update**: Private networking architecture with VNet, Private Endpoints, App Service |
 | 3.0 | 2026-01-24 | Kyle Monteagudo | Updated for Commercial Azure (Central US), AI Foundry (AI Services + AI Hub) |
 | 4.0 | 2026-01-25 | Kyle Monteagudo | Fixed database concurrency, all analysis features working, Kudu deployment method |
+| 5.0 | 2026-01-26 | Kyle Monteagudo | **MSI Authentication**: Full managed identity implementation for SQL and OpenAI |
 
 ---
 
@@ -291,21 +292,50 @@ engineer_roles
 
 ### 6.1 Authentication & Authorization
 
+> **Updated January 26, 2026**: Full MSI authentication implemented and verified working.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    AUTHENTICATION FLOW                          │
 └─────────────────────────────────────────────────────────────────┘
 
-App Service
+App Service (MSI: 7b0f0d42-0f23-48cd-b982-41abad5f1927)
     │
-    │ System Managed Identity
+    │ DefaultAzureCredential / ManagedIdentityCredential
     ▼
-Entra ID
+Entra ID (Tenant: 33e01921-4d64-4f8c-a055-5bdaffd5e33d)
     │
-    │ Token
+    │ OAuth2 Token (resource-specific)
     ▼
-Target Service (Key Vault, SQL, OpenAI)
+Target Services:
+    ├── Azure SQL: Token with database.windows.net audience
+    ├── Azure OpenAI: Token via get_bearer_token_provider()
+    └── Key Vault: @Microsoft.KeyVault references auto-resolved
 ```
+
+**MSI Implementation Details:**
+
+| Service | Auth Method | Code |
+|---------|-------------|------|
+| Azure SQL | `DefaultAzureCredential` → `struct.pack` token | `db_sync.py:_get_msi_access_token()` |
+| Azure OpenAI | `get_bearer_token_provider()` | `sentiment_service.py` |
+| Semantic Kernel | `ad_token_provider` parameter | `guardian_agent.py` |
+
+**Environment Variables:**
+```
+USE_SQL_MANAGED_IDENTITY=true      # Use MSI for SQL (default)
+USE_OPENAI_MANAGED_IDENTITY=true   # Use MSI for OpenAI (default)
+```
+
+**Azure RBAC Configuration:**
+
+| Resource | Principal | Role | Notes |
+|----------|-----------|------|-------|
+| SQL Server | App Service MSI | **SQL Admin** | Workaround - Directory Readers unavailable |
+| AI Services | App Service MSI | Cognitive Services User | Standard RBAC |
+| Key Vault | App Service MSI | Key Vault Secrets User | Standard RBAC |
+
+> **⚠️ Production Note**: The App Service is currently SQL Admin because the SQL Server MSI lacks Directory Readers role in Azure AD. For production, request AAD admin to grant Directory Readers to SQL Server MSI (`04199892-389c-4531-97a7-42eda6734c28`), then demote App Service to `db_datareader`/`db_datawriter`.
 
 **No credentials in code or config** - all authentication via Managed Identity
 

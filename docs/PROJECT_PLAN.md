@@ -10,6 +10,7 @@
 | 1.3 | 2026-01-23 | Kyle Monteagudo | Sprint 0 complete: branch protection, ADRs, issue templates |
 | 1.4 | 2026-01-23 | Kyle Monteagudo | Sprint 0 validated: Application runs end-to-end with Azure SQL/OpenAI (0 errors) |
 | 1.5 | 2026-01-24 | Kyle Monteagudo | Updated to App Service with VNet integration and private endpoints |
+| 1.6 | 2026-01-26 | Kyle Monteagudo | **MSI Authentication complete**: All services using managed identity, no API keys |
 
 ---
 
