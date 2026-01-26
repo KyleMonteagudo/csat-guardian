@@ -26,7 +26,7 @@ from config import AppConfig, get_config
 from database import DatabaseManager
 from models import (
     Case, Engineer, Customer, TimelineEntry, 
-    CaseStatus, CasePriority, TimelineEntryType
+    CaseStatus, CaseSeverity, TimelineEntryType
 )
 from logger import get_logger, log_api_call
 
@@ -184,7 +184,7 @@ class MockDfMClient(DfMClientBase):
         # Sort timeline by date
         timeline.sort(key=lambda x: x.created_on)
         
-        # Convert status and priority to enums
+        # Convert status and severity to enums
         status_map = {
             "active": CaseStatus.ACTIVE,
             "resolved": CaseStatus.RESOLVED,
@@ -193,10 +193,15 @@ class MockDfMClient(DfMClientBase):
             "waiting_on_customer": CaseStatus.WAITING_ON_CUSTOMER,
             "waiting_on_vendor": CaseStatus.WAITING_ON_VENDOR,
         }
-        priority_map = {
-            "high": CasePriority.HIGH,
-            "medium": CasePriority.MEDIUM,
-            "low": CasePriority.LOW,
+        severity_map = {
+            "sev_a": CaseSeverity.SEV_A,
+            "sev_b": CaseSeverity.SEV_B,
+            "sev_c": CaseSeverity.SEV_C,
+            "sev_d": CaseSeverity.SEV_D,
+            # Legacy mappings for existing data
+            "high": CaseSeverity.SEV_A,
+            "medium": CaseSeverity.SEV_C,
+            "low": CaseSeverity.SEV_D,
         }
         
         # Create and return the Case model
@@ -205,7 +210,7 @@ class MockDfMClient(DfMClientBase):
             title=db_case.title,
             description=db_case.description,
             status=status_map.get(db_case.status, CaseStatus.ACTIVE),
-            priority=priority_map.get(db_case.priority, CasePriority.MEDIUM),
+            severity=severity_map.get(db_case.priority, CaseSeverity.SEV_C),
             created_on=db_case.created_on,
             modified_on=db_case.modified_on,
             owner=engineer,
