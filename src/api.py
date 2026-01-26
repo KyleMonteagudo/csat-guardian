@@ -264,10 +264,19 @@ async def debug_sql_users():
     try:
         import pyodbc
         import struct
+        import re
         from azure.identity import DefaultAzureCredential
         
         # Get config
         config = get_config()
+        conn_string = config.database.connection_string or os.getenv("DATABASE_CONNECTION_STRING", "")
+        
+        # Parse server and database from connection string
+        server_match = re.search(r'Server=tcp:([^,;]+)', conn_string, re.IGNORECASE)
+        db_match = re.search(r'(?:Initial Catalog|Database)=([^;]+)', conn_string, re.IGNORECASE)
+        
+        server = server_match.group(1) if server_match else "unknown"
+        database = db_match.group(1) if db_match else "unknown"
         
         # Get MSI token
         credential = DefaultAzureCredential()
@@ -278,8 +287,8 @@ async def debug_sql_users():
         # Build connection string (without auth info)
         conn_str = (
             f"Driver={{ODBC Driver 18 for SQL Server}};"
-            f"Server={config.database.server};"
-            f"Database={config.database.name};"
+            f"Server={server};"
+            f"Database={database};"
             f"Encrypt=yes;"
             f"TrustServerCertificate=no;"
         )
@@ -314,8 +323,8 @@ async def debug_sql_users():
         return {
             "status": "success",
             "users": users,
-            "server": config.database.server,
-            "database": config.database.name
+            "server": server,
+            "database": database
         }
     except Exception as e:
         import traceback
