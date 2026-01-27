@@ -11,6 +11,7 @@
 | 1.4 | 2026-01-23 | Kyle Monteagudo | Sprint 0 validated: Application runs end-to-end with Azure SQL/OpenAI (0 errors) |
 | 1.5 | 2026-01-24 | Kyle Monteagudo | Updated to App Service with VNet integration and private endpoints |
 | 1.6 | 2026-01-26 | Kyle Monteagudo | **MSI Authentication complete**: All services using managed identity, no API keys |
+| 1.7 | 2026-01-27 | Kyle Monteagudo | **DfM via Kusto**: Discovered DfM data is in Azure Data Explorer, updated integration approach. Target audience: GSX engineers |
 
 ---
 

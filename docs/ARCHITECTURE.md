@@ -9,6 +9,7 @@
 | 3.0 | 2026-01-24 | Kyle Monteagudo | Updated for Commercial Azure (Central US), AI Foundry (AI Services + AI Hub) |
 | 4.0 | 2026-01-25 | Kyle Monteagudo | Fixed database concurrency, all analysis features working, Kudu deployment method |
 | 5.0 | 2026-01-26 | Kyle Monteagudo | **MSI Authentication**: Full managed identity implementation for SQL and OpenAI |
+| 6.0 | 2026-01-27 | Kyle Monteagudo | **DfM via Kusto**: DfM data is in Azure Data Explorer (ADX), not D365 OData. Teams Bot requires Azure Function gateway |
 
 ---
 
