@@ -1,7 +1,7 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 26, 2026 (11:30 PM)
-> **Status**: ✅ MSI Auth Complete | ⏳ Waiting on DfM + Security Approvals
+> **Last Updated**: January 27, 2026
+> **Status**: ✅ MSI Auth Complete | ⏳ Waiting on DfM/Kusto Access + Security Approvals
 
 ---
 
@@ -34,17 +34,34 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 
 ---
 
+## 🔄 KEY UPDATE: DfM Data via Azure Data Explorer (January 27, 2026)
+
+**Important Discovery**: DfM case data for Azure Gov is stored in **Azure Data Explorer (Kusto)**, not via D365 OData APIs.
+
+**What This Means**:
+- Need to query Kusto directly using `azure-kusto-data` SDK
+- Requires **user-assigned managed identity** specifically for ADX access
+- App Service already has an Enterprise Application (`app-csatguardian-dev`) that can be used
+
+**Information Still Needed from DfM/Kusto Team**:
+- ADX Cluster URL (e.g., `https://dfmgov.kusto.windows.net`)
+- Database name
+- Table names and schema
+- MSI granted Viewer access to the database
+
+---
+
 ## ⏳ Pending Approvals / External Dependencies
 
 | Item | Owner | Status | Notes |
 |------|-------|--------|-------|
-| **DfM API Access** | DfM Team | ⏳ Email sent Jan 26 | Need API endpoint, auth method, field mappings |
-| **Teams Bot Security** | Security Lead | ⏳ Email sent Jan 26 | Need approval for public bot endpoint (Azure Function gateway approach) |
-| **Directory Readers Role** | Entra Admin | ⏳ Not yet requested | SQL Server MSI needs this for least-privilege |
+| **DfM/Kusto Access** | DfM Team | ⏳ Request submitted | Need cluster URL, database, tables, MSI access granted |
+| **Teams Bot Security** | Security Lead | ⏳ Email sent Jan 26 | Need approval for public bot endpoint (Azure Function gateway) |
+| **Directory Readers Role** | Entra Admin | ⏳ Low priority | SQL Server MSI needs this (workaround in place) |
 
 ---
 
-## Code Changes Made Today (January 26, 2026)
+## Code Changes Made (January 26-27, 2026)
 
 | Change | Files | Details |
 |--------|-------|---------|
@@ -54,6 +71,40 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 | Debug endpoints removed | `api.py` | Cleaned up `/api/debug/*` endpoints |
 | Health endpoint fix | `api.py` | Restored missing return statement |
 | DfM request doc | `docs/DFM_INTEGRATION_REQUEST.md` | Formal request for DfM team |
+
+---
+
+## Teams Bot Integration Plan
+
+**Why Azure Bot Service is Required:**
+- Teams doesn't allow direct messaging to users
+- Bot Service acts as intermediary: Teams → Bot Service → Your endpoint
+- Bot Service must be able to reach your endpoint (requires public URL)
+
+**Recommended Architecture: Azure Function Gateway**
+```
+Teams ←→ Bot Service ←→ Azure Function (PUBLIC) ←→ App Service (PRIVATE)
+                              │
+                        Validates Bot tokens
+                        Minimal attack surface
+```
+
+**Why This Is Best:**
+1. Only a tiny Function is public, not the whole app
+2. Function validates Bot Framework JWT tokens before forwarding
+3. Function has VNet integration to call private App Service
+4. Separate concerns - bot logic isolated from main app
+
+**Security Approval Needed For:**
+- One Azure Function with public endpoint
+- Function validates Bot Framework tokens
+- Function calls private App Service via VNet
+
+---
+
+## Target Audience: GSX (Government Support Engineers)
+
+**Note**: This application is designed for **GSX (Government Support Engineers)**, not CSS.
 
 ---
 
@@ -107,7 +158,7 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 5. **MSI Authentication** - No API keys or passwords in code/config
 6. **Private Networking** - All services via Private Endpoints
 
-### ✅ Recent Changes (January 26, 2026)
+### ✅ Recent Changes (January 26-27, 2026)
 
 | Change | Details |
 |--------|---------|
@@ -119,19 +170,23 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 | Debug endpoints removed | Cleaned up `/api/debug/*` endpoints |
 | DfM integration request | Created `docs/DFM_INTEGRATION_REQUEST.md`, email sent |
 | Deployed | All changes live on `app-csatguardian-dev` |
+| **Kusto discovery** | DfM data is in Azure Data Explorer, not D365 OData |
 
 ### ⏳ Next Steps (Priority Order)
 
-1. **Teams Bot Integration** *(Awaiting security approval)*
+1. **DfM/Kusto Integration** *(Awaiting access approval)*
+   - Get cluster URL, database name, table names, schema
+   - Create user-assigned MSI for ADX access (or use existing Enterprise App)
+   - Update `src/clients/dfm_client.py` to query Kusto
+   - Add `azure-kusto-data` to requirements
+
+2. **Teams Bot Integration** *(Awaiting security approval)*
    - Need approval for Azure Function gateway approach
+   - Build Azure Function to validate Bot Framework tokens
+   - Connect to private App Service via VNet
    - Build notification service with detailed alert messages
-   - Engineer can chat back and forth with Guardian agent
 
-2. **DfM Integration** *(Awaiting DfM team response)*
-   - Replace seed data with real Dynamics for Microsoft case sync
-   - See `docs/DFM_INTEGRATION_REQUEST.md` for details
-
-3. **Directory Readers Fix** *(Awaiting Entra Admin)*
+3. **Directory Readers Fix** *(Awaiting Entra Admin - Low Priority)*
    - Grant Directory Readers to SQL Server MSI (`04199892-389c-4531-97a7-42eda6734c28`)
    - Then demote App Service from SQL admin to db_datareader/db_datawriter
 

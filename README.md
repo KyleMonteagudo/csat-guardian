@@ -1,6 +1,6 @@
 # CSAT Guardian
 
-> **Customer Satisfaction Guardian** - AI-Powered CSAT Risk Detection and Proactive Coaching for Microsoft CSS Engineers
+> **Customer Satisfaction Guardian** - AI-Powered CSAT Risk Detection and Proactive Coaching for GSX (Government Support Engineers)
 
 ---
 
@@ -24,8 +24,8 @@
 
 | Item | Priority | Status | Notes |
 |------|----------|--------|-------|
-| DfM API Integration | High | ⏳ Waiting on DfM team | Request sent Jan 26, 2026 |
-| Teams Bot Integration | High | ⏳ Awaiting security approval | Need approval for public bot endpoint |
+| DfM/Kusto Integration | High | ⏳ Awaiting access | Data is in Azure Data Explorer (Kusto), not D365 OData |
+| Teams Bot Integration | High | ⏳ Awaiting security approval | Need approval for Azure Function gateway |
 | Directory Readers Role | Medium | ⏳ Awaiting Entra admin | SQL Server MSI needs this for least-privilege |
 | Manager Dashboard | Medium | Not started | Aggregate view of team CSAT health |
 | CI/CD Pipeline | Low | Blocked | Network restrictions prevent GitHub Actions |
