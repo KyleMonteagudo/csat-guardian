@@ -50,53 +50,41 @@ git pull origin develop
 # Remove any old package
 rm -f deploy.zip
 
-# Create deployment ZIP with src and requirements.txt
-zip -r deploy.zip src requirements.txt
+# Create deployment ZIP with src folder only (requirements.txt is inside src/)
+zip -r deploy.zip src
 
-# Download to your local machine (browser will prompt)
-download deploy.zip
+# Deploy directly using az webapp deploy
+az webapp deploy --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev --src-path deploy.zip --type zip --clean
 ```
 
-### Step 3: Upload via Kudu (Browser)
+### Step 3: Verify Deployment
 
-1. Open Kudu Debug Console:
-   ```
-   https://app-csatguardian-dev.scm.azurewebsites.net/DebugConsole
-   ```
-2. Navigate to `/home` in the file browser
-3. **Drag and drop** `deploy.zip` onto the file area
-4. Wait for upload to complete (~30 seconds)
-
-### Step 4: Move Files to wwwroot (Kudu SSH Terminal)
-
-In the Kudu console (or via SSH):
+Test the health endpoint:
 ```bash
-cd /home/site/wwwroot
-
-# Remove old deployment
-rm -rf src requirements.txt
-
-# Move new files from /home
-mv /home/src .
-mv /home/requirements.txt .
-
-# Verify files are in place
-ls -la
+az vm run-command invoke \
+  --resource-group CSAT_Guardian_Dev \
+  --name vm-devbox-csatguardian \
+  --command-id RunPowerShellScript \
+  --scripts "Invoke-RestMethod -Uri 'https://app-csatguardian-dev.azurewebsites.net/api/health'"
 ```
 
-### Step 5: Configure Startup Command (Portal)
+---
 
-**Azure Portal → App Service → Configuration → General settings → Startup Command:**
+## Startup Command
+
+The App Service startup command is configured as:
 
 ```
 cd /home/site/wwwroot/src && pip install -r requirements.txt && python -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-### Step 6: Restart App Service
+**Note**: `requirements.txt` lives inside `src/`, not at the root level.
 
-**Azure Portal → App Service → Overview → Restart**
+---
 
-Or via Cloud Shell:
+## Restart App Service
+
+If needed, restart via Cloud Shell:
 ```bash
 az webapp restart --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev
 ```
