@@ -9,6 +9,11 @@
 # - Identifies key phrases indicating customer frustration
 # - Generates recommendations based on detected sentiment
 #
+# PII PROTECTION:
+# - All text is scrubbed of PII before being sent to Azure OpenAI
+# - Emails, phone numbers, IPs, SSNs, credit cards are automatically redacted
+# - See services/privacy.py for configuration options
+#
 # Supports two authentication modes:
 # - API Key: Uses AZURE_OPENAI_API_KEY (for local development)
 # - Managed Identity: Uses DefaultAzureCredential (for Azure production)
@@ -25,6 +30,7 @@ from models import (
     Case, TimelineEntry, SentimentResult, SentimentLabel, CaseAnalysis, AlertType
 )
 from logger import get_logger, log_api_call, log_case_event
+from services.privacy import get_privacy_service, scrub_pii
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -254,6 +260,8 @@ class SentimentAnalysisService:
         This method sends the content to Azure OpenAI for analysis
         and returns a structured sentiment result.
         
+        PII is automatically scrubbed before sending to the LLM.
+        
         Args:
             content: The text to analyze
             
@@ -275,10 +283,14 @@ class SentimentAnalysisService:
             )
         
         try:
+            # Scrub PII before sending to LLM
+            scrubbed_content = scrub_pii(content)
+            logger.debug(f"Content scrubbed for PII ({len(content)} → {len(scrubbed_content)} chars)")
+            
             # Build the prompt with CSAT domain knowledge
             prompt = SENTIMENT_ANALYSIS_PROMPT.format(
                 csat_rules=CSAT_BUSINESS_RULES,
-                content=content
+                content=scrubbed_content
             )
             
             # Call Azure OpenAI
@@ -530,6 +542,8 @@ class SentimentAnalysisService:
         """
         Generate a CSAT-focused case summary using Azure OpenAI.
         
+        PII is automatically scrubbed before sending to the LLM.
+        
         Args:
             case: The case to summarize
             sentiment: The overall sentiment result
@@ -561,14 +575,22 @@ class SentimentAnalysisService:
             else:
                 days_since_customer_contact = days_open
             
+            # Scrub PII from case data before sending to LLM
+            privacy = get_privacy_service()
+            scrubbed_title, scrubbed_description, scrubbed_timeline = privacy.scrub_case_for_llm(
+                case.title,
+                case.description[:500],
+                timeline_text
+            )
+            
             prompt = CASE_SUMMARY_PROMPT.format(
                 csat_rules=CSAT_BUSINESS_RULES,
-                title=case.title,
+                title=scrubbed_title,
                 days_open=days_open,
                 days_since_customer_contact=days_since_customer_contact,
                 days_since_notes=days_since_notes,
-                description=case.description[:500],
-                timeline=timeline_text or "No timeline entries yet.",
+                description=scrubbed_description,
+                timeline=scrubbed_timeline or "No timeline entries yet.",
             )
             
             response = await self.client.chat.completions.create(
