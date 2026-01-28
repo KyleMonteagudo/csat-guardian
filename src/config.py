@@ -323,6 +323,37 @@ class AlertThresholds(BaseModel):
     )
 
 
+class ContentSafetyConfig(BaseModel):
+    """
+    Configuration settings for Azure AI Content Safety service.
+    
+    Used for ML-powered PII detection as a second layer after regex scrubbing.
+    This provides better detection of names, addresses, and contextual PII.
+    
+    Attributes:
+        endpoint: The Azure AI Content Safety endpoint URL
+        api_key: API key for authentication (only used if use_managed_identity=False)
+        use_managed_identity: Use Managed Identity for authentication
+        enabled: Whether to use Content Safety for PII detection
+    """
+    endpoint: str = Field(
+        default="",
+        description="Azure AI Content Safety endpoint URL"
+    )
+    api_key: str = Field(
+        default="",
+        description="Azure AI Content Safety API key (only used if use_managed_identity=False)"
+    )
+    use_managed_identity: bool = Field(
+        default=True,
+        description="Use Managed Identity for Content Safety authentication"
+    )
+    enabled: bool = Field(
+        default=False,
+        description="Enable Content Safety PII detection (adds latency but catches more PII)"
+    )
+
+
 class FeatureFlags(BaseModel):
     """
     Feature flags for controlling application behavior.
@@ -339,6 +370,7 @@ class FeatureFlags(BaseModel):
         enable_sentiment_analysis: Enable AI sentiment analysis
         enable_compliance_tracking: Enable 7-day compliance tracking
         use_sql_managed_identity: Use Managed Identity for Azure SQL authentication
+        enable_content_safety_pii: Enable Azure AI Content Safety for enhanced PII detection
     """
     use_mock_dfm: bool = Field(
         default=True,
@@ -364,6 +396,10 @@ class FeatureFlags(BaseModel):
         default=True,
         description="Use Managed Identity for Azure SQL authentication (recommended for production)"
     )
+    enable_content_safety_pii: bool = Field(
+        default=False,
+        description="Enable Azure AI Content Safety for enhanced PII detection (recommended for sensitive data)"
+    )
 
 
 class AppConfig(BaseModel):
@@ -383,6 +419,7 @@ class AppConfig(BaseModel):
         database: Database connection configuration
         dfm: DfM/Dynamics 365 configuration (placeholder for POC)
         teams: Microsoft Teams configuration (placeholder for POC)
+        content_safety: Azure AI Content Safety configuration for PII detection
         thresholds: Alert triggering thresholds
         features: Feature flags for toggling functionality
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -398,6 +435,9 @@ class AppConfig(BaseModel):
     )
     teams: TeamsConfig = Field(
         default_factory=TeamsConfig
+    )
+    content_safety: ContentSafetyConfig = Field(
+        default_factory=ContentSafetyConfig
     )
     thresholds: AlertThresholds = Field(
         default_factory=AlertThresholds
@@ -495,6 +535,28 @@ class AppConfig(BaseModel):
                 bot_app_password=os.getenv("TEAMS_BOT_APP_PASSWORD"),
             ),
             # -------------------------
+            # Azure AI Content Safety Configuration
+            # For enhanced PII detection on sensitive data
+            # -------------------------
+            content_safety=ContentSafetyConfig(
+                endpoint=get_config_value(
+                    "CONTENT_SAFETY_ENDPOINT",
+                    "ContentSafety--Endpoint",
+                    ""
+                ),
+                api_key=get_config_value(
+                    "CONTENT_SAFETY_API_KEY",
+                    "ContentSafety--ApiKey",
+                    ""
+                ),
+                use_managed_identity=os.getenv(
+                    "USE_CONTENT_SAFETY_MANAGED_IDENTITY", "true"
+                ).lower() == "true",
+                enabled=os.getenv(
+                    "ENABLE_CONTENT_SAFETY_PII", "false"
+                ).lower() == "true",
+            ),
+            # -------------------------
             # Alert Thresholds
             # -------------------------
             thresholds=AlertThresholds(
@@ -529,6 +591,9 @@ class AppConfig(BaseModel):
                 ).lower() == "true",
                 use_sql_managed_identity=os.getenv(
                     "USE_SQL_MANAGED_IDENTITY", "true"
+                ).lower() == "true",
+                enable_content_safety_pii=os.getenv(
+                    "ENABLE_CONTENT_SAFETY_PII", "false"
                 ).lower() == "true",
             ),
             # -------------------------

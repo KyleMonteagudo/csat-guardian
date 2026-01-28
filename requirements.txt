@@ -28,6 +28,14 @@ azure-identity>=1.15.0
 azure-keyvault-secrets>=4.7.0
 
 # -----------------------------------------------------------------------------
+# Azure AI Content Safety - PII Detection
+# -----------------------------------------------------------------------------
+# Used for: ML-powered PII detection as a second layer after regex scrubbing
+# Detects names, addresses, and contextual PII that regex patterns miss
+# Enable with: ENABLE_CONTENT_SAFETY_PII=true
+azure-ai-contentsafety>=1.0.0
+
+# -----------------------------------------------------------------------------
 # Database - SQL Storage
 # -----------------------------------------------------------------------------
 # Used for: Storing sample case data (POC), configuration, and metrics
