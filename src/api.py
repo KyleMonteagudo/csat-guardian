@@ -89,6 +89,19 @@ class ChatResponse(BaseModel):
     suggestions: List[str] = []
 
 
+class PIITestRequest(BaseModel):
+    """Request for PII scrubbing test endpoint."""
+    text: str
+
+
+class PIITestResponse(BaseModel):
+    """Response for PII scrubbing test endpoint."""
+    original: str
+    scrubbed: str
+    items_redacted: int
+    content_safety_enabled: bool
+
+
 # =============================================================================
 # Application State
 # =============================================================================
@@ -228,6 +241,46 @@ async def health_check():
         environment=environment,
         timestamp=datetime.utcnow().isoformat(),
         services=services
+    )
+
+
+# =============================================================================
+# PII Test Endpoint (Development/Verification)
+# =============================================================================
+
+@app.post("/api/test-pii", response_model=PIITestResponse)
+async def test_pii_scrubbing(request: PIITestRequest):
+    """
+    Test PII scrubbing functionality.
+    
+    This endpoint demonstrates the PII scrubbing that happens before
+    any text is sent to Azure OpenAI. Use it to verify that sensitive
+    information is properly redacted.
+    
+    **Note**: This is a development/verification endpoint.
+    """
+    from services.privacy import get_privacy_service
+    
+    privacy = get_privacy_service()
+    
+    # Get original length
+    original_text = request.text
+    original_len = len(original_text)
+    
+    # Scrub the text
+    scrubbed_text = privacy.scrub(original_text)
+    scrubbed_len = len(scrubbed_text)
+    
+    # Count redactions (rough estimate based on redaction tokens found)
+    import re
+    redaction_pattern = r'\[(EMAIL|PHONE|IP|SSN|CARD|CUSTOMER_ID|ID|URL|KEY)_REDACTED'
+    redactions = len(re.findall(redaction_pattern, scrubbed_text))
+    
+    return PIITestResponse(
+        original=original_text,
+        scrubbed=scrubbed_text,
+        items_redacted=redactions,
+        content_safety_enabled=privacy.use_content_safety
     )
 
 
