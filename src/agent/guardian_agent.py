@@ -35,6 +35,7 @@ from models import (
 )
 from clients.dfm_client import DfMClientBase, get_dfm_client
 from services.sentiment_service import SentimentAnalysisService, get_sentiment_service
+from services.privacy import scrub_pii
 from agent.csat_rules_plugin import CSATRulesPlugin
 from logger import get_logger, log_case_event
 
@@ -476,6 +477,8 @@ Be the coach that notices what the engineer might have missed. Reference specifi
         """
         Process a message from the engineer and generate a response.
         
+        PII in the message is automatically scrubbed before sending to the LLM.
+        
         Args:
             message: The engineer's message
             
@@ -484,11 +487,16 @@ Be the coach that notices what the engineer might have missed. Reference specifi
         """
         logger.info(f"Agent received message from {self.engineer.name}: {message[:50]}...")
         
-        # Add message to session
+        # Scrub PII from the message before processing
+        scrubbed_message = scrub_pii(message)
+        if scrubbed_message != message:
+            logger.debug("PII scrubbed from user message before LLM processing")
+        
+        # Add original message to session (for logging/audit)
         self.session.add_message("engineer", message)
         
-        # Add to chat history
-        self.chat_history.add_user_message(message)
+        # Add scrubbed message to chat history (what goes to LLM)
+        self.chat_history.add_user_message(scrubbed_message)
         
         try:
             # Check if Azure OpenAI is configured
