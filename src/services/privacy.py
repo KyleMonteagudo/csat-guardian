@@ -466,7 +466,7 @@ def get_privacy_service(config=None) -> PrivacyService:
         # Initialize with Content Safety if enabled
         use_content_safety = (
             config.features.enable_content_safety_pii and 
-            config.content_safety.endpoint
+            bool(config.content_safety.endpoint)
         )
         
         _privacy_service = PrivacyService(
