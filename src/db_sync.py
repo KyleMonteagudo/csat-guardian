@@ -35,7 +35,7 @@ try:
 except ImportError:
     pass  # dotenv not installed, rely on environment variables
 
-from models import Case, Engineer, Customer, TimelineEntry, CaseStatus, CasePriority, TimelineEntryType
+from models import Case, Engineer, Customer, TimelineEntry, CaseStatus, CaseSeverity, TimelineEntryType
 
 
 # Azure SQL resource scope for access token
@@ -295,22 +295,30 @@ class SyncDatabaseManager:
         }
         return status_map.get(status_str, CaseStatus.ACTIVE)
     
-    def _map_priority(self, priority_val) -> CasePriority:
-        """Map database priority/severity to CasePriority enum."""
-        if not priority_val:
-            return CasePriority.MEDIUM
-        priority_str = str(priority_val).lower()
-        priority_map = {
-            "low": CasePriority.LOW,
-            "1": CasePriority.LOW,
-            "medium": CasePriority.MEDIUM,
-            "2": CasePriority.MEDIUM,
-            "high": CasePriority.HIGH,
-            "3": CasePriority.HIGH,
-            "critical": CasePriority.HIGH,
-            "4": CasePriority.HIGH,
+    def _map_severity(self, severity_val) -> CaseSeverity:
+        """Map database severity to CaseSeverity enum."""
+        if not severity_val:
+            return CaseSeverity.SEV_C
+        severity_str = str(severity_val).lower()
+        severity_map = {
+            "sev_a": CaseSeverity.SEV_A,
+            "a": CaseSeverity.SEV_A,
+            "critical": CaseSeverity.SEV_A,
+            "4": CaseSeverity.SEV_A,
+            "sev_b": CaseSeverity.SEV_B,
+            "b": CaseSeverity.SEV_B,
+            "high": CaseSeverity.SEV_B,
+            "3": CaseSeverity.SEV_B,
+            "sev_c": CaseSeverity.SEV_C,
+            "c": CaseSeverity.SEV_C,
+            "medium": CaseSeverity.SEV_C,
+            "2": CaseSeverity.SEV_C,
+            "sev_d": CaseSeverity.SEV_D,
+            "d": CaseSeverity.SEV_D,
+            "low": CaseSeverity.SEV_D,
+            "1": CaseSeverity.SEV_D,
         }
-        return priority_map.get(priority_str, CasePriority.MEDIUM)
+        return severity_map.get(severity_str, CaseSeverity.SEV_C)
     
     def get_cases_for_engineer(self, engineer_id: str) -> List[Case]:
         """Get all cases assigned to an engineer."""
@@ -351,7 +359,7 @@ class SyncDatabaseManager:
                 title=row.title,
                 description=row.description or "",
                 status=self._map_status(row.status),
-                priority=self._map_priority(row.priority or "medium"),
+                severity=self._map_severity(row.priority or "medium"),
                 created_on=row.created_on,
                 modified_on=row.modified_on or row.created_on,
                 owner=engineer,
@@ -400,7 +408,7 @@ class SyncDatabaseManager:
                 title=row.title,
                 description=row.description or "",
                 status=self._map_status(row.status),
-                priority=self._map_priority(row.priority or "medium"),
+                severity=self._map_severity(row.priority or "medium"),
                 created_on=row.created_on,
                 modified_on=row.modified_on or row.created_on,
                 owner=engineer,

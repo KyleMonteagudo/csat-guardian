@@ -19,7 +19,7 @@ from typing import List, Optional
 
 from models import (
     Engineer, Customer, Case, TimelineEntry,
-    CaseStatus, CasePriority, TimelineEntryType
+    CaseStatus, CaseSeverity, TimelineEntryType
 )
 
 
@@ -80,7 +80,7 @@ def get_sample_cases() -> List[Case]:
         title="Azure AD B2C configuration for patient portal",
         description="We are implementing Azure AD B2C for our new patient portal and need guidance on best practices for healthcare compliance.",
         status=CaseStatus.ACTIVE,
-        priority=CasePriority.MEDIUM,
+        severity=CaseSeverity.SEV_C,
         owner=engineers["eng-001"],
         customer=customers["cust-001"],
         created_on=now - timedelta(days=5),
@@ -171,7 +171,7 @@ def get_sample_cases() -> List[Case]:
         title="Production SQL Server down after patching - CRITICAL",
         description="Our production SQL Server went down after applying the monthly patches. We cannot process orders. This is a SEV1 situation affecting $50K/hour in revenue.",
         status=CaseStatus.ACTIVE,
-        priority=CasePriority.CRITICAL,
+        severity=CaseSeverity.SEV_A,
         owner=engineers["eng-001"],
         customer=customers["cust-002"],
         created_on=now - timedelta(days=4),
@@ -271,7 +271,7 @@ def get_sample_cases() -> List[Case]:
         title="Azure DevOps pipeline optimization inquiry",
         description="We would like guidance on optimizing our Azure DevOps pipelines for faster build times.",
         status=CaseStatus.ACTIVE,
-        priority=CasePriority.LOW,
+        severity=CaseSeverity.SEV_D,
         owner=engineers["eng-001"],
         customer=customers["cust-003"],
         created_on=now - timedelta(days=12),
@@ -336,7 +336,7 @@ def get_sample_cases() -> List[Case]:
         title="Azure Kubernetes Service intermittent pod failures",
         description="We are experiencing random pod restarts in our AKS cluster. Happening 2-3 times per day affecting our trading platform.",
         status=CaseStatus.ACTIVE,
-        priority=CasePriority.HIGH,
+        severity=CaseSeverity.SEV_B,
         owner=engineers["eng-002"],
         customer=customers["cust-004"],
         created_on=now - timedelta(days=7),
@@ -445,7 +445,7 @@ def get_sample_cases() -> List[Case]:
         title="Azure Synapse Analytics cost optimization",
         description="Looking for ways to reduce our Azure Synapse costs which have been higher than expected.",
         status=CaseStatus.ACTIVE,
-        priority=CasePriority.MEDIUM,
+        severity=CaseSeverity.SEV_C,
         owner=engineers["eng-001"],
         customer=customers["cust-005"],
         created_on=now - timedelta(days=6),
@@ -510,7 +510,7 @@ def get_sample_cases() -> List[Case]:
         title="Power BI embedded licensing questions",
         description="Need clarification on Power BI Embedded licensing for our customer-facing analytics portal.",
         status=CaseStatus.RESOLVED,
-        priority=CasePriority.MEDIUM,
+        severity=CaseSeverity.SEV_C,
         owner=engineers["eng-003"],
         customer=customers["cust-006"],
         created_on=now - timedelta(days=8),
@@ -592,7 +592,7 @@ def get_sample_cases() -> List[Case]:
         title="Azure Front Door WAF rule configuration",
         description="Need help configuring WAF rules for our healthcare API endpoints.",
         status=CaseStatus.ACTIVE,
-        priority=CasePriority.HIGH,
+        severity=CaseSeverity.SEV_B,
         owner=engineers["eng-001"],
         customer=customers["cust-001"],
         created_on=now - timedelta(days=2),
@@ -657,7 +657,7 @@ def get_sample_cases() -> List[Case]:
         title="SAP integration with Azure Data Factory failing",
         description="Our ADF pipeline that connects to SAP has been failing since the SAP upgrade last week. Need help troubleshooting.",
         status=CaseStatus.ACTIVE,
-        priority=CasePriority.HIGH,
+        severity=CaseSeverity.SEV_B,
         owner=engineers["eng-002"],
         customer=customers["cust-002"],
         created_on=now - timedelta(days=5),
