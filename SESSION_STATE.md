@@ -1,15 +1,57 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 28, 2026
-> **Status**: ✅ MSI Auth Complete | ✅ Content Safety Enabled | ⏳ Waiting on DfM/Kusto Access
+> **Last Updated**: January 28, 2026 (End of Day)
+> **Status**: ✅ ALL SYSTEMS HEALTHY | ✅ Enterprise Documentation Complete | ⏳ Waiting on DfM/Kusto Access
 
 ---
 
 ## Quick Context for AI Assistant
 
+**READ THIS FIRST** - This file contains everything you need to continue work on this project.
+
 ```
-Read the SESSION_STATE.md file in the csat-guardian project to understand the current state.
+The CSAT Guardian project is FULLY FUNCTIONAL in dev environment.
+All services healthy. All bugs fixed. Documentation complete.
+Next work: DfM/Kusto integration (awaiting external access).
 ```
+
+---
+
+## 📚 MILESTONE: Enterprise Documentation Complete (January 28, 2026)
+
+**Created comprehensive documentation suite (~2,800 lines):**
+
+| Document | Lines | Purpose |
+|----------|-------|---------|
+| `docs/FILE_REFERENCE.md` | ~850 | Complete file-by-file project reference |
+| `docs/GETTING_STARTED.md` | ~250 | Entry point for newcomers |
+| `docs/CODE_GUIDE_FOR_NON_DEVELOPERS.md` | ~500 | Python explained for non-programmers |
+| `README.md` | Updated | Added documentation table |
+
+**Committed**: `a23ed92` on develop, merged to main as `eb1805a`
+
+---
+
+## 🐛 BUGS FIXED (January 28, 2026)
+
+### 1. Content Safety Boolean Bug
+**File**: `src/services/privacy.py` (line ~467)
+**Problem**: `use_content_safety` returned the endpoint string instead of True/False
+**Fix**: Changed from `config.content_safety.endpoint` to `bool(config.content_safety.endpoint)`
+
+### 2. CasePriority → CaseSeverity Migration
+**Files**: `src/db_sync.py`, `src/sample_data_rich.py`
+**Problem**: Code still referenced old `CasePriority` enum that was renamed to `CaseSeverity`
+**Fix**: Updated all imports and usages to `CaseSeverity`
+
+### 3. Duplicate requirements.txt
+**Problem**: Two requirements.txt files (root and src/) causing confusion
+**Fix**: Deleted root `requirements.txt`, consolidated to `src/requirements.txt` only
+**Added**: `azure-ai-contentsafety>=1.0.0` to src/requirements.txt
+
+### 4. Deployment Guide Updates
+**File**: `infrastructure/DEPLOYMENT_GUIDE.md`
+**Fix**: Updated deployment commands for new file structure (src/requirements.txt)
 
 ---
 
@@ -25,7 +67,9 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 **Configuration:**
 - Endpoint: `https://csatguardcs.cognitiveservices.azure.com/`
 - Auth: Managed Identity (App Service MSI)
-- Enabled via: `ENABLE_CONTENT_SAFETY_PII=true`
+- Enabled via: `ENABLE_CONTENT_SAFETY_PII=true` (set in App Service config)
+
+**Verified Working**: `/api/test-pii` endpoint confirms both layers active
 
 ---
 
@@ -224,9 +268,10 @@ Teams ←→ Bot Service ←→ Azure Function (PUBLIC) ←→ App Service (PRIV
 | SQL Server | `sql-csatguardian-dev` | MSI: `04199892-389c-4531-97a7-42eda6734c28`, AD Admin: App Service |
 | SQL Database | `sqldb-csatguardian-dev` | Contains external user `app-csatguardian-dev` |
 | AI Services | `ais-csatguardian-dev` | GPT-4o deployment |
+| Content Safety | `csatguardcs` | PII detection service |
 | Key Vault | `kv-csatguard-dev` | Private endpoint only |
 | VNet | `vnet-csatguardian-dev` | 10.100.0.0/16 |
-| Dev VM | `vm-devbox-csatguardian` | MSI: `2941775d-fe8f-4ebd-88ef-6852df0eb43b` (former SQL admin) |
+| Dev VM | `vm-devbox-csatguardian` | For testing private endpoints |
 
 **Testing Access:**
 - No Bastion (deleted for security)
@@ -237,102 +282,105 @@ Teams ←→ Bot Service ←→ Azure Function (PUBLIC) ←→ App Service (PRIV
 
 ## Development Workflow
 
-**Local Development (API Keys):**
-```powershell
-$env:USE_SQL_MANAGED_IDENTITY = "false"
-$env:USE_OPENAI_MANAGED_IDENTITY = "false"
-cd src
-python -m uvicorn api:app --host 0.0.0.0 --port 8000
-```
-
-**Deploy to Azure (Kudu Method):**
+### Deploy to Azure (from Cloud Shell):
 ```bash
-# Cloud Shell
 cd ~/csat-guardian && git pull origin develop
-rm -f deploy.zip && zip -r deploy.zip src requirements.txt
-# Upload via https://app-csatguardian-dev.scm.azurewebsites.net/ZipDeployUI
-az webapp restart --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev
+zip -r deploy.zip src
+az webapp deploy --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev --src-path deploy.zip --type zip --clean
 ```
 
-**Test via VM:**
+### Test via VM:
 ```bash
 az vm run-command invoke \
     --resource-group CSAT_Guardian_Dev \
     --name vm-devbox-csatguardian \
     --command-id RunPowerShellScript \
-    --scripts "Invoke-WebRequest -Uri 'https://app-csatguardian-dev.azurewebsites.net/api/health' -UseBasicParsing | Select-Object -ExpandProperty Content"
+    --scripts "Invoke-RestMethod -Uri 'https://app-csatguardian-dev.azurewebsites.net/api/health'"
 ```
 
-4. **Infrastructure as Code**
-   - `infrastructure/bicep/main-commercial.bicep` - Complete template
-   - ⚠️ **Note**: Bicep template does NOT reflect current security state - manual changes were made
-   - Deploys: VNet, ~~Bastion~~, ~~Dev-box VM~~, SQL, AI Hub, AI Services, Key Vault, App Service
-   - All backend services use Private Endpoints (no public access)
-
-5. **Deployed to Azure**
-   - App Service running with VNet integration
-   - Database accessible via private endpoint
-   - Key Vault secrets auto-resolved via managed identity
-   - **Deployment method**: Kudu drag-and-drop (standard az commands have MSI scope issues)
-
-6. **Documentation** - Comprehensive guides for deployment, architecture, and troubleshooting
-
-### ✅ Recent Fixes (January 2026)
-
-| Date | Fix | Details |
-|------|-----|---------|
-| Jan 26 | **MSI Auth Migration** | Updated code to use `DefaultAzureCredential` for Azure OpenAI and SQL |
-| Jan 25 | Security hardening | Disabled local auth on AI Services, SQL, Storage |
-| Jan 25 | Database concurrency | Changed to per-query connections to fix "Connection is busy" errors |
-| Jan 25 | Agent analysis | Full sentiment, timeline, and coaching now working in production |
-| Jan 24 | Deployment method | Documented Kudu drag-drop as working approach |
-
-### ⏳ Next Steps
-
-1. **✅ DONE: MSI Auth Migration** - Code updated to use `DefaultAzureCredential`
-2. **🔴 BLOCKING: Grant MSI Permissions** - RBAC roles for AI Services, SQL user creation
-3. **🔴 BLOCKING: Deploy & Test** - Redeploy to App Service and verify MSI auth works
-4. **DfM Integration** - Replace seed data with real Dynamics case sync
-5. **Teams Notifications** - Webhook alerts for managers on CSAT risks
-6. **CI/CD Pipeline** - GitHub Actions for automated Kudu deployment
-7. **User Authentication** - Azure AD integration for API access
+### Git Workflow:
+- Development branch: `develop`
+- Production branch: `main`
+- Always push to `develop` first, then merge to `main`
 
 ---
 
-## Deployment Info
+## File Structure (Key Files)
 
-**Target Environment:**
-- Cloud: Commercial Azure (Central US)
-- Subscription: `a20d761d-cb36-4f83-b827-58ccdb166f39`
-- Resource Group: `CSAT_Guardian_Dev`
-
-**Key Resources:**
-| Resource | Name |
-|----------|------|
-| App Service | `app-csatguardian-dev.azurewebsites.net` |
-| App Service Plan | `asp-csatguardian-dev` |
-| SQL Server | `sql-csatguardian-dev.database.windows.net` |
-| SQL Database | `sqldb-csatguardian-dev` |
-| AI Services | `ais-csatguardian-dev` |
-| AI Hub | `aihub-csatguardian-dev` |
-| Key Vault | `kv-csatguard-dev` (note: shorter name due to soft-delete conflict) |
-| Bastion | `bas-csatguardian-dev` |
-| Dev-box VM | `vm-devbox-csatguardian` |
-| VNet | `vnet-csatguardian-dev` |
-
-**Key Vault Secrets:**
-| Secret | Description |
-|--------|-------------|
-| `azure-openai-key` | AI Services API key |
-| `sql-admin-password` | Azure SQL admin password |
-| `devbox-password` | Dev-box VM password |
-
-**Network:**
-- VNet: 10.100.0.0/16 (Central US)
-- All backend services: Private Endpoints
-- Access via Bastion → Dev-box VM
+```
+csat-guardian/
+├── src/
+│   ├── api.py              # Main FastAPI application
+│   ├── config.py           # Configuration loading
+│   ├── models.py           # Data models (Case, Engineer, etc.)
+│   ├── db_sync.py          # Azure SQL with MSI auth
+│   ├── requirements.txt    # Python dependencies (ONLY requirements file!)
+│   ├── agent/
+│   │   ├── guardian_agent.py      # Semantic Kernel AI agent
+│   │   └── csat_rules_plugin.py   # Business rules plugin
+│   ├── services/
+│   │   ├── privacy.py             # PII scrubbing (regex + Content Safety)
+│   │   ├── sentiment_service.py   # AI sentiment analysis
+│   │   └── alert_service.py       # Alert generation
+│   └── clients/
+│       ├── dfm_client.py          # DfM data abstraction
+│       └── teams_client.py        # Teams notifications (mock)
+├── docs/
+│   ├── FILE_REFERENCE.md          # Complete file reference
+│   ├── GETTING_STARTED.md         # Entry point for newcomers
+│   ├── CODE_GUIDE_FOR_NON_DEVELOPERS.md  # Python for non-programmers
+│   ├── ARCHITECTURE.md            # Technical architecture
+│   └── QUICK_REFERENCE.md         # Developer cheat sheet
+└── infrastructure/
+    ├── DEPLOYMENT_GUIDE.md        # How to deploy
+    ├── bicep/                     # Infrastructure as Code
+    └── sql/                       # Database schemas
+```
 
 ---
+
+## API Endpoints (All Working)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/health` | GET | Health check (shows all service status) |
+| `/api/engineers` | GET | List all engineers |
+| `/api/cases` | GET | List cases (filter by engineer_id, status) |
+| `/api/cases/{id}` | GET | Get single case with timeline |
+| `/api/analyze/{id}` | POST | Run AI sentiment analysis |
+| `/api/chat` | POST | Chat with AI agent |
+| `/api/test-pii` | POST | Test PII scrubbing |
+
+---
+
+## What's NOT Working / Known Issues
+
+1. **DfM Integration**: Using mock data, not real DfM/Kusto data (awaiting access)
+2. **Teams Bot**: Not implemented (awaiting security approval)
+3. **SCM Basic Auth**: DISABLED on App Service - must use `az webapp deploy` with AAD auth
+4. **CI/CD**: Not possible with current network restrictions
+
+---
+
+## Session History
+
+| Date | Key Accomplishments |
+|------|---------------------|
+| Jan 28 | Fixed Content Safety boolean bug, CaseSeverity migration, comprehensive documentation |
+| Jan 27 | Discovered DfM data is in Kusto, created integration request |
+| Jan 26 | MSI authentication for SQL and OpenAI, SQL Admin workaround |
+| Jan 25 | Security hardening, database concurrency fix, all analysis features working |
+| Jan 24 | Private networking, deployment method documented |
+| Jan 23 | Initial deployment, FastAPI + Semantic Kernel setup |
+
+---
+
+## Contact / Ownership
+
+- **Project Owner**: Kyle Monteagudo
+- **Repository**: github.com/kmonteagudo_microsoft/csat-guardian
+- **Target Users**: GSX (Government Support Engineers)
+
 
 ## Development Workflow
 
