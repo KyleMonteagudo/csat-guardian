@@ -4,7 +4,21 @@
 
 ---
 
-## 📋 Project Status
+## � Documentation
+
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [**Getting Started**](docs/GETTING_STARTED.md) | **Everyone** | Start here! Overview and quick start guide |
+| [File Reference](docs/FILE_REFERENCE.md) | Everyone | Complete file-by-file explanation |
+| [Code Guide for Non-Developers](docs/CODE_GUIDE_FOR_NON_DEVELOPERS.md) | Non-programmers | How to read Python code |
+| [Architecture](docs/ARCHITECTURE.md) | Developers | Technical deep-dive |
+| [Quick Reference](docs/QUICK_REFERENCE.md) | Developers | API cheat sheet |
+| [Deployment Guide](infrastructure/DEPLOYMENT_GUIDE.md) | DevOps | How to deploy |
+| [Security Review](docs/APPLICATION_SECURITY_REVIEW.md) | Security | Security controls |
+
+---
+
+## �📋 Project Status
 
 ### ✅ Completed (Dev Environment)
 
