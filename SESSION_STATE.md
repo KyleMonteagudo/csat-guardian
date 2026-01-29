@@ -1,7 +1,7 @@
 # CSAT Guardian - Session State
 
-> **Last Updated**: January 27, 2026
-> **Status**: ✅ MSI Auth Complete | ⏳ Waiting on DfM/Kusto Access + Security Approvals
+> **Last Updated**: January 28, 2026
+> **Status**: ✅ MSI Auth Complete | ✅ Content Safety Enabled | ⏳ Waiting on DfM/Kusto Access
 
 ---
 
@@ -10,6 +10,22 @@
 ```
 Read the SESSION_STATE.md file in the csat-guardian project to understand the current state.
 ```
+
+---
+
+## 🎉 MILESTONE: Azure AI Content Safety Enabled (January 28, 2026)
+
+**Two-layer PII protection now active:**
+
+| Layer | What It Catches | Latency |
+|-------|-----------------|---------|
+| **Regex Scrubbing** | Emails, phones, SSNs, IPs, credit cards | ~0ms |
+| **Content Safety** | Names, addresses, contextual PII | +100-300ms |
+
+**Configuration:**
+- Endpoint: `https://csatguardcs.cognitiveservices.azure.com/`
+- Auth: Managed Identity (App Service MSI)
+- Enabled via: `ENABLE_CONTENT_SAFETY_PII=true`
 
 ---
 
@@ -22,6 +38,7 @@ Read the SESSION_STATE.md file in the csat-guardian project to understand the cu
 | Azure SQL | ✅ Working | MSI token via `DefaultAzureCredential` |
 | Azure OpenAI | ✅ Working | MSI token via `get_bearer_token_provider` |
 | Key Vault | ✅ Working | `@Microsoft.KeyVault` references with MSI |
+| Content Safety | ✅ Working | MSI via `DefaultAzureCredential` |
 | API Health | ✅ Working | All services reporting "healthy" |
 
 ### Key Finding: Directory Readers Workaround
