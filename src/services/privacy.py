@@ -72,6 +72,12 @@ CUSTOMER_ID_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+# Azure Subscription IDs (GUIDs preceded by "subscription")
+SUBSCRIPTION_ID_PATTERN = re.compile(
+    r'\b(?:subscription\s*(?:id)?:?\s*)([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\b',
+    re.IGNORECASE
+)
+
 # URLs (may contain tokens or sensitive paths)
 URL_PATTERN = re.compile(
     r'https?://[^\s<>"\'{}|\\^`\[\]]+',
@@ -91,6 +97,7 @@ REDACTION_TOKENS = {
     'ssn': '[SSN_REDACTED]',
     'credit_card': '[CARD_REDACTED]',
     'customer_id': '[CUSTOMER_ID_REDACTED]',
+    'subscription_id': '[SUBSCRIPTION_ID_REDACTED]',
     'guid': '[ID_REDACTED]',
     'url': '[URL_REDACTED]',
     'api_key': '[KEY_REDACTED]',
@@ -269,6 +276,13 @@ class PrivacyService:
                 scrubbed
             )
             redaction_count += count
+        
+        # Scrub Azure subscription IDs (always enabled - these are sensitive)
+        scrubbed, count = SUBSCRIPTION_ID_PATTERN.subn(
+            f"subscription {REDACTION_TOKENS['subscription_id']}",
+            scrubbed
+        )
+        redaction_count += count
         
         # Scrub GUIDs (careful - may affect case IDs)
         if self.scrub_guids:
