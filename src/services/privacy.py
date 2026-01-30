@@ -55,9 +55,9 @@ IPV6_PATTERN = re.compile(r'\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b')
 # Social Security Numbers (US)
 SSN_PATTERN = re.compile(r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b')
 
-# Credit Card Numbers (basic patterns)
+# Credit Card Numbers (requires separators to avoid matching case IDs)
 CREDIT_CARD_PATTERN = re.compile(
-    r'\b(?:\d{4}[-.\s]?){3}\d{4}\b'  # 16 digits with optional separators
+    r'\b\d{4}[-.\s]\d{4}[-.\s]\d{4}[-.\s]\d{4}\b'  # 16 digits WITH separators required
 )
 
 # Azure/AWS/GCP resource IDs and keys (prevent accidental exposure)
