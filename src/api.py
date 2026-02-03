@@ -139,14 +139,21 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to load full configuration: {e}")
         logger.info("Continuing with default settings for POC")
     
+    # Check if we should use in-memory mock data (for demos/hackathon)
+    use_mock_data = os.getenv("USE_MOCK_DATA", "true").lower() == "true"
+    
     # Initialize DfM client - try Azure SQL adapter first, then in-memory mock
-    try:
-        from clients.azure_sql_adapter import get_azure_sql_adapter
-        app_state.dfm_client = await get_azure_sql_adapter()
-        logger.info("DfM client initialized (Azure SQL)")
-    except Exception as e:
-        logger.warning(f"Azure SQL adapter failed: {e}")
-        logger.info("Falling back to in-memory mock client with rich sample data")
+    if not use_mock_data:
+        try:
+            from clients.azure_sql_adapter import get_azure_sql_adapter
+            app_state.dfm_client = await get_azure_sql_adapter()
+            logger.info("DfM client initialized (Azure SQL)")
+        except Exception as e:
+            logger.warning(f"Azure SQL adapter failed: {e}")
+            use_mock_data = True  # Fall back to mock
+    
+    if use_mock_data or app_state.dfm_client is None:
+        logger.info("Using in-memory mock client with rich sample data")
         try:
             from clients.dfm_client_memory import get_in_memory_dfm_client
             app_state.dfm_client = get_in_memory_dfm_client()
