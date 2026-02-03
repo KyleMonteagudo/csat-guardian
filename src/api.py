@@ -322,14 +322,14 @@ async def list_engineers():
 async def list_cases(
     engineer_id: Optional[str] = Query(None, description="Filter by engineer ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    severity: Optional[str] = Query(None, description="Filter by severity (sev_a, sev_b, sev_c, sev_d)")
+    severity: Optional[str] = Query(None, description="Filter by severity (sev_a, sev_b, sev_c)")
 ):
     """
     List cases with optional filters.
     
     - **engineer_id**: Filter cases by assigned engineer
     - **status**: Filter by case status (active, resolved, etc.)
-    - **severity**: Filter by severity (sev_a, sev_b, sev_c, sev_d)
+    - **severity**: Filter by severity (sev_a, sev_b, sev_c)
     """
     if not app_state.dfm_client:
         raise HTTPException(status_code=503, detail="DfM client not available")

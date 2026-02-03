@@ -197,11 +197,10 @@ class MockDfMClient(DfMClientBase):
             "sev_a": CaseSeverity.SEV_A,
             "sev_b": CaseSeverity.SEV_B,
             "sev_c": CaseSeverity.SEV_C,
-            "sev_d": CaseSeverity.SEV_D,
             # Legacy mappings for existing data
             "high": CaseSeverity.SEV_A,
             "medium": CaseSeverity.SEV_C,
-            "low": CaseSeverity.SEV_D,
+            "low": CaseSeverity.SEV_C,
         }
         
         # Create and return the Case model

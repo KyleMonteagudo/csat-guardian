@@ -313,10 +313,11 @@ class SyncDatabaseManager:
             "c": CaseSeverity.SEV_C,
             "medium": CaseSeverity.SEV_C,
             "2": CaseSeverity.SEV_C,
-            "sev_d": CaseSeverity.SEV_D,
-            "d": CaseSeverity.SEV_D,
-            "low": CaseSeverity.SEV_D,
-            "1": CaseSeverity.SEV_D,
+            # Note: SEV_D doesn't exist in MS Support - map to SEV_C
+            "sev_d": CaseSeverity.SEV_C,
+            "d": CaseSeverity.SEV_C,
+            "low": CaseSeverity.SEV_C,
+            "1": CaseSeverity.SEV_C,
         }
         return severity_map.get(severity_str, CaseSeverity.SEV_C)
     
