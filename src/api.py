@@ -72,6 +72,8 @@ class AnalyzeResponse(BaseModel):
     sentiment: dict
     recommendations: List[str]
     analyzed_at: str
+    verbose_analysis: Optional[str] = None  # Detailed narrative analysis
+    timeline_insights: Optional[List[dict]] = None  # Per-entry insights
 
 
 class ChatRequest(BaseModel):
@@ -443,6 +445,12 @@ async def analyze_case(case_id: str, request: AnalyzeRequest = None):
         result = await app_state.sentiment_service.analyze_case(case)
         sentiment = result.overall_sentiment
         
+        # Generate verbose narrative analysis
+        verbose_analysis = await _generate_verbose_analysis(case, result)
+        
+        # Generate per-timeline-entry insights
+        timeline_insights = _generate_timeline_insights(case, result)
+        
         return AnalyzeResponse(
             case_id=case_id,
             sentiment={
@@ -450,16 +458,123 @@ async def analyze_case(case_id: str, request: AnalyzeRequest = None):
                 "label": sentiment.label.value,
                 "confidence": sentiment.confidence,
                 "trend": result.sentiment_trend,
-                "key_phrases": sentiment.key_phrases or []
+                "key_phrases": sentiment.key_phrases or [],
+                "concerns": sentiment.concerns or []
             },
             recommendations=result.recommendations or [],
-            analyzed_at=datetime.utcnow().isoformat()
+            analyzed_at=datetime.utcnow().isoformat(),
+            verbose_analysis=verbose_analysis,
+            timeline_insights=timeline_insights
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to analyze case {case_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _generate_verbose_analysis(case, analysis_result) -> str:
+    """Generate a detailed narrative analysis of the case."""
+    sentiment = analysis_result.overall_sentiment
+    
+    # Build narrative based on actual case data
+    narrative = f"""## Sentiment Analysis for {case.id}
+
+### Overall Assessment
+The customer sentiment is **{sentiment.label.value.upper()}** with a confidence score of {sentiment.confidence:.0%}. 
+The sentiment score is {sentiment.score:.2f} on a scale of 0 (very negative) to 1 (very positive).
+
+### Sentiment Trend
+{analysis_result.sentiment_trend}
+
+### Key Observations from Communications
+"""
+    
+    # Add key phrases with context
+    if sentiment.key_phrases:
+        narrative += "\n**Notable phrases from customer communications:**\n"
+        for phrase in sentiment.key_phrases[:5]:
+            narrative += f'- *"{phrase}"*\n'
+    
+    # Add concerns
+    if sentiment.concerns:
+        narrative += "\n**Identified Customer Concerns:**\n"
+        for concern in sentiment.concerns[:5]:
+            narrative += f"- {concern}\n"
+    
+    # Add compliance status
+    narrative += f"""
+### CSAT Rule Compliance
+- **7-Day Notes Rule:** {analysis_result.compliance_status.upper()}
+- **Days Since Last Note:** {analysis_result.days_since_last_note:.1f} days
+"""
+    
+    # Add specific timeline observations
+    if case.timeline:
+        narrative += "\n### Communication Timeline Analysis\n"
+        
+        # Check for communication gaps
+        customer_comms = [e for e in case.timeline if e.is_customer_communication]
+        engineer_comms = [e for e in case.timeline if not e.is_customer_communication and e.entry_type.value in ['email_sent', 'phone_call']]
+        
+        if customer_comms:
+            last_customer = customer_comms[-1]
+            narrative += f"- **Last customer contact:** {last_customer.created_on.strftime('%Y-%m-%d')} - "
+            narrative += f'"{last_customer.content[:100]}..."\n'
+        
+        if engineer_comms:
+            last_engineer = engineer_comms[-1]
+            narrative += f"- **Last engineer response:** {last_engineer.created_on.strftime('%Y-%m-%d')}\n"
+    
+    # Add recommendations summary
+    if analysis_result.recommendations:
+        narrative += "\n### Recommended Actions\n"
+        for i, rec in enumerate(analysis_result.recommendations[:5], 1):
+            narrative += f"{i}. {rec}\n"
+    
+    return narrative
+
+
+def _generate_timeline_insights(case, analysis_result) -> list:
+    """Generate per-entry insights for the timeline."""
+    insights = []
+    
+    for entry in case.timeline[-10:]:  # Last 10 entries
+        insight = {
+            "entry_id": entry.id,
+            "date": entry.created_on.isoformat(),
+            "type": entry.entry_type.value,
+            "author": entry.created_by,
+            "is_customer": entry.is_customer_communication,
+            "content_preview": entry.content[:200] + "..." if len(entry.content) > 200 else entry.content,
+        }
+        
+        # Add sentiment indicator based on content analysis
+        content_lower = entry.content.lower()
+        if entry.is_customer_communication:
+            # Check for frustration indicators
+            frustration_words = ['frustrated', 'disappointed', 'unacceptable', 'urgent', 'escalate', 'waiting', 'still no', 'again']
+            positive_words = ['thank', 'great', 'appreciate', 'helpful', 'excellent', 'resolved']
+            
+            frustration_count = sum(1 for word in frustration_words if word in content_lower)
+            positive_count = sum(1 for word in positive_words if word in content_lower)
+            
+            if frustration_count > positive_count:
+                insight["sentiment_indicator"] = "⚠️ Signs of frustration"
+                insight["detected_phrases"] = [w for w in frustration_words if w in content_lower]
+            elif positive_count > 0:
+                insight["sentiment_indicator"] = "✅ Positive tone"
+                insight["detected_phrases"] = [w for w in positive_words if w in content_lower]
+            else:
+                insight["sentiment_indicator"] = "➡️ Neutral"
+                insight["detected_phrases"] = []
+        else:
+            insight["sentiment_indicator"] = "📝 Engineer activity"
+            insight["detected_phrases"] = []
+        
+        insights.append(insight)
+    
+    return insights
 
 
 # =============================================================================
@@ -528,10 +643,46 @@ async def chat(request: ChatRequest):
         else:
             agent = _agent_sessions[session_key]
         
-        # Build the message with case context if provided
+        # Build the message with RICH case context if provided
         message = request.message
-        if request.case_id:
-            message = f"[Context: Discussing case {request.case_id}] {message}"
+        if request.case_id and app_state.dfm_client:
+            case = await app_state.dfm_client.get_case(request.case_id)
+            if case:
+                # Build rich context with full timeline
+                timeline_text = ""
+                for entry in case.timeline:
+                    entry_date = entry.created_on.strftime('%Y-%m-%d %H:%M')
+                    timeline_text += f"\n[{entry_date}] {entry.entry_type.value.upper()} by {entry.created_by}:\n"
+                    if entry.subject:
+                        timeline_text += f"Subject: {entry.subject}\n"
+                    timeline_text += f"{entry.content}\n"
+                    timeline_text += "-" * 40
+                
+                context = f"""
+=== FULL CASE CONTEXT FOR {case.id} ===
+
+CASE DETAILS:
+- Title: {case.title}
+- Status: {case.status.value}
+- Severity: {case.severity.value}
+- Customer: {case.customer.company} ({case.customer.tier} tier)
+- Owner: {case.owner.name}
+- Created: {case.created_on.strftime('%Y-%m-%d')} ({case.days_since_creation:.0f} days ago)
+- Last Updated: {case.modified_on.strftime('%Y-%m-%d')}
+- Days Since Last Note: {case.days_since_last_note:.1f}
+
+CASE DESCRIPTION:
+{case.description}
+
+FULL COMMUNICATION TIMELINE ({len(case.timeline)} entries):
+{timeline_text}
+
+=== END CASE CONTEXT ===
+
+The engineer is asking: {request.message}
+
+Provide a detailed, contextual response that references specific emails, dates, and events from the timeline above. Be specific about what you observe in the actual communications."""
+                message = context
         
         # Get response from agent
         response_text = await agent.chat(message)
@@ -784,6 +935,16 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
 # Serve static files if they exist
 static_path = Path(__file__).parent / "static"
 if static_path.exists():
+    # Serve index.html at /ui (must be before mount to take precedence)
+    @app.get("/ui", response_class=HTMLResponse)
+    async def serve_ui():
+        """Serve the frontend UI."""
+        index_file = static_path / "index.html"
+        if index_file.exists():
+            with open(index_file, 'r', encoding='utf-8') as f:
+                return HTMLResponse(content=f.read(), status_code=200)
+        return HTMLResponse(content="<h1>UI not found</h1>", status_code=404)
+    
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 

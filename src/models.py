@@ -159,6 +159,7 @@ class Customer(BaseModel):
     Attributes:
         id: Unique customer identifier (anonymized reference)
         company: Company name (if applicable)
+        tier: Support tier (Premier, Unified, Pro, etc.)
     """
     id: str = Field(
         description="Anonymized customer identifier"
@@ -166,6 +167,10 @@ class Customer(BaseModel):
     company: Optional[str] = Field(
         default=None,
         description="Customer's company name"
+    )
+    tier: Optional[str] = Field(
+        default="Standard",
+        description="Customer support tier (Premier, Unified, Pro, Standard)"
     )
 
 
@@ -190,7 +195,8 @@ class TimelineEntry(BaseModel):
     id: str = Field(
         description="Unique activity identifier"
     )
-    case_id: str = Field(
+    case_id: Optional[str] = Field(
+        default=None,
         description="Parent case identifier"
     )
     entry_type: TimelineEntryType = Field(
