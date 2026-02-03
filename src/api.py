@@ -952,24 +952,27 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
         # Insert Customers (actual schema: id, name, company, tier)
         customers = [
             ("cust-001", "Contoso Contact", "Contoso Ltd", "enterprise"),
-            ("cust-002", "Fabrikam Contact", "Fabrikam Inc", "enterprise"),
-            ("cust-003", "Northwind Contact", "Northwind Traders", "standard"),
-            ("cust-004", "Adventure Contact", "Adventure Works", "premium"),
-            ("cust-005", "Woodgrove Contact", "Woodgrove Bank", "enterprise"),
-            ("cust-006", "Tailspin Contact", "Tailspin Toys", "standard"),
+            ("cust-002", "Fabrikam Contact", "Fabrikam Manufacturing", "enterprise"),
+            ("cust-003", "Adventure Contact", "Adventure Works Retail", "standard"),
+            ("cust-004", "Northwind Contact", "Northwind Financial", "premium"),
+            ("cust-005", "Tailspin Contact", "Tailspin Aerospace", "enterprise"),
+            ("cust-006", "Wide World Contact", "Wide World Importers", "standard"),
         ]
         for c in customers:
             cursor.execute("INSERT INTO Customers (id, name, company, tier) VALUES (?, ?, ?, ?)", c)
         
         # Insert Cases (actual schema: id, title, customer_id, engineer_id, status, severity, created_at)
-        # Using severity as int: 1=low, 2=medium, 3=high, 4=critical
+        # Case IDs use realistic 16-digit MS Support format: YYMMDDHHMM + sequence
+        # Severity: 1=Sev C (low), 2=Sev B (medium), 3=Sev A (high/critical)
         cases = [
-            ("case-001", "Azure VM Performance Optimization", "cust-001", "eng-001", 1, 2, -10),
-            ("case-002", "Storage Account Access Issues", "cust-002", "eng-001", 1, 3, -5),
-            ("case-003", "Azure SQL Query Performance", "cust-003", "eng-002", 1, 2, -7),
-            ("case-004", "Billing Discrepancy Investigation", "cust-004", "eng-001", 1, 3, -14),
-            ("case-005", "App Service Deployment Failures", "cust-005", "eng-002", 1, 2, -8),
-            ("case-006", "Network Connectivity Problems", "cust-006", "eng-003", 1, 4, -12),
+            ("2501140050001234", "Azure AD B2C configuration for patient portal", "cust-001", "eng-001", 1, 1, -5),
+            ("2501130050005678", "Production SQL Server down after patching - CRITICAL", "cust-002", "eng-001", 1, 3, -4),
+            ("2501100050009012", "Azure DevOps pipeline optimization inquiry", "cust-003", "eng-001", 1, 1, -12),
+            ("2501080050003456", "Azure Kubernetes Service intermittent pod failures", "cust-004", "eng-002", 1, 2, -7),
+            ("2501090050007890", "Azure Synapse Analytics cost optimization", "cust-005", "eng-001", 1, 1, -6),
+            ("2501050050002345", "Azure Functions cold start improvements", "cust-006", "eng-002", 0, 1, -10),
+            ("2501120050006789", "Azure Logic Apps workflow debugging", "cust-003", "eng-001", 1, 1, -3),
+            ("2501100050004567", "Azure API Management gateway timeout issues", "cust-004", "eng-002", 1, 2, -8),
         ]
         for c in cases:
             cursor.execute(f"""
@@ -979,23 +982,27 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
         
         # Insert Timeline Entries (actual schema: id, case_id, entry_type, content, sentiment_score, created_at)
         timeline = [
-            ("tl-001-01", "case-001", "email", "Thanks for looking into this. We are seeing slow response times.", 0.6, -9),
-            ("tl-001-02", "case-001", "note", "Reviewed VM metrics. CPU peaks at 95%. Recommend scaling.", 0.5, -8),
-            ("tl-001-03", "case-001", "email", "Thank you so much for the quick response! Very helpful.", 0.9, -3),
-            ("tl-002-01", "case-002", "email", "This is URGENT! Our production application is DOWN!", -0.8, -4),
-            ("tl-002-02", "case-002", "note", "Checking storage account configuration and access policies.", 0.5, -3),
-            ("tl-002-03", "case-002", "email", "We have been waiting 2 days. This is completely unacceptable!", -0.9, -1),
-            ("tl-003-01", "case-003", "email", "Some queries are slower than expected. Can you help?", 0.3, -6),
-            ("tl-003-02", "case-003", "note", "Requested query execution plans for analysis.", 0.5, -5),
-            ("tl-003-03", "case-003", "email", "Here are the execution plans as requested.", 0.4, -2),
-            ("tl-004-01", "case-004", "email", "We noticed some unexpected charges. Can you clarify?", 0.2, -13),
-            ("tl-004-02", "case-004", "note", "Looking into billing details for the customer account.", 0.5, -12),
-            ("tl-004-03", "case-004", "email", "It has been a week! This is getting very frustrating!", -0.7, -10),
-            ("tl-005-01", "case-005", "email", "Deployments are failing randomly. Sometimes work, sometimes dont.", 0.1, -7),
-            ("tl-005-02", "case-005", "note", "Requested deployment logs and pipeline configuration.", 0.5, -6),
-            ("tl-006-01", "case-006", "email", "VMs cannot communicate across subnets. Blocking our project!", -0.3, -11),
-            ("tl-006-02", "case-006", "note", "NSG rules appear correct. Need deeper investigation.", 0.4, -10),
-            ("tl-006-03", "case-006", "email", "Stuck for over a week now. Very worried. Please escalate!", -0.6, -8),
+            # Case 1 - Happy customer (healthy)
+            ("tl-001-01", "2501140050001234", "email", "We are implementing Azure AD B2C for our patient portal. Need guidance on HIPAA compliance.", 0.6, -5),
+            ("tl-001-02", "2501140050001234", "note", "Customer implementing B2C for healthcare portal. Key requirements: HIPAA compliance, Feb 15 go-live.", 0.5, -5),
+            ("tl-001-03", "2501140050001234", "email", "Thank you for the quick response! The documentation was very helpful.", 0.9, -2),
+            ("tl-001-04", "2501140050001234", "note", "Sent custom policy documentation. Customer on track for Feb 15 go-live.", 0.5, 0),
+            # Case 2 - Frustrated customer (critical CSAT risk)
+            ("tl-002-01", "2501130050005678", "email", "Our production SQL Server crashed after patching. We CANNOT process orders. $50K/hour lost!", -0.8, -4),
+            ("tl-002-02", "2501130050005678", "note", "SEV1 - Production SQL down. Customer losing $50K/hr. Escalating to SQL PG.", 0.5, -4),
+            ("tl-002-03", "2501130050005678", "email", "DAY 2 - Still no resolution! Our VP is now involved. The lack of communication is unacceptable.", -0.9, -3),
+            ("tl-002-04", "2501130050005678", "email", "I am FURIOUS. $3.6 MILLION lost. Filing complaint with legal. ESCALATE NOW!", -1.0, -2),
+            ("tl-002-05", "2501130050005678", "note", "CRITICAL: Customer threatening legal. SQL PG provided recovery steps. Management aware.", 0.5, 0),
+            # Case 3 - 7-day rule breach (no recent notes)
+            ("tl-003-01", "2501100050009012", "email", "Our pipelines take 45 minutes. Want to get under 15 minutes.", 0.3, -12),
+            ("tl-003-02", "2501100050009012", "note", "Customer wants pipeline optimization. Requested YAML and build type info.", 0.5, -11),
+            ("tl-003-03", "2501100050009012", "email", "Here is our pipeline YAML as requested.", 0.4, -10),
+            ("tl-003-04", "2501100050009012", "note", "Received YAML. Identified optimization opportunities. Will document recommendations.", 0.5, -8),
+            # Case 4 - Declining sentiment
+            ("tl-004-01", "2501080050003456", "email", "Seeing intermittent pod restarts 2-3 times daily affecting our trading platform.", 0.3, -7),
+            ("tl-004-02", "2501080050003456", "note", "AKS pod restart issues. Checking for OOMKilled events and resource limits.", 0.5, -6),
+            ("tl-004-03", "2501080050003456", "email", "Tried your suggestion but restarts happening MORE frequently now!", -0.5, -4),
+            ("tl-004-04", "2501080050003456", "email", "It has been a WEEK! Traders losing confidence. Need resolution TODAY or escalating.", -0.8, -1),
         ]
         for t in timeline:
             cursor.execute(f"""
