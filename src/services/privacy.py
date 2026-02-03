@@ -55,9 +55,9 @@ IPV6_PATTERN = re.compile(r'\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b')
 # Social Security Numbers (US)
 SSN_PATTERN = re.compile(r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b')
 
-# Credit Card Numbers (basic patterns)
+# Credit Card Numbers (requires separators to avoid matching case IDs)
 CREDIT_CARD_PATTERN = re.compile(
-    r'\b(?:\d{4}[-.\s]?){3}\d{4}\b'  # 16 digits with optional separators
+    r'\b\d{4}[-.\s]\d{4}[-.\s]\d{4}[-.\s]\d{4}\b'  # 16 digits WITH separators required
 )
 
 # Azure/AWS/GCP resource IDs and keys (prevent accidental exposure)
@@ -69,6 +69,12 @@ GUID_PATTERN = re.compile(
 # Customer IDs and case IDs (redact the numeric part)
 CUSTOMER_ID_PATTERN = re.compile(
     r'\b(?:customer\s*(?:id|#|number)?:?\s*)(\d{5,})\b',
+    re.IGNORECASE
+)
+
+# Azure Subscription IDs (GUIDs preceded by "subscription")
+SUBSCRIPTION_ID_PATTERN = re.compile(
+    r'\b(?:subscription\s*(?:id)?:?\s*)([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\b',
     re.IGNORECASE
 )
 
@@ -91,6 +97,7 @@ REDACTION_TOKENS = {
     'ssn': '[SSN_REDACTED]',
     'credit_card': '[CARD_REDACTED]',
     'customer_id': '[CUSTOMER_ID_REDACTED]',
+    'subscription_id': '[SUBSCRIPTION_ID_REDACTED]',
     'guid': '[ID_REDACTED]',
     'url': '[URL_REDACTED]',
     'api_key': '[KEY_REDACTED]',
@@ -269,6 +276,13 @@ class PrivacyService:
                 scrubbed
             )
             redaction_count += count
+        
+        # Scrub Azure subscription IDs (always enabled - these are sensitive)
+        scrubbed, count = SUBSCRIPTION_ID_PATTERN.subn(
+            f"subscription {REDACTION_TOKENS['subscription_id']}",
+            scrubbed
+        )
+        redaction_count += count
         
         # Scrub GUIDs (careful - may affect case IDs)
         if self.scrub_guids:

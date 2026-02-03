@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 110" width="100" height="110">
+  <defs>
+    <linearGradient id="azure" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078D4"/>
+      <stop offset="100%" style="stop-color:#005A9E"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Shield -->
+  <path d="M50 5 L90 20 L90 50 C90 75 70 92 50 100 C30 92 10 75 10 50 L10 20 Z" 
+        fill="url(#azure)" stroke="#004578" stroke-width="2"/>
+  
+  <!-- Smile -->
+  <path d="M30 55 Q50 75 70 55" fill="none" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Eyes -->
+  <circle cx="35" cy="42" r="5" fill="white"/>
+  <circle cx="65" cy="42" r="5" fill="white"/>
+  
+  <!-- Pulse -->
+  <path d="M20 72 L35 72 L42 65 L50 78 L58 68 L65 72 L80 72" 
+        fill="none" stroke="#50E6FF" stroke-width="2" stroke-linecap="round"/>
+</svg>

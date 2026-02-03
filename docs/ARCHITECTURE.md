@@ -9,8 +9,7 @@
 | 3.0 | 2026-01-24 | Kyle Monteagudo | Updated for Commercial Azure (Central US), AI Foundry (AI Services + AI Hub) |
 | 4.0 | 2026-01-25 | Kyle Monteagudo | Fixed database concurrency, all analysis features working, Kudu deployment method |
 | 5.0 | 2026-01-26 | Kyle Monteagudo | **MSI Authentication**: Full managed identity implementation for SQL and OpenAI |
-| 6.0 | 2026-01-27 | Kyle Monteagudo | **DfM via Kusto**: DfM data is in Azure Data Explorer (ADX), not D365 OData. Teams Bot requires Azure Function gateway |
-
+| 6.0 | 2026-01-27 | Kyle Monteagudo | **DfM via Kusto**: DfM data is in Azure Data Explorer (ADX), not D365 OData. Teams Bot requires Azure Function gateway || 7.0 | 2026-02-03 | Kyle Monteagudo | **Static Frontend**: Microsoft Learn-style UI with HTML/CSS/JS served by FastAPI at `/ui` |
 ---
 
 ## Quick Links
@@ -43,16 +42,25 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 
 ## 2. High-Level Architecture
 
+### Frontend (New - February 2026)
+
+The application now includes a **Microsoft Learn-style static frontend** served directly by FastAPI:
+
+- **Access URL**: `https://app-csatguardian-dev.azurewebsites.net/ui`
+- **Technology**: Pure HTML/CSS/JavaScript (no build step required)
+- **Design**: Fluent Design System with dark theme
+- **Features**: Engineer Dashboard, Manager Dashboard, Sentiment Analysis, AI Chat
+
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │             CSAT GUARDIAN ARCHITECTURE (AZURE COMMERCIAL - PRIVATE NETWORKING)      │
 └────────────────────────────────────────────────────────────────────────────────────┘
 
                             ┌─────────────────────────────┐
-                            │       Cloud Shell Deploy    │
-                            │     (az webapp up)          │
+                            │       User Browser          │
+                            │   https://.../ui            │
                             └─────────────┬───────────────┘
-                                          │ Deploy
+                                          │ HTTPS
                                           ▼
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │                       AZURE COMMERCIAL CLOUD (Central US)                           │
@@ -143,14 +151,15 @@ CSAT Guardian is a cloud-native, AI-powered support case monitoring system desig
 
 ## 4. Component Details
 
-### 4.1 App Service (FastAPI + Semantic Kernel)
+### 4.1 App Service (FastAPI + Static Frontend + Semantic Kernel)
 
-**Purpose**: Hosts the FastAPI backend with AI-powered CSAT coaching agent
+**Purpose**: Hosts the FastAPI backend with AI-powered CSAT coaching agent AND the Microsoft Learn-style frontend UI
 
 **Why App Service?**
 - Simpler deployment for Python apps
 - Native VNet integration support
 - Managed identity for Key Vault access
+- Static file serving for frontend (no separate web server needed)
 
 **Configuration:**
 ```
@@ -159,12 +168,22 @@ Runtime: Python 3.11
 VNet Integration: snet-appservice
 Route All: Enabled (all outbound through VNet)
 URL: https://app-csatguardian-dev.azurewebsites.net
+UI URL: https://app-csatguardian-dev.azurewebsites.net/ui
 Startup Command: cd /home/site/wwwroot/src && pip install -r requirements.txt && python -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
+
+**Frontend Stack:**
+| Component | Technology | Location |
+|-----------|------------|----------|
+| HTML | Static HTML5 | `src/static/index.html` |
+| Styling | CSS3 (Fluent Design) | `src/static/css/styles.css` |
+| Logic | Vanilla JavaScript | `src/static/js/app.js` |
+| Icons | Fluent UI Icons (inline SVG) | Embedded in JS |
 
 **Deployed Endpoints:**
 | Endpoint | Status | Description |
 |----------|--------|-------------|
+| `/ui` | ✅ Working | **Static frontend UI** |
 | `/api/health` | ✅ Working | Health check |
 | `/api/cases` | ✅ Working | List cases from Azure SQL |
 | `/api/analyze/{id}` | ✅ Working | AI sentiment analysis |

@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
+  <defs>
+    <linearGradient id="azureGradientDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#50E6FF"/>
+      <stop offset="100%" style="stop-color:#0078D4"/>
+    </linearGradient>
+    <filter id="glowDark">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Dark background -->
+  <rect width="200" height="220" fill="#1a1a2e"/>
+  
+  <!-- Shield shape -->
+  <path d="M100 15 
+           L175 42 
+           L175 100 
+           C175 148 138 182 100 197 
+           C62 182 25 148 25 100 
+           L25 42 Z" 
+        fill="none" 
+        stroke="url(#azureGradientDark)" 
+        stroke-width="4"
+        filter="url(#glowDark)"/>
+  
+  <!-- Inner shield -->
+  <path d="M100 30 
+           L160 52 
+           L160 100 
+           C160 138 130 165 100 178 
+           C70 165 40 138 40 100 
+           L40 52 Z" 
+        fill="rgba(0,120,212,0.1)" 
+        stroke="rgba(80,230,255,0.3)" 
+        stroke-width="1"/>
+  
+  <!-- Face circle -->
+  <circle cx="100" cy="95" r="45" fill="none" stroke="rgba(80,230,255,0.3)" stroke-width="1"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="80" cy="85" rx="6" ry="8" fill="#50E6FF"/>
+  <ellipse cx="120" cy="85" rx="6" ry="8" fill="#50E6FF"/>
+  
+  <!-- Smile -->
+  <path d="M70 105 Q100 135 130 105" 
+        fill="none" 
+        stroke="#50E6FF" 
+        stroke-width="4" 
+        stroke-linecap="round"
+        filter="url(#glowDark)"/>
+  
+  <!-- Pulse line -->
+  <path d="M40 145 L60 145 L70 128 L85 160 L100 135 L110 150 L120 145 L160 145" 
+        fill="none" 
+        stroke="#00D4AA" 
+        stroke-width="3" 
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        filter="url(#glowDark)"/>
+  
+  <!-- Check badge -->
+  <circle cx="155" cy="50" r="16" fill="none" stroke="#00D4AA" stroke-width="2"/>
+  <path d="M147 50 L153 56 L165 42" 
+        fill="none" 
+        stroke="#00D4AA" 
+        stroke-width="3" 
+        stroke-linecap="round"/>
+</svg>

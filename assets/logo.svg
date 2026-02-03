@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
+  <defs>
+    <!-- Azure gradient -->
+    <linearGradient id="azureGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#005A9E;stop-opacity:1" />
+    </linearGradient>
+    <!-- Shield shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.3"/>
+    </filter>
+    <!-- Glow effect -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Shield shape -->
+  <path d="M100 10 
+           L180 40 
+           L180 100 
+           C180 150 140 185 100 200 
+           C60 185 20 150 20 100 
+           L20 40 Z" 
+        fill="url(#azureGradient)" 
+        stroke="#004578" 
+        stroke-width="3"
+        filter="url(#shadow)"/>
+  
+  <!-- Inner shield highlight -->
+  <path d="M100 25 
+           L165 50 
+           L165 100 
+           C165 140 135 170 100 183 
+           C65 170 35 140 35 100 
+           L35 50 Z" 
+        fill="none" 
+        stroke="rgba(255,255,255,0.3)" 
+        stroke-width="2"/>
+  
+  <!-- Happy face (satisfaction indicator) -->
+  <circle cx="100" cy="95" r="45" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="80" cy="85" rx="6" ry="8" fill="white"/>
+  <ellipse cx="120" cy="85" rx="6" ry="8" fill="white"/>
+  
+  <!-- Smile -->
+  <path d="M70 105 Q100 135 130 105" 
+        fill="none" 
+        stroke="white" 
+        stroke-width="5" 
+        stroke-linecap="round"
+        filter="url(#glow)"/>
+  
+  <!-- Pulse line (monitoring) -->
+  <path d="M40 140 L60 140 L70 125 L85 155 L100 130 L110 145 L120 140 L160 140" 
+        fill="none" 
+        stroke="#50E6FF" 
+        stroke-width="3" 
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+  
+  <!-- Small checkmark badge -->
+  <circle cx="155" cy="45" r="18" fill="#107C10"/>
+  <path d="M145 45 L152 52 L167 37" 
+        fill="none" 
+        stroke="white" 
+        stroke-width="4" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+</svg>

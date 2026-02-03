@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSAT Guardian</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="nav-brand">
+            <span style="font-size: 1.5rem;">🛡️</span>
+            <span class="nav-product-name" style="font-weight: 600; font-size: 1.1rem;">CSAT Guardian</span>
+        </div>
+        
+        <div class="nav-actions">
+            <div id="backend-status" class="status-indicator">
+                <span class="status-dot checking"></span>
+                <span class="status-text">Checking...</span>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+        <div id="breadcrumb">
+            <span class="breadcrumb-current">Home</span>
+        </div>
+    </div>
+    
+    <!-- Global Loading Indicator -->
+    <div id="global-loader" class="hidden" style="position: fixed; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); animation: loading-bar 1s infinite;"></div>
+    <style>
+        @keyframes loading-bar {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+    </style>
+    
+    <!-- Main Content Area -->
+    <main id="main-content" class="main-content">
+        <!-- Content will be dynamically inserted here -->
+        <div class="loading">
+            <div class="spinner"></div>
+        </div>
+    </main>
+    
+    <!-- Footer -->
+    <footer style="text-align: center; padding: var(--spacing-xl); color: var(--text-tertiary); font-size: 0.75rem; border-top: 1px solid var(--border-subtle); margin-top: var(--spacing-2xl);">
+        <p>CSAT Guardian &copy; 2026 Microsoft CSS • AI-Powered Customer Satisfaction Monitoring</p>
+        <p style="margin-top: var(--spacing-sm);">
+            Built with Azure OpenAI • Semantic Kernel • FastAPI
+        </p>
+    </footer>
+    
+    <!-- Application Script -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

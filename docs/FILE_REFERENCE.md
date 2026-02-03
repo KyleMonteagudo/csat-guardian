@@ -4,7 +4,7 @@
 > 
 > **Audience:** Developers, security auditors, project managers, and anyone who needs to understand this codebase.
 > 
-> **Last Updated:** January 28, 2026
+> **Last Updated:** February 3, 2026
 
 ---
 
@@ -51,6 +51,7 @@ Imagine you're a support engineer with 10 open cases. It's hard to remember:
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Core API | ✅ Working | All endpoints functional |
+| **Frontend UI** | ✅ Working | **Microsoft Learn-style HTML/CSS/JS at `/ui`** |
 | AI Analysis | ✅ Working | Azure OpenAI GPT-4o |
 | Database | ✅ Working | Azure SQL with MSI auth |
 | PII Protection | ✅ Working | Two-layer scrubbing |
@@ -97,20 +98,33 @@ CSAT Guardian acts like a vigilant assistant that:
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           USER INTERACTION                               │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
-│  │   Web API    │    │  Chat Agent  │    │   Alerts     │              │
-│  │  Dashboard   │    │  Interface   │    │  (Future)    │              │
-│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘              │
-└─────────┼───────────────────┼───────────────────┼───────────────────────┘
-          │                   │                   │
-          ▼                   ▼                   ▼
+│                                                                          │
+│   ┌───────────────────────────────────────────────────────────────┐      │
+│   │                    STATIC FRONTEND (src/static/)                  │      │
+│   │                                                                   │      │
+│   │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │      │
+│   │   │  index.html  │  │ styles.css   │  │   app.js     │          │      │
+│   │   │  (HTML5 UI)  │  │ (Fluent CSS) │  │ (870 lines)  │          │      │
+│   │   └──────────────┘  └──────────────┘  └──────────────┘          │      │
+│   │                                                                   │      │
+│   │   Features:                                                       │      │
+│   │   • Engineer Dashboard (case list, sentiment status)              │      │
+│   │   • Manager Dashboard (team overview, critical cases)             │      │
+│   │   • Real-time Sentiment Analysis with AI                         │      │
+│   │   • AI Chat Interface with CSAT coaching                         │      │
+│   └───────────────────────────┬───────────────────────────────────┘      │
+│                                  │ fetch() API calls                         │
+└──────────────────────────────────┼───────────────────────────────────────────┘
+                                   │
+                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         CSAT GUARDIAN CORE                               │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │                     FastAPI Application (api.py)                  │   │
 │  │                                                                   │   │
-│  │  • Receives HTTP requests                                        │   │
+│  │  • Serves static frontend at /ui                                 │   │
+│  │  • Receives HTTP requests at /api/*                              │   │
 │  │  • Routes to appropriate services                                │   │
 │  │  • Returns JSON responses                                        │   │
 │  └───────────────────────────┬──────────────────────────────────────┘   │

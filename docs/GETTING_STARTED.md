@@ -40,13 +40,21 @@ CSAT Guardian is an AI-powered assistant that helps Microsoft Support Engineers 
 
 ## 🚀 Quick Start (5 minutes)
 
-### If you just want to understand the code:
+### If you just want to see the app running:
+
+1. **Open** the UI: `https://app-csatguardian-dev.azurewebsites.net/ui`
+2. **Click** Engineer Mode to see the case dashboard
+3. **Click** Manager Mode to see team overview
+4. **Try** the sentiment analysis on any case
+
+### If you want to understand the code:
 
 1. **Read** [FILE_REFERENCE.md](FILE_REFERENCE.md) - it explains every file
-2. **Browse** `/src/api.py` - the main application
-3. **Check** `/src/models.py` - all data structures
+2. **Browse** `/src/api.py` - the main FastAPI application
+3. **Browse** `/src/static/` - the frontend UI (HTML/CSS/JS)
+4. **Check** `/src/models.py` - all data structures
 
-### If you want to test the running application:
+### If you want to test the API directly:
 
 1. **Open** Azure Portal → CSAT_Guardian_Dev resource group
 2. **Connect** to `vm-devbox-csatguardian` via Bastion
@@ -89,10 +97,20 @@ az webapp deploy --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev 
 | Technology | What It Does | Why We Chose It |
 |------------|--------------|-----------------|
 | **Python 3.11** | Main programming language | Team expertise, great AI libraries |
-| **FastAPI** | Web framework | Fast, modern, auto-generates docs |
+| **FastAPI** | Web framework + static file serving | Fast, modern, auto-generates docs |
+| **HTML/CSS/JS** | Frontend UI | No build step, deploys with backend |
 | **Semantic Kernel** | AI orchestration | Microsoft's official AI SDK |
 | **Pydantic** | Data validation | Type safety, auto-documentation |
 | **pyodbc** | Database driver | Best Azure SQL support |
+
+### Frontend Design
+
+| Component | Description |
+|-----------|-------------|
+| **Fluent Design** | Microsoft's design language (dark theme) |
+| **Static Files** | Pure HTML/CSS/JS served by FastAPI at `/ui` |
+| **No Build Step** | No npm, webpack, or bundler required |
+| **Responsive** | Works on desktop and mobile |
 
 ### Azure Services
 
