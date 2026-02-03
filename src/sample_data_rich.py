@@ -4,14 +4,14 @@
 # This module provides comprehensive mock data for testing the agent locally.
 # 
 # Cases included:
-# - case-001: Happy customer (ideal behavior)
-# - case-002: Frustrated customer (CSAT risk - escalation language)
-# - case-003: 7-day rule breach (no notes in 8 days)
-# - case-004: Declining sentiment (started good, getting worse)
-# - case-005: 2-day rule violation (no comms in 3 days)
-# - case-006: Resolved happy (well-handled)
-# - case-007: 5-hour rule violation (email sent, no notes)
-# - case-008: Complex third-party dependency
+# - 2501140050001234: Happy customer (ideal behavior)
+# - 2501130050005678: Frustrated customer (CSAT risk - escalation language)
+# - 2501100050009012: 7-day rule breach (no notes in 8 days)
+# - 2501080050003456: Declining sentiment (started good, getting worse)
+# - 2501090050007890: 2-day rule violation (no comms in 3 days)
+# - 2501050050002345: Resolved happy (well-handled)
+# - 2501120050006789: 5-hour rule violation (email sent, no notes)
+# - 2501100050004567: Complex third-party dependency
 # =============================================================================
 
 from datetime import datetime, timedelta
@@ -65,7 +65,7 @@ def get_sample_cases() -> List[Case]:
     
     Each case is designed to test specific CSAT rules and scenarios.
     """
-    now = datetime.now()
+    now = datetime.utcnow()  # Use UTC for consistency with days_since calculations
     engineers = {e.id: e for e in get_sample_engineers()}
     customers = {c.id: c for c in get_sample_customers()}
     
@@ -146,7 +146,7 @@ def get_sample_cases() -> List[Case]:
                 subject="Follow-up Note",
                 content="Sent custom policy documentation. Customer has everything needed to proceed. Will check in Friday to see if they have questions. On track for Feb 15 go-live.",
                 created_by="Kevin Monteagudo",
-                created_on=now - timedelta(days=1, hours=-1),
+                created_on=now - timedelta(hours=2),  # Very recent note
                 is_customer_communication=False
             ),
             TimelineEntry(
@@ -257,6 +257,24 @@ def get_sample_cases() -> List[Case]:
                 created_by="Customer",
                 created_on=now - timedelta(days=2),
                 is_customer_communication=True
+            ),
+            TimelineEntry(
+                id="tl-002-10",
+                entry_type=TimelineEntryType.NOTE,
+                subject="Urgent Escalation Note",
+                content="CRITICAL: Customer threatening legal action. SQL PG provided recovery steps - implementing now. Need to call customer within the hour with update. Management aware.",
+                created_by="Kevin Monteagudo",
+                created_on=now - timedelta(hours=4),  # Recent note today
+                is_customer_communication=False
+            ),
+            TimelineEntry(
+                id="tl-002-11",
+                entry_type=TimelineEntryType.EMAIL_SENT,
+                subject="Recovery Progress Update",
+                content="I sincerely apologize for the delay in updates. I have been working with our SQL Product Group and we have identified the root cause - a known issue with KB5032679 and certain database configurations. We have a recovery procedure ready. I am available RIGHT NOW for a call to walk through the steps. Please let me know the best number to reach you.",
+                created_by="Kevin Monteagudo",
+                created_on=now - timedelta(hours=3),  # Very recent outbound
+                is_customer_communication=False
             ),
         ]
     )
