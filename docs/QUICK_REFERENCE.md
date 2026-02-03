@@ -14,7 +14,8 @@
 
 | Service | URL |
 |---------|-----|
-| App Service | https://app-csatguardian-dev.azurewebsites.net |
+| **Frontend UI** | https://app-csatguardian-dev.azurewebsites.net/ui |
+| App Service (API) | https://app-csatguardian-dev.azurewebsites.net |
 | Swagger Docs | https://app-csatguardian-dev.azurewebsites.net/docs |
 | Kudu Console | https://app-csatguardian-dev.scm.azurewebsites.net/DebugConsole |
 | Log Stream | https://app-csatguardian-dev.scm.azurewebsites.net/api/logstream |
@@ -109,7 +110,10 @@ Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/chat"
 
 | File | Purpose |
 |------|---------|
-| `src/api.py` | FastAPI endpoints |
+| `src/api.py` | FastAPI endpoints + static file serving |
+| `src/static/index.html` | **Frontend UI (Microsoft Learn-style)** |
+| `src/static/css/styles.css` | **Frontend styles (Fluent Design)** |
+| `src/static/js/app.js` | **Frontend JavaScript (~870 lines)** |
 | `src/agent/guardian_agent.py` | Semantic Kernel agent |
 | `src/db_sync.py` | Azure SQL database client |
 | `src/models.py` | Pydantic data models |

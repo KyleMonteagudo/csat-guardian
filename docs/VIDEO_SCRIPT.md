@@ -1,15 +1,24 @@
 # CSAT Guardian - 2 Minute Video Script
 
 ## Hackathon Submission Video
-**Target Duration:** 2:00 minutes
-**Speaker:** Kyle Monteagudo
+**Target Duration:** 2:00 minutes  
+**Speaker:** Kyle Monteagudo  
+**Last Updated:** February 3, 2026
+
+---
+
+## DEMO ENVIRONMENT
+
+- **URL:** `https://app-csatguardian-dev.azurewebsites.net/ui`
+- **Frontend:** Microsoft Learn-style static HTML/CSS/JS
+- **Backend:** FastAPI + Semantic Kernel + Azure OpenAI GPT-4o
 
 ---
 
 ## SCRIPT
 
 ### Opening (0:00 - 0:15)
-*[Show landing page with CSAT Guardian logo]*
+*[Open browser to /ui - show landing page with CSAT Guardian branding]*
 
 > "Hi, I'm Kyle Monteagudo, and this is **CSAT Guardian** - an AI-powered solution that transforms reactive customer support into proactive customer success.
 >
@@ -18,7 +27,7 @@
 ---
 
 ### The Solution (0:15 - 0:30)
-*[Stay on landing page, highlight the three feature bullets]*
+*[Stay on landing page, highlight the three feature cards]*
 
 > "CSAT Guardian solves this by analyzing customer communications in **real-time** using Azure OpenAI. We detect frustration as it happens, not after it's too late.
 >
@@ -31,41 +40,41 @@
 
 > "First, let's look at the **Engineer Dashboard**."
 
-*[Dashboard loads - point to alert banner]*
+*[Dashboard loads - point to alert banner and metrics cards]*
 
-> "Immediately, I can see I have one critical case that needs attention. The dashboard shows all my active cases with their sentiment status - critical, at-risk, or positive."
+> "Immediately, I can see my case metrics - total cases, at-risk cases, and my average CSAT score. The dashboard shows all my active cases with their sentiment status - critical in red, at-risk in yellow, or positive in green."
 
-*[Point to the at-risk cases section]*
+*[Point to the sentiment indicators on case cards]*
 
-> "For each case, our AI provides a real-time analysis. Here, we've detected that this customer is 'highly frustrated due to extended downtime' and recommends 'immediate intervention.'"
+> "For each case, our AI provides a real-time analysis. Here, we've detected that this customer is frustrated due to extended downtime."
 
-*[Click into case detail]*
+*[Click Analyze button on a case]*
 
-> "Drilling into a case, I get the full AI analysis, risk factors, the customer's latest message, and - most importantly - specific recommended actions to turn this situation around."
+> "Clicking Analyze runs GPT-4o sentiment analysis in real-time. You can see the sentiment score, risk factors, and - most importantly - specific recommended actions to turn this situation around."
 
 ---
 
 ### Manager Mode Demo (1:05 - 1:40)
-*[Click Back, then Back to Home, then Manager Mode]*
+*[Click Back to Home, then Manager Mode]*
 
 > "Now let's see the **Manager View**."
 
-*[Dashboard loads]*
+*[Dashboard loads with team overview]*
 
-> "As a manager, I get a bird's eye view of my entire team's CSAT health. I can immediately see we have 5 critical cases across the team, and which engineers need support."
+> "As a manager, I get a bird's eye view of my entire team's CSAT health. I can see team-wide metrics, and which engineers need support."
 
 *[Point to engineer cards]*
 
-> "Each engineer is shown with their average CSAT and cases at risk. James here has three at-risk cases and might need coaching or workload balancing."
+> "Each engineer is shown with their case load and average CSAT. I can quickly identify who might need coaching or workload balancing."
 
 *[Point to critical cases section]*
 
-> "At the bottom, I see every critical case across my team, with AI analysis, so I can prioritize where to intervene first."
+> "At the bottom, I see every critical case across my team, so I can prioritize where to intervene first."
 
 ---
 
 ### Tech & Close (1:40 - 2:00)
-*[Show landing page or banner image]*
+*[Show landing page or chat with AI feature]*
 
 > "Under the hood, CSAT Guardian uses **Semantic Kernel** with **Azure OpenAI's GPT-4o** for sentiment analysis, and **Azure AI Content Safety** for enterprise-grade PII protection - ensuring customer data never reaches the AI unprotected.
 >

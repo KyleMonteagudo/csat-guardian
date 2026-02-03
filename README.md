@@ -24,11 +24,13 @@
 
 | Component | Status | Details |
 |-----------|--------|---------|
+| **Frontend UI** | ✅ Running | **Microsoft Learn-style HTML/CSS/JS at `/ui`** |
 | Azure SQL Database | ✅ Deployed | 12 tables, 8 test cases with timelines |
 | App Service | ✅ Running | Python 3.11, VNet integrated, private endpoints |
 | Azure OpenAI | ✅ Connected | GPT-4o via MSI authentication |
 | Semantic Kernel Agent | ✅ Working | Function calling with CSAT rules plugin |
 | MSI Authentication | ✅ Working | No API keys - SQL and OpenAI both use managed identity |
+| `/ui` | ✅ Working | **Static frontend served by FastAPI** |
 | `/api/health` | ✅ Working | Health check endpoint |
 | `/api/cases` | ✅ Working | Lists cases from Azure SQL |
 | `/api/analyze/{id}` | ✅ Working | Sentiment analysis (AI-powered) |
@@ -41,7 +43,6 @@
 | DfM/Kusto Integration | High | ⏳ Awaiting access | Data is in Azure Data Explorer (Kusto), not D365 OData |
 | Teams Bot Integration | High | ⏳ Awaiting security approval | Need approval for Azure Function gateway |
 | Directory Readers Role | Medium | ⏳ Awaiting Entra admin | SQL Server MSI needs this for least-privilege |
-| Manager Dashboard | Medium | Not started | Aggregate view of team CSAT health |
 | CI/CD Pipeline | Low | Blocked | Network restrictions prevent GitHub Actions |
 
 ---
@@ -257,10 +258,14 @@ Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/chat"
 ```
 csat-guardian/
 ├── src/
-│   ├── api.py                    # FastAPI REST endpoints
+│   ├── api.py                    # FastAPI REST endpoints + static serving
 │   ├── config.py                 # Configuration management
 │   ├── db_sync.py                # Azure SQL sync client
 │   ├── models.py                 # Pydantic data models
+│   ├── static/                   # ** FRONTEND UI **
+│   │   ├── index.html            # Microsoft Learn-style HTML
+│   │   ├── css/styles.css        # Fluent Design CSS
+│   │   └── js/app.js             # Frontend JavaScript
 │   ├── agent/
 │   │   ├── guardian_agent.py     # Semantic Kernel agent
 │   │   └── csat_rules_plugin.py  # CSAT rules function plugin
@@ -341,9 +346,8 @@ Ensure startup command includes `pip install -r requirements.txt`
 
 1. **DfM Integration**: Replace seed data with real case sync
 2. **Teams Notifications**: Alert managers on CSAT risks
-3. **Dashboard UI**: React or Power BI dashboard for engineers
-4. **Manager Mode**: Aggregate team CSAT metrics
-5. **CI/CD Pipeline**: GitHub Actions for automated deployment
+3. **CI/CD Pipeline**: GitHub Actions for automated deployment
+4. **Real-time Updates**: WebSocket for live dashboard refresh
 
 ---
 
