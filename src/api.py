@@ -346,26 +346,114 @@ async def list_cases(
         if severity:
             cases = [c for c in cases if c.severity.value == severity]
         
+        # Calculate sentiment/CSAT risk for each case based on timeline content
+        case_data = []
+        for c in cases:
+            # Calculate CSAT risk score based on customer communications
+            csat_risk_score = _calculate_csat_risk(c)
+            
+            case_data.append({
+                "id": c.id,
+                "title": c.title,
+                "status": c.status.value,
+                "severity": c.severity.value,
+                "customer": {"company": c.customer.company, "tier": c.customer.tier} if c.customer else None,
+                "owner": {"id": c.owner.id, "name": c.owner.name} if c.owner else None,
+                "created_on": c.created_on.isoformat() if c.created_on else None,
+                "days_since_last_note": c.days_since_last_note,
+                "days_since_last_outbound": c.days_since_last_outbound,
+                "timeline_count": len(c.timeline) if c.timeline else 0,
+                "sentiment_score": csat_risk_score,  # CSAT risk (0=high risk, 1=low risk)
+                "csat_risk": _get_risk_label(csat_risk_score),
+            })
+        
         return {
-            "count": len(cases),
-            "cases": [
-                {
-                    "id": c.id,
-                    "title": c.title,
-                    "status": c.status.value,
-                    "severity": c.severity.value,
-                    "customer_company": c.customer.company if c.customer else None,
-                    "owner_name": c.owner.name if c.owner else None,
-                    "created_on": c.created_on.isoformat() if c.created_on else None,
-                    "days_since_last_note": c.days_since_last_note,
-                    "timeline_count": len(c.timeline) if c.timeline else 0
-                }
-                for c in cases
-            ]
+            "count": len(case_data),
+            "cases": case_data
         }
     except Exception as e:
         logger.error(f"Failed to list cases: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _calculate_csat_risk(case) -> float:
+    """
+    Calculate CSAT risk score for a case based on customer communications.
+    
+    Returns a score from 0 to 1 where:
+    - 0.0-0.3 = High risk (customer frustrated)
+    - 0.3-0.6 = Medium risk (some concerns)
+    - 0.6-1.0 = Low risk (customer satisfied)
+    """
+    # Get customer communications
+    customer_msgs = [
+        e for e in case.timeline 
+        if e.is_customer_communication or e.created_by == "Customer"
+    ]
+    
+    if not customer_msgs:
+        return 0.6  # Neutral if no customer comms yet
+    
+    # Analyze sentiment indicators in customer messages
+    frustration_indicators = [
+        'frustrated', 'disappointed', 'unacceptable', 'urgent', 'escalate',
+        'waiting', 'still no', 'again', 'furious', 'angry', 'legal',
+        'manager', 'complaint', 'nightmare', 'unacceptable', 'terrible',
+        'horrible', 'worst', 'ridiculous', 'outrageous', 'days', 'hours',
+        'no response', 'no update', 'ignored'
+    ]
+    positive_indicators = [
+        'thank', 'great', 'appreciate', 'helpful', 'excellent', 'resolved',
+        'perfect', 'amazing', 'wonderful', 'fantastic', 'awesome', 'good job',
+        'well done', 'impressed', 'saved', 'exactly what', 'works great'
+    ]
+    
+    # Weight more recent messages higher
+    total_score = 0.0
+    total_weight = 0.0
+    
+    for i, msg in enumerate(customer_msgs):
+        content_lower = msg.content.lower()
+        
+        # Count indicators
+        frustration_count = sum(1 for word in frustration_indicators if word in content_lower)
+        positive_count = sum(1 for word in positive_indicators if word in content_lower)
+        
+        # Calculate message score (0-1)
+        if frustration_count > positive_count:
+            # More frustration = lower score
+            msg_score = max(0.1, 0.5 - (frustration_count * 0.1))
+        elif positive_count > 0:
+            msg_score = min(0.95, 0.7 + (positive_count * 0.05))
+        else:
+            msg_score = 0.5  # Neutral
+        
+        # Weight recent messages more (exponential)
+        weight = 1.0 + (i * 0.5)  # Later messages get more weight
+        total_score += msg_score * weight
+        total_weight += weight
+    
+    # Calculate weighted average
+    avg_score = total_score / total_weight if total_weight > 0 else 0.5
+    
+    # Factor in communication gaps (2-day rule violation = risk)
+    days_since_outbound = case.days_since_last_outbound
+    if days_since_outbound > 3:
+        avg_score = max(0.1, avg_score - 0.2)  # Penalize for no communication
+    elif days_since_outbound > 2:
+        avg_score = max(0.2, avg_score - 0.1)
+    
+    return round(avg_score, 2)
+
+
+def _get_risk_label(score: float) -> str:
+    """Get CSAT risk label from score."""
+    if score < 0.35:
+        return "critical"
+    elif score < 0.55:
+        return "at_risk"
+    else:
+        return "healthy"
 
 
 @app.get("/api/cases/{case_id}")
@@ -379,6 +467,9 @@ async def get_case(case_id: str):
         if not case:
             raise HTTPException(status_code=404, detail=f"Case {case_id} not found")
         
+        # Calculate CSAT risk
+        csat_risk_score = _calculate_csat_risk(case)
+        
         return {
             "id": case.id,
             "title": case.title,
@@ -387,7 +478,8 @@ async def get_case(case_id: str):
             "severity": case.severity.value,
             "customer": {
                 "id": case.customer.id,
-                "company": case.customer.company
+                "company": case.customer.company,
+                "tier": case.customer.tier
             } if case.customer else None,
             "owner": {
                 "id": case.owner.id,
@@ -398,6 +490,9 @@ async def get_case(case_id: str):
             "modified_on": case.modified_on.isoformat() if case.modified_on else None,
             "days_open": case.days_since_creation,
             "days_since_last_note": case.days_since_last_note,
+            "days_since_last_outbound": case.days_since_last_outbound,
+            "sentiment_score": csat_risk_score,
+            "csat_risk": _get_risk_label(csat_risk_score),
             "timeline": [
                 {
                     "id": t.id,

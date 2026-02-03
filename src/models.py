@@ -43,11 +43,11 @@ class CaseSeverity(str, Enum):
     Enumeration of case severity levels.
     
     These map to the severitycode field in Dynamics 365 Incident entity.
+    Microsoft Support uses A/B/C severity levels only.
     """
     SEV_A = "sev_a"      # Critical - Production down
     SEV_B = "sev_b"      # High - Major impact
     SEV_C = "sev_c"      # Medium - Moderate impact
-    SEV_D = "sev_d"      # Low - Minimal impact
 
 
 class SentimentLabel(str, Enum):
@@ -339,6 +339,32 @@ class Case(BaseModel):
         # Find the most recent note
         latest_note = max(notes, key=lambda x: x.created_on)
         delta = datetime.utcnow() - latest_note.created_on
+        return delta.total_seconds() / (24 * 3600)
+    
+    @property
+    def days_since_last_outbound(self) -> float:
+        """
+        Calculate days since the last outgoing customer communication.
+        
+        This looks at email_sent entries for 2-day communication tracking.
+        
+        Returns:
+            float: Days elapsed since last outbound communication (or since creation if none)
+        """
+        # Filter to outbound communications (emails sent to customer)
+        outbound = [
+            e for e in self.timeline 
+            if e.entry_type == TimelineEntryType.EMAIL_SENT or 
+               (e.entry_type == TimelineEntryType.EMAIL and not e.is_customer_communication)
+        ]
+        
+        if not outbound:
+            # No outbound comms, use case creation date
+            return self.days_since_creation
+        
+        # Find the most recent outbound
+        latest_outbound = max(outbound, key=lambda x: x.created_on)
+        delta = datetime.utcnow() - latest_outbound.created_on
         return delta.total_seconds() / (24 * 3600)
     
     class Config:

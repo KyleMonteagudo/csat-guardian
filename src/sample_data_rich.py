@@ -76,7 +76,7 @@ def get_sample_cases() -> List[Case]:
     # Tests: Ideal behavior, no violations
     # =========================================================================
     case1 = Case(
-        id="case-001",
+        id="2501140050001234",
         title="Azure AD B2C configuration for patient portal",
         description="We are implementing Azure AD B2C for our new patient portal and need guidance on best practices for healthcare compliance.",
         status=CaseStatus.ACTIVE,
@@ -167,7 +167,7 @@ def get_sample_cases() -> List[Case]:
     # Tests: 2-day rule violation, declining sentiment, CSAT risk
     # =========================================================================
     case2 = Case(
-        id="case-002",
+        id="2501130050005678",
         title="Production SQL Server down after patching - CRITICAL",
         description="Our production SQL Server went down after applying the monthly patches. We cannot process orders. This is a SEV1 situation affecting $50K/hour in revenue.",
         status=CaseStatus.ACTIVE,
@@ -267,11 +267,11 @@ def get_sample_cases() -> List[Case]:
     # Tests: 7-day notes rule violation
     # =========================================================================
     case3 = Case(
-        id="case-003",
+        id="2501100050009012",
         title="Azure DevOps pipeline optimization inquiry",
         description="We would like guidance on optimizing our Azure DevOps pipelines for faster build times.",
         status=CaseStatus.ACTIVE,
-        severity=CaseSeverity.SEV_D,
+        severity=CaseSeverity.SEV_C,
         owner=engineers["eng-001"],
         customer=customers["cust-003"],
         created_on=now - timedelta(days=12),
@@ -332,7 +332,7 @@ def get_sample_cases() -> List[Case]:
     # Tests: Sentiment trend analysis
     # =========================================================================
     case4 = Case(
-        id="case-004",
+        id="2501080050003456",
         title="Azure Kubernetes Service intermittent pod failures",
         description="We are experiencing random pod restarts in our AKS cluster. Happening 2-3 times per day affecting our trading platform.",
         status=CaseStatus.ACTIVE,
@@ -441,7 +441,7 @@ def get_sample_cases() -> List[Case]:
     # Tests: 2-day communication rule violation
     # =========================================================================
     case5 = Case(
-        id="case-005",
+        id="2501090050007890",
         title="Azure Synapse Analytics cost optimization",
         description="Looking for ways to reduce our Azure Synapse costs which have been higher than expected.",
         status=CaseStatus.ACTIVE,
@@ -506,7 +506,7 @@ def get_sample_cases() -> List[Case]:
     # Tests: Example of well-handled case
     # =========================================================================
     case6 = Case(
-        id="case-006",
+        id="2501050050002345",
         title="Power BI embedded licensing questions",
         description="Need clarification on Power BI Embedded licensing for our customer-facing analytics portal.",
         status=CaseStatus.RESOLVED,
@@ -588,7 +588,7 @@ def get_sample_cases() -> List[Case]:
     # Tests: 5-hour email-to-notes rule
     # =========================================================================
     case7 = Case(
-        id="case-007",
+        id="2501120050006789",
         title="Azure Front Door WAF rule configuration",
         description="Need help configuring WAF rules for our healthcare API endpoints.",
         status=CaseStatus.ACTIVE,
@@ -653,7 +653,7 @@ def get_sample_cases() -> List[Case]:
     # Tests: Handling blocked scenarios
     # =========================================================================
     case8 = Case(
-        id="case-008",
+        id="2501100050004567",
         title="SAP integration with Azure Data Factory failing",
         description="Our ADF pipeline that connects to SAP has been failing since the SAP upgrade last week. Need help troubleshooting.",
         status=CaseStatus.ACTIVE,

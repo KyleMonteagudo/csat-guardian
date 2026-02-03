@@ -30,6 +30,32 @@ const state = {
 };
 
 // =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Format severity from "sev_a", "sev_b" etc to just "A", "B", "C", "D"
+ */
+function formatSeverity(severity) {
+    if (!severity) return 'C';
+    const sev = severity.toLowerCase().replace('sev_', '').replace('sev', '').toUpperCase();
+    return sev || 'C';
+}
+
+/**
+ * Get severity badge class based on level
+ */
+function getSeverityBadgeClass(severity) {
+    const sev = formatSeverity(severity);
+    switch (sev) {
+        case 'A': return 'badge-danger';
+        case 'B': return 'badge-warning';
+        case 'C': return 'badge-info';
+        default: return 'badge-info';
+    }
+}
+
+// =============================================================================
 // API Functions
 // =============================================================================
 
@@ -46,16 +72,32 @@ async function apiGet(endpoint) {
 
 async function apiPost(endpoint, data) {
     try {
+        // Add timeout for chat requests (30 seconds)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
         const response = await fetch(`${CONFIG.API_BASE}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
+            signal: controller.signal,
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`API POST ${endpoint} error: ${response.status} - ${errorText}`);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
         return await response.json();
     } catch (error) {
+        if (error.name === 'AbortError') {
+            console.error(`API POST ${endpoint} timed out`);
+            return { error: 'timeout', message: 'Request timed out. The AI service may be unavailable or slow. Please try again.' };
+        }
         console.error(`API POST ${endpoint} failed:`, error);
-        return null;
+        return { error: 'failed', message: error.message };
     }
 }
 
@@ -216,24 +258,30 @@ async function renderEngineerDashboard() {
     
     state.cases = casesData.cases || casesData || [];
     
-    // Calculate metrics
-    const critical = state.cases.filter(c => (c.days_since_last_note || 0) >= 7).length;
-    const warning = state.cases.filter(c => {
-        const days = c.days_since_last_note || 0;
-        return days >= 5 && days < 7;
+    // Calculate CSAT risk metrics (focus on sentiment, not just days)
+    const critical = state.cases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
+    const atRisk = state.cases.filter(c => {
+        const score = c.sentiment_score || 0.5;
+        return score >= 0.35 && score < 0.55;
     }).length;
-    const healthy = state.cases.length - critical - warning;
+    const healthy = state.cases.length - critical - atRisk;
     
-    // Render alerts
+    // Render alerts - focus on CSAT risk, not SLA
     if (critical > 0) {
         document.getElementById('alerts-container').innerHTML = `
             <div class="alert-banner danger">
-                🚨 <strong>SLA Alert:</strong> ${critical} case${critical > 1 ? 's' : ''} exceeded 7-day update requirement
+                🚨 <strong>CSAT Alert:</strong> ${critical} case${critical > 1 ? 's' : ''} with critical customer satisfaction risk - immediate attention needed
+            </div>
+        `;
+    } else if (atRisk > 0) {
+        document.getElementById('alerts-container').innerHTML = `
+            <div class="alert-banner warning">
+                ⚠️ <strong>CSAT Warning:</strong> ${atRisk} case${atRisk > 1 ? 's' : ''} showing signs of declining customer satisfaction
             </div>
         `;
     }
     
-    // Render metrics
+    // Render metrics - CSAT focused
     document.getElementById('metrics-container').innerHTML = `
         <div class="metric-card">
             <div class="metric-value">${state.cases.length}</div>
@@ -241,10 +289,10 @@ async function renderEngineerDashboard() {
         </div>
         <div class="metric-card">
             <div class="metric-value danger">${critical}</div>
-            <div class="metric-label">SLA Breach</div>
+            <div class="metric-label">Critical CSAT</div>
         </div>
         <div class="metric-card">
-            <div class="metric-value warning">${warning}</div>
+            <div class="metric-value warning">${atRisk}</div>
             <div class="metric-label">At Risk</div>
         </div>
         <div class="metric-card">
@@ -272,8 +320,8 @@ async function renderEngineerDashboard() {
                         <th>Title</th>
                         <th>Status</th>
                         <th>Severity</th>
-                        <th>Last Note</th>
                         <th>Customer</th>
+                        <th>CSAT Risk</th>
                         <th>Sentiment</th>
                     </tr>
                 </thead>
@@ -286,30 +334,40 @@ async function renderEngineerDashboard() {
 }
 
 function renderCaseRow(caseData) {
-    const daysNote = caseData.days_since_last_note || 0;
-    let statusBadge = 'badge-success';
-    let statusIcon = '✅';
-    if (daysNote >= 7) {
-        statusBadge = 'badge-danger';
-        statusIcon = '🚨';
-    } else if (daysNote >= 5) {
-        statusBadge = 'badge-warning';
-        statusIcon = '⚠️';
+    const sentiment = caseData.sentiment_score || 0.5;
+    const csatRisk = caseData.csat_risk || 'healthy';
+    
+    // CSAT risk indicator (based on sentiment score)
+    let riskBadge = 'badge-success';
+    let riskIcon = '✅';
+    let riskLabel = 'Healthy';
+    if (csatRisk === 'critical' || sentiment < 0.35) {
+        riskBadge = 'badge-danger';
+        riskIcon = '🚨';
+        riskLabel = 'Critical';
+    } else if (csatRisk === 'at_risk' || sentiment < 0.55) {
+        riskBadge = 'badge-warning';
+        riskIcon = '⚠️';
+        riskLabel = 'At Risk';
     }
     
-    const sentiment = caseData.sentiment_score || 0.5;
     const sentimentClass = getSentimentClass(sentiment);
+    const daysNote = Math.round(caseData.days_since_last_note || 0);
+    const daysComm = Math.round(caseData.days_since_last_outbound || 0);
+    
+    const sevLetter = formatSeverity(caseData.severity);
+    const sevClass = getSeverityBadgeClass(caseData.severity);
     
     return `
         <tr class="clickable" onclick="viewCase('${caseData.id}')">
             <td><strong>${caseData.id}</strong></td>
             <td>${caseData.title || 'Untitled'}</td>
             <td><span class="badge badge-info">${caseData.status || 'Active'}</span></td>
-            <td>${caseData.severity || 'Sev C'}</td>
-            <td>
-                ${statusIcon} <span class="badge ${statusBadge}">${Math.round(daysNote)} days</span>
-            </td>
+            <td><span class="badge ${sevClass}">Sev ${sevLetter}</span></td>
             <td>${caseData.customer?.company || 'Unknown'}</td>
+            <td>
+                ${riskIcon} <span class="badge ${riskBadge}">${riskLabel}</span>
+            </td>
             <td>
                 <div class="sentiment-indicator">
                     <span class="sentiment-dot sentiment-${sentimentClass}"></span>
@@ -352,6 +410,11 @@ async function viewCase(caseId) {
     const analysisPromise = analyzeCase(caseId);
     
     // Render case detail structure - Clean layout without full timeline
+    const daysNote = Math.round(caseData.days_since_last_note || 0);
+    const daysComm = Math.round(caseData.days_since_last_outbound || 0);
+    const csatRisk = caseData.csat_risk || 'healthy';
+    const sentimentScore = caseData.sentiment_score || 0.5;
+    
     main.innerHTML = `
         <div class="content-header flex justify-between items-center">
             <div>
@@ -359,9 +422,15 @@ async function viewCase(caseId) {
                 <h1>${caseData.title || caseId}</h1>
                 <p class="subtitle">${caseData.id} • ${caseData.customer?.company || 'Unknown Customer'} (${caseData.customer?.tier || 'Standard'})</p>
             </div>
-            <div class="text-right">
-                <div class="metric-value ${(caseData.days_since_last_note || 0) >= 7 ? 'danger' : (caseData.days_since_last_note || 0) >= 5 ? 'warning' : ''}">${Math.round(caseData.days_since_last_note || 0)}</div>
-                <div class="metric-label">Days Since Note</div>
+            <div style="display: flex; gap: 24px; text-align: right;">
+                <div>
+                    <div class="metric-value ${daysComm > 2 ? 'danger' : daysComm > 1 ? 'warning' : ''}">${daysComm}</div>
+                    <div class="metric-label">Days Since Comm</div>
+                </div>
+                <div>
+                    <div class="metric-value ${daysNote >= 7 ? 'danger' : daysNote >= 5 ? 'warning' : ''}">${daysNote}</div>
+                    <div class="metric-label">Days Since Note</div>
+                </div>
             </div>
         </div>
         
@@ -376,7 +445,7 @@ async function viewCase(caseId) {
                     </div>
                     <div class="mt-md">
                         <div class="text-small text-muted">Severity</div>
-                        <div>${caseData.severity || 'Sev C'}</div>
+                        <div><span class="badge ${getSeverityBadgeClass(caseData.severity)}">Sev ${formatSeverity(caseData.severity)}</span></div>
                     </div>
                     <div class="mt-md">
                         <div class="text-small text-muted">Created</div>
@@ -654,23 +723,23 @@ async function renderManagerDashboard() {
     const engineers = engineersData?.engineers || engineersData || [];
     const cases = casesData?.cases || casesData || [];
     
-    // Calculate metrics
-    const critical = cases.filter(c => (c.days_since_last_note || 0) >= 7).length;
-    const warning = cases.filter(c => {
-        const days = c.days_since_last_note || 0;
-        return days >= 5 && days < 7;
+    // Calculate CSAT risk metrics
+    const critical = cases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
+    const atRisk = cases.filter(c => {
+        const score = c.sentiment_score || 0.5;
+        return score >= 0.35 && score < 0.55;
     }).length;
     
-    // Alerts
+    // Alerts - CSAT focused
     if (critical > 0) {
         document.getElementById('alerts-container').innerHTML = `
             <div class="alert-banner danger">
-                🚨 <strong>Team Alert:</strong> ${critical} case${critical > 1 ? 's' : ''} with SLA breaches require immediate attention
+                🚨 <strong>Team CSAT Alert:</strong> ${critical} case${critical > 1 ? 's' : ''} with critical satisfaction risk require immediate attention
             </div>
         `;
     }
     
-    // Metrics
+    // Metrics - CSAT focused
     document.getElementById('metrics-container').innerHTML = `
         <div class="metric-card">
             <div class="metric-value">${engineers.length}</div>
@@ -682,21 +751,21 @@ async function renderManagerDashboard() {
         </div>
         <div class="metric-card">
             <div class="metric-value danger">${critical}</div>
-            <div class="metric-label">SLA Breaches</div>
+            <div class="metric-label">Critical CSAT</div>
         </div>
         <div class="metric-card">
-            <div class="metric-value warning">${warning}</div>
+            <div class="metric-value warning">${atRisk}</div>
             <div class="metric-label">At Risk</div>
         </div>
     `;
     
-    // Engineer cards
+    // Engineer cards - CSAT focused
     const teamHtml = engineers.map(eng => {
         const engCases = cases.filter(c => c.owner?.id === eng.id);
-        const engCritical = engCases.filter(c => (c.days_since_last_note || 0) >= 7).length;
-        const engWarning = engCases.filter(c => {
-            const days = c.days_since_last_note || 0;
-            return days >= 5 && days < 7;
+        const engCritical = engCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
+        const engAtRisk = engCases.filter(c => {
+            const score = c.sentiment_score || 0.5;
+            return score >= 0.35 && score < 0.55;
         }).length;
         
         return `
@@ -706,8 +775,8 @@ async function renderManagerDashboard() {
                         <div class="card-title">${eng.name}</div>
                         <div class="card-subtitle">${eng.email}</div>
                     </div>
-                    ${engCritical > 0 ? '<span class="badge badge-danger">Needs Attention</span>' : 
-                      engWarning > 0 ? '<span class="badge badge-warning">At Risk</span>' : 
+                    ${engCritical > 0 ? '<span class="badge badge-danger">CSAT Critical</span>' : 
+                      engAtRisk > 0 ? '<span class="badge badge-warning">At Risk</span>' : 
                       '<span class="badge badge-success">Healthy</span>'}
                 </div>
                 <div class="card-body">
@@ -716,12 +785,12 @@ async function renderManagerDashboard() {
                         <span>${engCases.length}</span>
                     </div>
                     <div class="flex justify-between mt-sm">
-                        <span class="text-muted">SLA Breaches</span>
+                        <span class="text-muted">Critical CSAT</span>
                         <span class="${engCritical > 0 ? 'text-danger' : ''}">${engCritical}</span>
                     </div>
                     <div class="flex justify-between mt-sm">
                         <span class="text-muted">At Risk</span>
-                        <span class="${engWarning > 0 ? 'text-warning' : ''}">${engWarning}</span>
+                        <span class="${engAtRisk > 0 ? 'text-warning' : ''}">${engAtRisk}</span>
                     </div>
                 </div>
                 <div class="card-footer">
@@ -779,8 +848,20 @@ async function sendChatMessage() {
     // Remove loading
     document.getElementById('chat-loading')?.remove();
     
-    // Add response
-    const responseText = response?.response || 'Sorry, I encountered an error. Please try again.';
+    // Handle response or error
+    let responseText;
+    if (response?.error) {
+        if (response.error === 'timeout') {
+            responseText = '⏱️ The AI service is taking too long to respond. This could be due to high load or the service being unavailable. Please try again in a moment.';
+        } else {
+            responseText = `❌ Sorry, I encountered an error: ${response.message || 'Unable to process your request'}. Please try again.`;
+        }
+    } else if (response?.response) {
+        responseText = response.response;
+    } else {
+        responseText = '❌ Sorry, I couldn\'t get a response. The AI service may be unavailable. Please try again later.';
+    }
+    
     messagesContainer.innerHTML += `
         <div class="chat-message">
             <div class="chat-avatar">🤖</div>
