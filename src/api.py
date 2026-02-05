@@ -1292,21 +1292,36 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
     if secret != expected_secret:
         raise HTTPException(status_code=403, detail="Invalid secret")
     
-    # Check for database - adapter uses _db (with underscore)
-    if not app_state.dfm_client:
-        raise HTTPException(status_code=503, detail="DFM client not available")
-    
     # Get the underlying database manager
+    # Try multiple approaches since different client types have different structures
+    db_manager = None
+    client_type = type(app_state.dfm_client).__name__ if app_state.dfm_client else "None"
+    
     try:
-        if hasattr(app_state.dfm_client, '_ensure_db'):
+        if app_state.dfm_client and hasattr(app_state.dfm_client, '_ensure_db'):
             # Azure SQL adapter - call _ensure_db() to get connection
             db_manager = app_state.dfm_client._ensure_db()
-        elif hasattr(app_state.dfm_client, '_db'):
+            logger.info(f"Seed: Using Azure SQL adapter's database manager")
+        elif app_state.dfm_client and hasattr(app_state.dfm_client, '_db') and app_state.dfm_client._db:
             db_manager = app_state.dfm_client._db
-        elif hasattr(app_state.dfm_client, 'db'):
+            logger.info(f"Seed: Using _db attribute")
+        elif app_state.dfm_client and hasattr(app_state.dfm_client, 'db') and app_state.dfm_client.db:
             db_manager = app_state.dfm_client.db
+            logger.info(f"Seed: Using db attribute")
         else:
-            raise HTTPException(status_code=503, detail="Database not available - no db attribute found")
+            # Fallback: try to create a fresh database connection
+            logger.warning(f"Seed: Current client ({client_type}) has no db access, attempting direct connection")
+            try:
+                from db_sync import SyncDatabaseManager
+                db_manager = SyncDatabaseManager()
+                logger.info("Seed: Created fresh SyncDatabaseManager connection")
+            except Exception as db_err:
+                raise HTTPException(
+                    status_code=503, 
+                    detail=f"Database not available. Current client: {client_type}. Direct connection failed: {str(db_err)}"
+                )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
     
