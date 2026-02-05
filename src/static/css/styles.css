@@ -2386,3 +2386,67 @@ textarea.form-input {
     background: rgba(16, 124, 16, 0.15);
     color: var(--accent-success);
 }
+
+/* =============================================================================
+   Engineer Detail - Case Summary Cards
+   ============================================================================= */
+
+.case-summary-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+}
+
+.case-summary-card {
+    background: var(--background-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    text-align: center;
+    border: 1px solid var(--border-subtle);
+}
+
+.case-summary-card.active {
+    border-left: 4px solid var(--accent-primary);
+}
+
+.case-summary-card.resolved {
+    border-left: 4px solid var(--accent-success);
+}
+
+.case-summary-card.total {
+    border-left: 4px solid var(--text-tertiary);
+}
+
+.case-summary-card .summary-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.case-summary-card.active .summary-number {
+    color: var(--accent-primary);
+}
+
+.case-summary-card.resolved .summary-number {
+    color: var(--accent-success);
+}
+
+.case-summary-card .summary-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: var(--spacing-sm);
+}
+
+.case-summary-card .summary-detail {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-top: var(--spacing-xs);
+}
+
+@media (max-width: 768px) {
+    .case-summary-row {
+        grid-template-columns: 1fr;
+    }
+}

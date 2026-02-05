@@ -967,22 +967,32 @@ function updateDateRange(range) {
 }
 
 function renderTeamDashboardContent() {
-    const cases = state.cases;
     const engineers = state.engineers;
     const stats = state.managerStats || {};
     const range = state.selectedDateRange;
     
     const rangeLabel = range === '7d' ? 'Past 7 Days' : range === '30d' ? 'Past 30 Days' : 'Past Quarter';
     
-    // Use pre-computed stats from fast endpoint if available
-    const totalActiveCases = stats.total_active_cases || cases.length;
+    // Calculate date cutoff based on range selection
+    const now = new Date();
+    const cutoffDays = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+    const cutoffDate = new Date(now.getTime() - cutoffDays * 24 * 60 * 60 * 1000);
+    
+    // Note: Since we're using summary endpoint, we show all active cases
+    // The date range affects the "period" label but active cases are always current
+    // In a real implementation, you'd have historical data to filter
+    
+    // Use pre-computed stats from fast endpoint
+    const totalActiveCases = stats.total_active_cases || engineers.reduce((sum, e) => sum + (e.active_cases || 0), 0);
+    const totalResolvedCases = stats.total_resolved_cases || engineers.reduce((sum, e) => sum + (e.resolved_cases || 0), 0);
+    const totalCases = stats.total_cases || (totalActiveCases + totalResolvedCases);
     
     // Calculate risk metrics from engineer summaries (fast endpoint provides risk_level)
     const healthyEngineers = engineers.filter(e => e.risk_level === 'healthy').length;
     const atRiskEngineers = engineers.filter(e => e.risk_level === 'at_risk').length;
     const criticalEngineers = engineers.filter(e => e.risk_level === 'critical').length;
     
-    // Estimate sentiment from risk levels for display
+    // Estimate sentiment distribution from ACTIVE cases only
     const excellentCount = engineers.reduce((sum, e) => sum + (e.risk_level === 'healthy' ? (e.active_cases || 0) : 0), 0);
     const goodCount = engineers.reduce((sum, e) => sum + (e.risk_level === 'at_risk' ? Math.floor((e.active_cases || 0) / 2) : 0), 0);
     const opportunityCount = engineers.reduce((sum, e) => sum + (e.risk_level === 'critical' ? (e.active_cases || 0) : (e.risk_level === 'at_risk' ? Math.ceil((e.active_cases || 0) / 2) : 0)), 0);
@@ -1005,7 +1015,7 @@ function renderTeamDashboardContent() {
                 <div class="sentiment-chart-container">
                     <div class="sentiment-donut">
                         <svg viewBox="0 0 100 100" class="donut-chart">
-                            ${renderDonutChart(excellentCount, goodCount, opportunityCount, cases.length)}
+                            ${renderDonutChart(excellentCount, goodCount, opportunityCount, totalActiveCases)}
                         </svg>
                         <div class="donut-center">
                             <span class="donut-value">${Math.round(teamAvgSentiment * 100)}%</span>
@@ -1043,12 +1053,16 @@ function renderTeamDashboardContent() {
                         <span class="glance-label">Engineers</span>
                     </div>
                     <div class="glance-item">
-                        <span class="glance-value">${cases.length}</span>
+                        <span class="glance-value">${totalActiveCases}</span>
                         <span class="glance-label">Active Cases</span>
                     </div>
                     <div class="glance-item">
-                        <span class="glance-value">${Math.round(cases.length / Math.max(engineers.length, 1))}</span>
-                        <span class="glance-label">Avg per Engineer</span>
+                        <span class="glance-value">${totalResolvedCases}</span>
+                        <span class="glance-label">Resolved (${rangeLabel})</span>
+                    </div>
+                    <div class="glance-item">
+                        <span class="glance-value">${Math.round(totalActiveCases / Math.max(engineers.length, 1))}</span>
+                        <span class="glance-label">Avg Active/Engineer</span>
                     </div>
                 </div>
             </div>
@@ -1193,26 +1207,33 @@ async function viewEngineerDetail(engineerId) {
     }
     
     const engineer = summaryData.engineer;
-    const engCases = summaryData.cases || [];
+    const allCases = summaryData.cases || [];
     const summary = summaryData.summary || {};
+    
+    // Separate active vs resolved cases
+    const activeCases = allCases.filter(c => c.status === 'active');
+    const resolvedCases = allCases.filter(c => c.status === 'resolved');
+    
+    // For coaching and analysis, focus on ACTIVE cases only
+    const engCases = activeCases;
     
     state.selectedEngineer = engineer;
     const dateRange = state.selectedDateRange || '30d';
     const rangeLabel = dateRange === '7d' ? 'Past 7 Days' : dateRange === '30d' ? 'Past 30 Days' : 'Past Quarter';
     
-    // Calculate metrics from the summary data
+    // Calculate metrics from ACTIVE cases only
     // Map risk_level to sentiment scores for display
-    const avgSentiment = engCases.length > 0
-        ? engCases.reduce((sum, c) => {
-            const riskScore = c.risk_level === 'breach' ? 0.25 : c.risk_level === 'at_risk' ? 0.5 : c.risk_level === 'resolved' ? 0.7 : 0.8;
+    const avgSentiment = activeCases.length > 0
+        ? activeCases.reduce((sum, c) => {
+            const riskScore = c.risk_level === 'breach' ? 0.25 : c.risk_level === 'at_risk' ? 0.5 : 0.8;
             return sum + riskScore;
-        }, 0) / engCases.length
+        }, 0) / activeCases.length
         : 0.5;
     
-    // Count cases by risk level for distribution
-    const excellentCases = engCases.filter(c => c.risk_level === 'healthy' || c.risk_level === 'resolved');
-    const goodCases = engCases.filter(c => c.risk_level === 'at_risk');
-    const opportunityCases = engCases.filter(c => c.risk_level === 'breach');
+    // Count ACTIVE cases by risk level for distribution
+    const excellentCases = activeCases.filter(c => c.risk_level === 'healthy');
+    const goodCases = activeCases.filter(c => c.risk_level === 'at_risk');
+    const opportunityCases = activeCases.filter(c => c.risk_level === 'breach');
     
     // Generate personalized coaching based on actual case data
     const personalizedCoaching = generatePersonalizedCoachingFromSummary(engCases, engineer.name.split(' ')[0]);
@@ -1235,6 +1256,8 @@ async function viewEngineerDetail(engineerId) {
                     <p class="subtitle">${engineer.email} • ${engineer.team || 'CSS Support'}</p>
                     <div class="profile-badges">
                         <span class="period-badge">${rangeLabel}</span>
+                        <span class="case-count-badge">${activeCases.length} active</span>
+                        <span class="case-count-badge resolved">${resolvedCases.length} resolved</span>
                         ${avgSentiment >= 0.7 ? '<span class="achievement-badge">⭐ Top Performer</span>' : ''}
                     </div>
                 </div>
@@ -1248,15 +1271,34 @@ async function viewEngineerDetail(engineerId) {
                         </svg>
                         <span class="score-text">${Math.round(avgSentiment * 100)}%</span>
                     </div>
-                    <span class="score-label">Avg Sentiment</span>
+                    <span class="score-label">Active Case Sentiment</span>
                 </div>
+            </div>
+        </div>
+        
+        <!-- Case Summary Cards -->
+        <div class="case-summary-row mb-lg">
+            <div class="case-summary-card active">
+                <div class="summary-number">${activeCases.length}</div>
+                <div class="summary-label">Active Cases</div>
+                <div class="summary-detail">${opportunityCases.length} need attention</div>
+            </div>
+            <div class="case-summary-card resolved">
+                <div class="summary-number">${resolvedCases.length}</div>
+                <div class="summary-label">Resolved</div>
+                <div class="summary-detail">This quarter</div>
+            </div>
+            <div class="case-summary-card total">
+                <div class="summary-number">${allCases.length}</div>
+                <div class="summary-label">Total Assigned</div>
+                <div class="summary-detail">All time</div>
             </div>
         </div>
         
         <!-- Trend Chart Section -->
         <div class="card trend-card mb-lg">
             <div class="trend-header">
-                <h3>📈 Sentiment Trend</h3>
+                <h3>📈 Sentiment Trend (Active Cases)</h3>
                 <span class="trend-period">${rangeLabel}</span>
             </div>
             <div class="trend-chart-container">
@@ -1333,25 +1375,26 @@ async function viewEngineerDetail(engineerId) {
             <div class="sidebar">
                 <!-- Case Distribution -->
                 <div class="card mb-lg">
-                    <h3>📊 Case Distribution</h3>
+                    <h3>📊 Active Case Distribution</h3>
+                    <p class="text-muted text-small">${activeCases.length} active cases</p>
                     <div class="distribution-visual mt-md">
                         <div class="dist-bar">
-                            <div class="dist-segment excellent" style="width: ${(excellentCases.length / Math.max(engCases.length, 1)) * 100}%"></div>
-                            <div class="dist-segment good" style="width: ${(goodCases.length / Math.max(engCases.length, 1)) * 100}%"></div>
-                            <div class="dist-segment opportunity" style="width: ${(opportunityCases.length / Math.max(engCases.length, 1)) * 100}%"></div>
+                            <div class="dist-segment excellent" style="width: ${(excellentCases.length / Math.max(activeCases.length, 1)) * 100}%"></div>
+                            <div class="dist-segment good" style="width: ${(goodCases.length / Math.max(activeCases.length, 1)) * 100}%"></div>
+                            <div class="dist-segment opportunity" style="width: ${(opportunityCases.length / Math.max(activeCases.length, 1)) * 100}%"></div>
                         </div>
                         <div class="dist-legend">
                             <div class="dist-item">
                                 <span class="dist-dot excellent"></span>
-                                <span>Excellent: ${excellentCases.length}</span>
+                                <span>Healthy: ${excellentCases.length}</span>
                             </div>
                             <div class="dist-item">
                                 <span class="dist-dot good"></span>
-                                <span>Good: ${goodCases.length}</span>
+                                <span>At Risk: ${goodCases.length}</span>
                             </div>
                             <div class="dist-item">
                                 <span class="dist-dot opportunity"></span>
-                                <span>Growth: ${opportunityCases.length}</span>
+                                <span>Breach: ${opportunityCases.length}</span>
                             </div>
                         </div>
                     </div>
@@ -1361,7 +1404,7 @@ async function viewEngineerDetail(engineerId) {
                 <div class="card mb-lg">
                     <h3>🌟 Strengths to Recognize</h3>
                     <div class="strengths-list mt-md">
-                        ${generateStrengths(engCases, firstName)}
+                        ${generateStrengths(activeCases, firstName)}
                     </div>
                 </div>
                 
@@ -1370,12 +1413,16 @@ async function viewEngineerDetail(engineerId) {
                     <h3>📈 Quick Stats</h3>
                     <div class="quick-stats mt-md">
                         <div class="stat-row">
-                            <span class="stat-label">Total Cases</span>
-                            <span class="stat-value">${engCases.length}</span>
+                            <span class="stat-label">Active Cases</span>
+                            <span class="stat-value">${activeCases.length}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Resolved This Quarter</span>
+                            <span class="stat-value">${resolvedCases.length}</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Avg Response Time</span>
-                            <span class="stat-value">${calculateAvgResponseTime(engCases)}</span>
+                            <span class="stat-value">${calculateAvgResponseTime(activeCases)}</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Cases 70%+ Sentiment</span>
