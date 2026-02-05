@@ -19,9 +19,10 @@ const CONFIG = {
 // =============================================================================
 
 const state = {
-    currentView: 'landing',  // landing, engineer, manager, case-detail
+    currentView: 'landing',  // landing, engineer, manager, case-detail, engineer-detail
     currentEngineer: null,
     currentCase: null,
+    selectedEngineer: null,  // For manager viewing an engineer's details
     cases: [],
     engineers: [],
     isLoading: false,
@@ -53,6 +54,169 @@ function getSeverityBadgeClass(severity) {
         case 'C': return 'badge-info';
         default: return 'badge-info';
     }
+}
+
+/**
+ * Analyze negative indicators from a set of cases
+ * Returns top 3 factors contributing to negative sentiment
+ */
+function analyzeNegativeIndicators(cases) {
+    const indicators = {
+        'Slow Response Time': 0,
+        'Long Time Since Last Note': 0,
+        'High Severity Case Delays': 0,
+        'Customer Frustration Signals': 0,
+        'Extended Case Duration': 0,
+        'Declining Sentiment Trend': 0,
+    };
+    
+    cases.forEach(c => {
+        const sentiment = c.sentiment_score || 0.5;
+        const daysComm = c.days_since_last_outbound || 0;
+        const daysNote = c.days_since_last_note || 0;
+        const daysOpen = c.days_open || c.days_since_creation || 0;
+        const sev = formatSeverity(c.severity);
+        
+        // Only analyze cases with issues
+        if (sentiment < 0.55) {
+            if (daysComm > 2) indicators['Slow Response Time'] += (daysComm - 2);
+            if (daysNote > 5) indicators['Long Time Since Last Note'] += (daysNote - 5);
+            if ((sev === 'A' || sev === 'B') && daysOpen > 5) indicators['High Severity Case Delays'] += 1;
+            if (sentiment < 0.35) indicators['Customer Frustration Signals'] += 1;
+            if (daysOpen > 14) indicators['Extended Case Duration'] += 1;
+            if (c.sentiment_trend === 'declining') indicators['Declining Sentiment Trend'] += 1;
+        }
+    });
+    
+    // Sort and return top 3
+    return Object.entries(indicators)
+        .filter(([_, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([indicator, _]) => indicator);
+}
+
+/**
+ * Generate coaching advice based on negative indicators
+ */
+function generateCoachingAdvice(indicators, avgSentiment) {
+    const advice = [];
+    
+    indicators.forEach(indicator => {
+        switch (indicator) {
+            case 'Slow Response Time':
+                advice.push({
+                    issue: indicator,
+                    suggestion: 'Consider setting daily check-in reminders to ensure customers hear from you within 24-48 hours',
+                    icon: '⏰'
+                });
+                break;
+            case 'Long Time Since Last Note':
+                advice.push({
+                    issue: indicator,
+                    suggestion: 'Keep case notes current - even brief updates help with handoffs and compliance (7-day rule)',
+                    icon: '📝'
+                });
+                break;
+            case 'High Severity Case Delays':
+                advice.push({
+                    issue: indicator,
+                    suggestion: 'Prioritize Sev A/B cases - consider blocking time each morning specifically for critical cases',
+                    icon: '🎯'
+                });
+                break;
+            case 'Customer Frustration Signals':
+                advice.push({
+                    issue: indicator,
+                    suggestion: 'When customers show frustration, acknowledge their concerns directly and provide clear next steps with timelines',
+                    icon: '🤝'
+                });
+                break;
+            case 'Extended Case Duration':
+                advice.push({
+                    issue: indicator,
+                    suggestion: 'For long-running cases, consider a case review or escalation to ensure forward progress',
+                    icon: '📊'
+                });
+                break;
+            case 'Declining Sentiment Trend':
+                advice.push({
+                    issue: indicator,
+                    suggestion: 'Schedule proactive check-ins with customers showing declining satisfaction before issues escalate',
+                    icon: '📉'
+                });
+                break;
+        }
+    });
+    
+    // Add general advice based on overall sentiment
+    if (avgSentiment < 0.4 && advice.length < 3) {
+        advice.push({
+            issue: 'Overall CSAT Health',
+            suggestion: 'Consider scheduling 1:1 time to review challenging cases and identify patterns',
+            icon: '💡'
+        });
+    }
+    
+    return advice;
+}
+
+/**
+ * Render personal analytics section for engineer dashboard
+ */
+function renderPersonalAnalytics(avgSentiment, indicators, cases) {
+    const container = document.getElementById('analytics-section');
+    const sentimentClass = getSentimentClass(avgSentiment);
+    const coachingAdvice = generateCoachingAdvice(indicators, avgSentiment);
+    
+    container.innerHTML = `
+        <h3>📊 My CSAT Performance (Last 30 Days)</h3>
+        
+        <div class="analytics-grid mt-lg">
+            <!-- Sentiment Score -->
+            <div class="analytics-score-card">
+                <div class="score-circle ${sentimentClass}">
+                    <span class="score-value">${Math.round(avgSentiment * 100)}%</span>
+                </div>
+                <div class="score-label">Average Sentiment</div>
+                <div class="score-trend text-muted">Across ${cases.length} active cases</div>
+            </div>
+            
+            <!-- Top Indicators -->
+            <div class="analytics-indicators">
+                <h4>🎯 Top Areas for Improvement</h4>
+                ${indicators.length > 0 ? `
+                    <div class="indicators-list mt-md">
+                        ${indicators.map((ind, i) => `
+                            <div class="indicator-item">
+                                <span class="indicator-rank">${i + 1}</span>
+                                <span class="indicator-text">${ind}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <p class="text-muted mt-md">✅ No significant improvement areas identified - keep up the great work!</p>
+                `}
+            </div>
+        </div>
+        
+        ${coachingAdvice.length > 0 ? `
+            <div class="coaching-section mt-lg">
+                <h4>💡 Personalized Coaching Tips</h4>
+                <div class="coaching-cards mt-md">
+                    ${coachingAdvice.map(a => `
+                        <div class="coaching-card">
+                            <div class="coaching-icon">${a.icon}</div>
+                            <div class="coaching-content">
+                                <div class="coaching-issue">${a.issue}</div>
+                                <div class="coaching-suggestion">${a.suggestion}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+    `;
 }
 
 // =============================================================================
@@ -232,11 +396,21 @@ async function renderEngineerDashboard() {
     const main = document.getElementById('main-content');
     main.innerHTML = `
         <div class="content-header">
-            <h1>My Cases</h1>
-            <p class="subtitle">Monitor customer sentiment and get AI-powered coaching</p>
+            <h1>My Dashboard</h1>
+            <p class="subtitle">Your CSAT performance insights and case management</p>
         </div>
         <div id="alerts-container"></div>
+        
+        <!-- Personal Analytics Section -->
+        <div id="analytics-section" class="card mb-lg">
+            <div class="loading"><div class="spinner"></div></div>
+            <p class="text-center text-muted">Loading your performance analytics...</p>
+        </div>
+        
         <div id="metrics-container" class="metrics-row"></div>
+        
+        <!-- My Cases Section -->
+        <h3 class="mt-lg mb-md">📋 My Cases</h3>
         <div id="cases-container">
             <div class="loading"><div class="spinner"></div></div>
         </div>
@@ -265,6 +439,17 @@ async function renderEngineerDashboard() {
         return score >= 0.35 && score < 0.55;
     }).length;
     const healthy = state.cases.length - critical - atRisk;
+    
+    // Calculate average sentiment
+    const avgSentiment = state.cases.length > 0 
+        ? state.cases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / state.cases.length 
+        : 0.5;
+    
+    // Find top negative indicators
+    const negativeIndicators = analyzeNegativeIndicators(state.cases);
+    
+    // Render personal analytics
+    renderPersonalAnalytics(avgSentiment, negativeIndicators, state.cases);
     
     // Render alerts - focus on CSAT risk, not SLA
     if (critical > 0) {
@@ -702,7 +887,7 @@ async function renderManagerDashboard() {
     main.innerHTML = `
         <div class="content-header">
             <h1>Team Overview</h1>
-            <p class="subtitle">Monitor team CSAT health and identify cases needing intervention</p>
+            <p class="subtitle">Click on an engineer to view their CSAT insights and coaching recommendations</p>
         </div>
         <div id="alerts-container"></div>
         <div id="metrics-container" class="metrics-row"></div>
@@ -720,8 +905,11 @@ async function renderManagerDashboard() {
     
     showLoading(false);
     
-    const engineers = engineersData?.engineers || engineersData || [];
-    const cases = casesData?.cases || casesData || [];
+    state.engineers = engineersData?.engineers || engineersData || [];
+    state.cases = casesData?.cases || casesData || [];
+    
+    const cases = state.cases;
+    const engineers = state.engineers;
     
     // Calculate CSAT risk metrics
     const critical = cases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
@@ -729,6 +917,11 @@ async function renderManagerDashboard() {
         const score = c.sentiment_score || 0.5;
         return score >= 0.35 && score < 0.55;
     }).length;
+    
+    // Calculate team average sentiment
+    const teamAvgSentiment = cases.length > 0
+        ? cases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / cases.length
+        : 0.5;
     
     // Alerts - CSAT focused
     if (critical > 0) {
@@ -750,16 +943,16 @@ async function renderManagerDashboard() {
             <div class="metric-label">Total Cases</div>
         </div>
         <div class="metric-card">
+            <div class="metric-value ${getSentimentClass(teamAvgSentiment)}">${Math.round(teamAvgSentiment * 100)}%</div>
+            <div class="metric-label">Team Avg Sentiment</div>
+        </div>
+        <div class="metric-card">
             <div class="metric-value danger">${critical}</div>
             <div class="metric-label">Critical CSAT</div>
         </div>
-        <div class="metric-card">
-            <div class="metric-value warning">${atRisk}</div>
-            <div class="metric-label">At Risk</div>
-        </div>
     `;
     
-    // Engineer cards - CSAT focused
+    // Engineer cards - clickable for details
     const teamHtml = engineers.map(eng => {
         const engCases = cases.filter(c => c.owner?.id === eng.id);
         const engCritical = engCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
@@ -767,34 +960,35 @@ async function renderManagerDashboard() {
             const score = c.sentiment_score || 0.5;
             return score >= 0.35 && score < 0.55;
         }).length;
+        const engAvgSentiment = engCases.length > 0
+            ? engCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engCases.length
+            : 0.5;
+        
+        const statusBadge = engCritical > 0 ? '<span class="badge badge-danger">Needs Attention</span>' : 
+                           engAtRisk > 0 ? '<span class="badge badge-warning">At Risk</span>' : 
+                           '<span class="badge badge-success">Healthy</span>';
         
         return `
-            <div class="card">
+            <div class="card card-clickable engineer-card" onclick="viewEngineerDetail('${eng.id}')">
                 <div class="card-header">
+                    <div class="engineer-avatar">${eng.name.split(' ').map(n => n[0]).join('')}</div>
                     <div>
                         <div class="card-title">${eng.name}</div>
-                        <div class="card-subtitle">${eng.email}</div>
+                        <div class="card-subtitle">${engCases.length} cases</div>
                     </div>
-                    ${engCritical > 0 ? '<span class="badge badge-danger">CSAT Critical</span>' : 
-                      engAtRisk > 0 ? '<span class="badge badge-warning">At Risk</span>' : 
-                      '<span class="badge badge-success">Healthy</span>'}
+                    ${statusBadge}
                 </div>
                 <div class="card-body">
-                    <div class="flex justify-between mt-md">
-                        <span class="text-muted">Total Cases</span>
-                        <span>${engCases.length}</span>
+                    <div class="engineer-sentiment-bar">
+                        <div class="sentiment-fill ${getSentimentClass(engAvgSentiment)}" style="width: ${Math.round(engAvgSentiment * 100)}%"></div>
                     </div>
                     <div class="flex justify-between mt-sm">
-                        <span class="text-muted">Critical CSAT</span>
-                        <span class="${engCritical > 0 ? 'text-danger' : ''}">${engCritical}</span>
-                    </div>
-                    <div class="flex justify-between mt-sm">
-                        <span class="text-muted">At Risk</span>
-                        <span class="${engAtRisk > 0 ? 'text-warning' : ''}">${engAtRisk}</span>
+                        <span class="text-muted text-small">Avg Sentiment</span>
+                        <span class="text-small ${getSentimentClass(engAvgSentiment)}">${Math.round(engAvgSentiment * 100)}%</span>
                     </div>
                 </div>
                 <div class="card-footer">
-                    <span class="text-xs text-muted">${eng.team || 'CSS Support'}</span>
+                    <span class="text-xs text-muted">Click for coaching insights →</span>
                 </div>
             </div>
         `;
@@ -806,6 +1000,221 @@ async function renderManagerDashboard() {
             ${teamHtml || '<p class="text-muted">No team members found.</p>'}
         </div>
     `;
+}
+
+/**
+ * View individual engineer details (for managers)
+ */
+async function viewEngineerDetail(engineerId) {
+    state.currentView = 'engineer-detail';
+    showLoading(true);
+    
+    const engineer = state.engineers.find(e => e.id === engineerId);
+    const engCases = state.cases.filter(c => c.owner?.id === engineerId);
+    
+    if (!engineer) {
+        showLoading(false);
+        alert('Engineer not found');
+        return;
+    }
+    
+    state.selectedEngineer = engineer;
+    
+    const main = document.getElementById('main-content');
+    
+    // Calculate metrics
+    const avgSentiment = engCases.length > 0
+        ? engCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engCases.length
+        : 0.5;
+    const critical = engCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
+    const atRisk = engCases.filter(c => {
+        const score = c.sentiment_score || 0.5;
+        return score >= 0.35 && score < 0.55;
+    }).length;
+    const healthy = engCases.length - critical - atRisk;
+    
+    // Get negative indicators
+    const indicators = analyzeNegativeIndicators(engCases);
+    const coachingAdvice = generateCoachingAdvice(indicators, avgSentiment);
+    
+    const sentimentClass = getSentimentClass(avgSentiment);
+    
+    main.innerHTML = `
+        <div class="content-header">
+            <button class="btn btn-ghost mb-sm" onclick="navigateTo('manager')">← Back to Team</button>
+            <div class="flex items-center gap-md">
+                <div class="engineer-avatar-large">${engineer.name.split(' ').map(n => n[0]).join('')}</div>
+                <div>
+                    <h1>${engineer.name}</h1>
+                    <p class="subtitle">${engineer.email} • ${engineer.team || 'CSS Support'}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="metrics-container" class="metrics-row">
+            <div class="metric-card">
+                <div class="metric-value">${engCases.length}</div>
+                <div class="metric-label">Total Cases</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value ${sentimentClass}">${Math.round(avgSentiment * 100)}%</div>
+                <div class="metric-label">Avg Sentiment</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value danger">${critical}</div>
+                <div class="metric-label">Critical</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value success">${healthy}</div>
+                <div class="metric-label">Healthy</div>
+            </div>
+        </div>
+        
+        <div class="two-column mt-lg">
+            <div class="main-column">
+                <!-- Coaching Section for Manager -->
+                <div class="card mb-lg">
+                    <h3>🎯 Coaching Insights for 1:1</h3>
+                    <p class="text-muted text-small mt-sm">Use these insights when having coaching conversations with ${engineer.name.split(' ')[0]}</p>
+                    
+                    <!-- Top Indicators -->
+                    <div class="mt-lg">
+                        <h4>Top 3 Areas Affecting CSAT</h4>
+                        ${indicators.length > 0 ? `
+                            <div class="indicators-list mt-md">
+                                ${indicators.map((ind, i) => `
+                                    <div class="indicator-item highlight">
+                                        <span class="indicator-rank">${i + 1}</span>
+                                        <span class="indicator-text">${ind}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <p class="text-muted mt-md">✅ No significant issues identified</p>
+                        `}
+                    </div>
+                    
+                    <!-- Coaching Advice -->
+                    ${coachingAdvice.length > 0 ? `
+                        <div class="mt-lg">
+                            <h4>💬 Suggested Coaching Points</h4>
+                            <div class="coaching-cards mt-md">
+                                ${coachingAdvice.map(a => `
+                                    <div class="coaching-card manager">
+                                        <div class="coaching-icon">${a.icon}</div>
+                                        <div class="coaching-content">
+                                            <div class="coaching-issue">${a.issue}</div>
+                                            <div class="coaching-suggestion">${a.suggestion}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Sample Talking Points -->
+                    <div class="mt-lg">
+                        <h4>📋 Sample Talking Points</h4>
+                        <div class="talking-points mt-md">
+                            ${generateTalkingPoints(engineer.name.split(' ')[0], indicators, avgSentiment)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <!-- Case Summary -->
+                <div class="card mb-lg">
+                    <h3>📊 Case Breakdown</h3>
+                    <div class="case-breakdown mt-md">
+                        <div class="breakdown-item">
+                            <span class="breakdown-dot danger"></span>
+                            <span>Critical (${critical})</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <span class="breakdown-dot warning"></span>
+                            <span>At Risk (${atRisk})</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <span class="breakdown-dot success"></span>
+                            <span>Healthy (${healthy})</span>
+                        </div>
+                    </div>
+                    
+                    ${critical > 0 ? `
+                        <div class="mt-lg">
+                            <h4 class="text-danger">🚨 Critical Cases</h4>
+                            <div class="critical-cases-list mt-md">
+                                ${engCases.filter(c => (c.sentiment_score || 0.5) < 0.35).slice(0, 3).map(c => `
+                                    <div class="critical-case-item">
+                                        <div class="text-small"><strong>${c.id}</strong></div>
+                                        <div class="text-xs text-muted">${c.title?.substring(0, 40)}${c.title?.length > 40 ? '...' : ''}</div>
+                                        <div class="text-xs text-danger">${Math.round((c.sentiment_score || 0.5) * 100)}% sentiment</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <!-- Trend Indicator -->
+                <div class="card">
+                    <h3>📈 30-Day Trend</h3>
+                    <div class="trend-indicator mt-md">
+                        <div class="trend-visual ${sentimentClass}">
+                            ${avgSentiment >= 0.6 ? '📈' : avgSentiment >= 0.4 ? '➡️' : '📉'}
+                        </div>
+                        <div class="trend-label">
+                            ${avgSentiment >= 0.6 ? 'Positive trend' : avgSentiment >= 0.4 ? 'Stable' : 'Needs improvement'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    updateBreadcrumb([
+        { text: 'Manager Dashboard', action: "navigateTo('manager')" },
+        { text: engineer.name }
+    ]);
+    
+    showLoading(false);
+}
+
+/**
+ * Generate sample talking points for manager coaching
+ */
+function generateTalkingPoints(firstName, indicators, avgSentiment) {
+    const points = [];
+    
+    // Opening
+    if (avgSentiment < 0.4) {
+        points.push(`"${firstName}, I wanted to check in on how things are going with your cases. I've noticed some customers may be having a tougher time than usual."`);
+    } else if (avgSentiment < 0.6) {
+        points.push(`"${firstName}, let's talk about your current caseload and see if there are areas where I can support you."`);
+    } else {
+        points.push(`"${firstName}, your customer sentiment looks great! Let's discuss what's working well so we can share with the team."`);
+    }
+    
+    // Specific to indicators
+    indicators.forEach(ind => {
+        switch (ind) {
+            case 'Slow Response Time':
+                points.push(`"I noticed some customers haven't heard back in a while. Is there anything blocking you from responding more quickly?"`);
+                break;
+            case 'Long Time Since Last Note':
+                points.push(`"Let's talk about keeping case notes current. It really helps with handoffs and audit compliance."`);
+                break;
+            case 'Customer Frustration Signals':
+                points.push(`"A few customers seem frustrated. What's your read on the situation? How can I help?"`);
+                break;
+        }
+    });
+    
+    // Closing
+    points.push(`"What support do you need from me to help improve these areas?"`);
+    
+    return points.map(p => `<div class="talking-point">${p}</div>`).join('');
 }
 
 // =============================================================================
