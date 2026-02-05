@@ -306,7 +306,12 @@ async function getEngineers() {
  * Fast manager summary - uses SQL aggregation for performance
  */
 async function getManagerSummary() {
-    return await apiGet('/api/manager/summary');
+    // Build URL with optional date filter
+    let url = '/api/manager/summary';
+    if (state.selectedDateRange) {
+        url += `?days=${state.selectedDateRange}`;
+    }
+    return await apiGet(url);
 }
 
 /**
@@ -916,48 +921,97 @@ function renderAnalysis(analysis, caseData) {
     const timeline = caseData?.timeline || [];
     const customerMessages = timeline.filter(e => e.is_customer_communication || e.created_by === 'Customer');
     
-    // Build sentiment evidence from ALL customer communications (not just last 3)
+    // Build sentiment evidence showing the "story" - key communications that show sentiment trajectory
     let evidenceHtml = '';
     if (customerMessages.length > 0) {
-        // Show all customer messages, but limit to last 10 for UI
-        const recentCustomerMsgs = customerMessages.slice(-10);
+        // Analyze all customer messages and find the most story-telling ones
+        const frustrationWords = ['frustrated', 'disappointed', 'unacceptable', 'urgent', 'escalate', 'waiting', 'still no', 'again', 'issue', 'problem', 'not working', 'furious', 'terrible', 'nightmare'];
+        const positiveWords = ['thank', 'great', 'appreciate', 'helpful', 'excellent', 'resolved', 'perfect', 'amazing', 'wonderful', 'awesome'];
+        
+        // Score each message
+        const scoredMessages = customerMessages.map((msg, idx) => {
+            const content = msg.content || '';
+            const contentLower = content.toLowerCase();
+            const foundFrustration = frustrationWords.filter(w => contentLower.includes(w));
+            const foundPositive = positiveWords.filter(w => contentLower.includes(w));
+            
+            let msgScore = 0.5;
+            let sentiment = 'neutral';
+            if (foundFrustration.length > foundPositive.length) {
+                msgScore = Math.max(0.1, 0.5 - (foundFrustration.length * 0.1));
+                sentiment = 'negative';
+            } else if (foundPositive.length > 0) {
+                msgScore = Math.min(0.95, 0.7 + (foundPositive.length * 0.05));
+                sentiment = 'positive';
+            }
+            
+            return { ...msg, msgScore, sentiment, foundFrustration, foundPositive, index: idx };
+        });
+        
+        // Find key story points: first, last, highest, lowest, and any sentiment changes
+        const storyMessages = [];
+        
+        // Always show first customer message (sets the scene)
+        if (scoredMessages.length > 0) {
+            storyMessages.push({ ...scoredMessages[0], reason: 'Initial contact' });
+        }
+        
+        // Find sentiment changes (transitions)
+        for (let i = 1; i < scoredMessages.length; i++) {
+            const prev = scoredMessages[i - 1];
+            const curr = scoredMessages[i];
+            
+            // Detect significant sentiment change
+            if (prev.sentiment !== curr.sentiment && curr.sentiment !== 'neutral') {
+                storyMessages.push({ ...curr, reason: prev.sentiment === 'positive' ? '📉 Sentiment dropped' : '📈 Sentiment improved' });
+            }
+        }
+        
+        // Always show most recent message if not already included
+        const lastMsg = scoredMessages[scoredMessages.length - 1];
+        if (!storyMessages.find(m => m.index === lastMsg.index)) {
+            storyMessages.push({ ...lastMsg, reason: 'Most recent' });
+        }
+        
+        // Sort by chronological order and limit to 5 for display
+        const displayMessages = storyMessages
+            .sort((a, b) => a.index - b.index)
+            .slice(0, 5);
+        
+        const totalAnalyzed = customerMessages.length;
         evidenceHtml = `
             <div class="mt-lg">
-                <h4>📧 Sentiment Evidence from Communications</h4>
+                <h4>📧 Sentiment Journey (${totalAnalyzed} total communications analyzed)</h4>
                 <div class="mt-md" style="display: flex; flex-direction: column; gap: 12px;">
-                    ${recentCustomerMsgs.map(msg => {
-                        // Detect sentiment indicators in message
+                    ${displayMessages.map(msg => {
                         const content = msg.content || '';
-                        const contentLower = content.toLowerCase();
-                        const frustrationWords = ['frustrated', 'disappointed', 'unacceptable', 'urgent', 'escalate', 'waiting', 'still no', 'again', 'issue', 'problem', 'not working'];
-                        const positiveWords = ['thank', 'great', 'appreciate', 'helpful', 'excellent', 'resolved', 'perfect', 'amazing'];
-                        
-                        const foundFrustration = frustrationWords.filter(w => contentLower.includes(w));
-                        const foundPositive = positiveWords.filter(w => contentLower.includes(w));
-                        
                         let indicator = '➡️ Neutral';
                         let bgColor = 'var(--background-tertiary)';
-                        if (foundFrustration.length > foundPositive.length) {
+                        if (msg.sentiment === 'negative') {
                             indicator = '⚠️ Signs of frustration';
                             bgColor = 'rgba(209, 52, 56, 0.1)';
-                        } else if (foundPositive.length > 0) {
+                        } else if (msg.sentiment === 'positive') {
                             indicator = '✅ Positive tone';
                             bgColor = 'rgba(16, 124, 16, 0.1)';
                         }
                         
-                        // Extract a relevant snippet (first 150 chars or first sentence)
                         let snippet = content.substring(0, 200);
                         if (content.length > 200) snippet += '...';
                         
+                        const borderColor = msg.sentiment === 'negative' ? 'var(--accent-danger)' : msg.sentiment === 'positive' ? 'var(--accent-success)' : 'var(--border-subtle)';
+                        
                         return `
-                            <div style="background: ${bgColor}; padding: 12px; border-radius: 8px; border-left: 3px solid ${foundFrustration.length > foundPositive.length ? 'var(--accent-danger)' : foundPositive.length > 0 ? 'var(--accent-success)' : 'var(--border-subtle)'};">
+                            <div style="background: ${bgColor}; padding: 12px; border-radius: 8px; border-left: 3px solid ${borderColor};">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <span style="font-weight: 600; color: var(--text-primary);">${indicator}</span>
-                                    <span style="font-size: 0.75rem; color: var(--text-tertiary);">${formatDateShort(msg.created_on)}</span>
+                                    <div style="text-align: right;">
+                                        <span style="font-size: 0.7rem; color: var(--accent-primary); display: block;">${msg.reason}</span>
+                                        <span style="font-size: 0.75rem; color: var(--text-tertiary);">${formatDateShort(msg.created_on)}</span>
+                                    </div>
                                 </div>
                                 <div style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.5; font-style: italic;">"${snippet}"</div>
-                                ${foundFrustration.length > 0 ? `<div style="margin-top: 8px; font-size: 0.75rem; color: var(--accent-warning);">Detected: ${foundFrustration.join(', ')}</div>` : ''}
-                                ${foundPositive.length > 0 ? `<div style="margin-top: 8px; font-size: 0.75rem; color: var(--accent-success);">Detected: ${foundPositive.join(', ')}</div>` : ''}
+                                ${msg.foundFrustration.length > 0 ? `<div style="margin-top: 8px; font-size: 0.75rem; color: var(--accent-warning);">Detected: ${msg.foundFrustration.join(', ')}</div>` : ''}
+                                ${msg.foundPositive.length > 0 ? `<div style="margin-top: 8px; font-size: 0.75rem; color: var(--accent-success);">Detected: ${msg.foundPositive.join(', ')}</div>` : ''}
                             </div>
                         `;
                     }).join('')}
@@ -1094,7 +1148,7 @@ function renderAnalysis(analysis, caseData) {
 
 async function renderManagerDashboard() {
     state.currentView = 'manager';
-    state.selectedDateRange = state.selectedDateRange || '30d';
+    state.selectedDateRange = state.selectedDateRange || 30;  // Default to 30 days (numeric)
     showLoading(true);
     
     const main = document.getElementById('main-content');
@@ -1106,9 +1160,9 @@ async function renderManagerDashboard() {
                     <p class="subtitle">Empowering your team through data-driven coaching insights</p>
                 </div>
                 <div class="date-range-selector">
-                    <button class="date-btn ${state.selectedDateRange === '7d' ? 'active' : ''}" onclick="updateDateRange('7d')">7 Days</button>
-                    <button class="date-btn ${state.selectedDateRange === '30d' ? 'active' : ''}" onclick="updateDateRange('30d')">30 Days</button>
-                    <button class="date-btn ${state.selectedDateRange === '90d' ? 'active' : ''}" onclick="updateDateRange('90d')">Quarter</button>
+                    <button class="date-btn ${state.selectedDateRange === 7 ? 'active' : ''}" onclick="updateDateRange('7d')">7 Days</button>
+                    <button class="date-btn ${state.selectedDateRange === 30 ? 'active' : ''}" onclick="updateDateRange('30d')">30 Days</button>
+                    <button class="date-btn ${state.selectedDateRange === 90 ? 'active' : ''}" onclick="updateDateRange('90d')">Quarter</button>
                 </div>
             </div>
         </div>
@@ -1194,14 +1248,33 @@ async function renderManagerDashboard() {
 }
 
 function updateDateRange(range) {
-    state.selectedDateRange = range;
+    // Convert range string to days number
+    const daysMap = { '7d': 7, '30d': 30, '90d': 90 };
+    state.selectedDateRange = daysMap[range] || 90;
+    
     // Update button states
     document.querySelectorAll('.date-btn').forEach(btn => {
         btn.classList.toggle('active', btn.textContent.includes(
             range === '7d' ? '7' : range === '30d' ? '30' : 'Quarter'
         ));
     });
-    renderTeamDashboardContent();
+    
+    // Re-fetch data with new date filter
+    refreshManagerData();
+}
+
+async function refreshManagerData() {
+    try {
+        showLoading(true);
+        const summaryData = await getManagerSummary();
+        state.engineers = summaryData.engineers || [];
+        state.managerStats = summaryData.stats || {};
+        renderTeamDashboardContent();
+    } catch (error) {
+        console.error('Failed to refresh manager data:', error);
+    } finally {
+        showLoading(false);
+    }
 }
 
 function renderTeamDashboardContent() {
@@ -1216,20 +1289,11 @@ function renderTeamDashboardContent() {
     
     const engineers = state.engineers;
     const stats = state.managerStats || {};
-    const range = state.selectedDateRange;
+    const range = state.selectedDateRange || 30;  // numeric days
     
-    const rangeLabel = range === '7d' ? 'Past 7 Days' : range === '30d' ? 'Past 30 Days' : 'Past Quarter';
+    const rangeLabel = range === 7 ? 'Past 7 Days' : range === 30 ? 'Past 30 Days' : 'Past Quarter';
     
-    // Calculate date cutoff based on range selection
-    const now = new Date();
-    const cutoffDays = range === '7d' ? 7 : range === '30d' ? 30 : 90;
-    const cutoffDate = new Date(now.getTime() - cutoffDays * 24 * 60 * 60 * 1000);
-    
-    // Note: Since we're using summary endpoint, we show all active cases
-    // The date range affects the "period" label but active cases are always current
-    // In a real implementation, you'd have historical data to filter
-    
-    // Use pre-computed stats from fast endpoint
+    // Use pre-computed stats from fast endpoint (already filtered by days)
     const totalActiveCases = stats.total_active_cases || engineers.reduce((sum, e) => sum + (e.active_cases || 0), 0);
     const totalResolvedCases = stats.total_resolved_cases || engineers.reduce((sum, e) => sum + (e.resolved_cases || 0), 0);
     const totalCases = stats.total_cases || (totalActiveCases + totalResolvedCases);
@@ -1477,8 +1541,8 @@ async function viewEngineerDetail(engineerId) {
     const engCases = activeCases;
     
     state.selectedEngineer = engineer;
-    const dateRange = state.selectedDateRange || '30d';
-    const rangeLabel = dateRange === '7d' ? 'Past 7 Days' : dateRange === '30d' ? 'Past 30 Days' : 'Past Quarter';
+    const dateRange = state.selectedDateRange || 30;  // numeric days
+    const rangeLabel = dateRange === 7 ? 'Past 7 Days' : dateRange === 30 ? 'Past 30 Days' : 'Past Quarter';
     
     // Use the pre-calculated avg_sentiment from API (consistent with manager view)
     // Fall back to calculating from cases if not available

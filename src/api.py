@@ -327,11 +327,16 @@ async def test_pii_scrubbing(request: PIITestRequest):
 # =============================================================================
 
 @app.get("/api/manager/summary")
-async def get_manager_summary():
+async def get_manager_summary(
+    days: int = Query(None, description="Filter to cases created within last N days")
+):
     """
     Fast summary endpoint for manager dashboard.
     Uses SQL aggregation to avoid N+1 queries.
     Returns engineer summaries with case counts and staleness metrics.
+    
+    Query params:
+    - days: Filter to cases created within last N days (7, 30, 90)
     """
     # Try to use direct SQL for performance
     db_manager = None
@@ -346,23 +351,27 @@ async def get_manager_summary():
     if not db_manager:
         # Fallback to slow method if no direct DB access
         logger.warning("Manager summary: No direct DB access, using slow method")
-        return await _get_manager_summary_slow()
+        return await _get_manager_summary_slow(days)
     
     try:
         conn = db_manager.connect()
         cursor = conn.cursor()
         
-        # Simpler, faster query - avoids correlated subqueries that can timeout
-        # Get engineer info and case counts
-        cursor.execute("""
+        # Build date filter clause
+        date_filter = ""
+        if days:
+            date_filter = f"AND c.created_on >= DATEADD(day, -{days}, GETUTCDATE())"
+        
+        # Get engineer info and case counts with date filter
+        cursor.execute(f"""
             SELECT 
                 e.id as engineer_id,
                 e.name as engineer_name,
                 e.email as engineer_email,
                 e.team as engineer_team,
-                COUNT(CASE WHEN c.status = 'active' THEN 1 END) as active_cases,
-                COUNT(CASE WHEN c.status = 'resolved' THEN 1 END) as resolved_cases,
-                COUNT(c.id) as total_cases
+                COUNT(CASE WHEN c.status = 'active' {date_filter.replace('AND', 'AND')} THEN 1 END) as active_cases,
+                COUNT(CASE WHEN c.status = 'resolved' {date_filter.replace('AND', 'AND')} THEN 1 END) as resolved_cases,
+                COUNT(CASE WHEN 1=1 {date_filter} THEN c.id END) as total_cases
             FROM engineers e
             LEFT JOIN cases c ON c.owner_id = e.id
             WHERE e.id LIKE 'eng-%'
@@ -383,19 +392,22 @@ async def get_manager_summary():
                 "risk_level": "healthy"  # Will be recalculated below
             })
         
-        # Get overall stats
-        cursor.execute("""
+        # Get overall stats with date filter
+        stats_date_filter = f"WHERE created_on >= DATEADD(day, -{days}, GETUTCDATE())" if days else ""
+        cursor.execute(f"""
             SELECT 
                 COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
                 COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved,
                 COUNT(*) as total
             FROM cases
+            {stats_date_filter}
         """)
         stats_row = cursor.fetchone()
         
         # Get sentiment per engineer using weighted keyword matching (matching _calculate_csat_risk logic)
         # More keywords = stronger signal, weighted towards recent messages
-        cursor.execute("""
+        case_date_filter = f"AND c.created_on >= DATEADD(day, -{days}, GETUTCDATE())" if days else ""
+        cursor.execute(f"""
             WITH customer_messages AS (
                 SELECT 
                     c.owner_id,
@@ -429,6 +441,7 @@ async def get_manager_summary():
                 WHERE c.status = 'active' 
                   AND c.owner_id LIKE 'eng-%'
                   AND te.is_customer_communication = 1
+                  {case_date_filter}
             ),
             case_sentiment AS (
                 SELECT 
@@ -490,12 +503,12 @@ async def get_manager_summary():
         }
     except Exception as e:
         logger.error(f"Manager summary SQL failed: {e}", exc_info=True)
-        return await _get_manager_summary_slow()
+        return await _get_manager_summary_slow(days)
 
 
-async def _get_manager_summary_slow():
+async def _get_manager_summary_slow(days: int = None):
     """Fallback slow method for manager summary (loads all cases)."""
-    logger.info("Using slow manager summary method")
+    logger.info(f"Using slow manager summary method (days={days})")
     
     if not app_state.dfm_client:
         raise HTTPException(status_code=503, detail="DfM client not available")
@@ -504,6 +517,12 @@ async def _get_manager_summary_slow():
         # Get all engineers and cases
         engineers = await app_state.dfm_client.get_engineers()
         cases = await app_state.dfm_client.get_cases()
+        
+        # Apply date filter if specified
+        if days:
+            from datetime import datetime, timedelta
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cases = [c for c in cases if c.created_at and c.created_at >= cutoff_date]
         
         active_cases = [c for c in cases if c.status.value == 'active']
         resolved_cases = [c for c in cases if c.status.value == 'resolved']
