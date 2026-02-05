@@ -2463,3 +2463,9 @@ textarea.form-input {
 .resolved-row td {
     color: var(--text-secondary);
 }
+
+/* Badge for engineers with no active cases */
+.badge-neutral {
+    background: var(--background-tertiary);
+    color: var(--text-tertiary);
+}

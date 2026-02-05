@@ -1010,14 +1010,18 @@ async function renderManagerDashboard() {
             // Calculate average sentiment for this engineer's active cases
             const avgSentiment = engActiveCases.length > 0
                 ? engActiveCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engActiveCases.length
-                : 0.5;
+                : null;  // null means no active cases to measure
             
-            // Determine risk level based on sentiment
-            let riskLevel = 'healthy';
-            if (engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.35)) {
-                riskLevel = 'critical';
-            } else if (engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.55)) {
-                riskLevel = 'at_risk';
+            // Determine risk level based on sentiment - only if they have active cases
+            let riskLevel = 'no_cases';  // Default for engineers with no active cases
+            if (engActiveCases.length > 0) {
+                if (engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.35)) {
+                    riskLevel = 'critical';
+                } else if (engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.55)) {
+                    riskLevel = 'at_risk';
+                } else {
+                    riskLevel = 'healthy';
+                }
             }
             
             return {
@@ -1045,6 +1049,15 @@ function updateDateRange(range) {
 }
 
 function renderTeamDashboardContent() {
+    const teamSummaryEl = document.getElementById('team-summary');
+    const teamContainerEl = document.getElementById('team-container');
+    
+    // Guard against race condition where elements don't exist yet
+    if (!teamSummaryEl || !teamContainerEl) {
+        console.warn('Team dashboard elements not ready, skipping render');
+        return;
+    }
+    
     const engineers = state.engineers;
     const stats = state.managerStats || {};
     const range = state.selectedDateRange;
@@ -1082,7 +1095,7 @@ function renderTeamDashboardContent() {
         : 0.5;
     
     // Team summary with visual chart
-    document.getElementById('team-summary').innerHTML = `
+    teamSummaryEl.innerHTML = `
         <div class="summary-grid">
             <div class="summary-card highlight">
                 <div class="summary-header">
@@ -1150,19 +1163,23 @@ function renderTeamDashboardContent() {
     // Engineer cards - using data from fast summary endpoint
     const teamHtml = engineers.map(eng => {
         // Use pre-computed risk_level from fast endpoint
-        const riskLevel = eng.risk_level || 'healthy';
+        const riskLevel = eng.risk_level || 'no_cases';
         const activeCases = eng.active_cases || 0;
         const maxDaysComm = eng.max_days_since_comm || 0;
         const avgDaysComm = eng.avg_days_since_comm || 0;
         
         // Use actual sentiment if available, otherwise estimate from risk level
-        const engAvgSentiment = eng.avg_sentiment 
+        // null sentiment means no active cases
+        const engAvgSentiment = eng.avg_sentiment !== null && eng.avg_sentiment !== undefined
             ? eng.avg_sentiment 
-            : (riskLevel === 'critical' ? 0.35 : riskLevel === 'at_risk' ? 0.55 : 0.75);
+            : (riskLevel === 'critical' ? 0.35 : riskLevel === 'at_risk' ? 0.55 : riskLevel === 'healthy' ? 0.75 : null);
         
-        // Supportive status badges based on risk_level from server
+        // Supportive status badges based on risk_level
         let statusBadge, statusClass;
-        if (riskLevel === 'healthy') {
+        if (riskLevel === 'no_cases' || activeCases === 0) {
+            statusBadge = '📋 No Active Cases';
+            statusClass = 'badge-neutral';
+        } else if (riskLevel === 'healthy') {
             statusBadge = '⭐ Top Performer';
             statusClass = 'badge-excellent';
         } else if (riskLevel === 'at_risk') {
@@ -1176,12 +1193,18 @@ function renderTeamDashboardContent() {
             statusClass = 'badge-good';
         }
         
-        // Show communication staleness indicator
-        const stalenessIndicator = maxDaysComm >= 7 
+        // Show communication staleness indicator (only if they have active cases)
+        const stalenessIndicator = activeCases > 0 && maxDaysComm >= 7 
             ? `<span class="staleness-warning">⏰ ${maxDaysComm}d since comm</span>`
-            : maxDaysComm >= 4
+            : activeCases > 0 && maxDaysComm >= 4
                 ? `<span class="staleness-caution">📅 ${maxDaysComm}d since comm</span>`
                 : '';
+        
+        // Sentiment display - show N/A if no active cases
+        const sentimentDisplay = engAvgSentiment !== null 
+            ? `${Math.round(engAvgSentiment * 100)}%`
+            : 'N/A';
+        const sentimentWidth = engAvgSentiment !== null ? Math.round(engAvgSentiment * 100) : 0;
         
         return `
             <div class="engineer-card-modern" onclick="viewEngineerDetail('${eng.id}')">
@@ -1189,16 +1212,16 @@ function renderTeamDashboardContent() {
                     <div class="engineer-avatar-modern">${(eng.name || 'Unknown').split(' ').map(n => n[0]).join('')}</div>
                     <div class="eng-card-info">
                         <div class="eng-card-name">${eng.name || 'Unknown'}</div>
-                        <div class="eng-card-meta">${activeCases} active cases • ${eng.team || 'GSX Support'}</div>
+                        <div class="eng-card-meta">${activeCases} active cases • ${eng.team || 'Support'}</div>
                         ${stalenessIndicator}
                     </div>
                 </div>
                 <div class="eng-card-middle">
                     <div class="eng-sentiment-visual">
                         <div class="eng-sentiment-bar-bg">
-                            <div class="eng-sentiment-bar-fill ${getSentimentClass(engAvgSentiment)}" style="width: ${Math.round(engAvgSentiment * 100)}%"></div>
+                            <div class="eng-sentiment-bar-fill ${engAvgSentiment !== null ? getSentimentClass(engAvgSentiment) : 'neutral'}" style="width: ${sentimentWidth}%"></div>
                         </div>
-                        <span class="eng-sentiment-value">${Math.round(engAvgSentiment * 100)}%</span>
+                        <span class="eng-sentiment-value">${sentimentDisplay}</span>
                     </div>
                     <div class="eng-case-summary">
                         <span class="case-count-badge">${activeCases} active</span>
@@ -1213,7 +1236,7 @@ function renderTeamDashboardContent() {
         `;
     }).join('');
     
-    document.getElementById('team-container').innerHTML = `
+    teamContainerEl.innerHTML = `
         <div class="team-section-header">
             <h3>Team Members</h3>
             <p class="text-muted">Select an engineer to view personalized coaching insights</p>
