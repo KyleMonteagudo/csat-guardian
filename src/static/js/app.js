@@ -971,41 +971,61 @@ async function renderManagerDashboard() {
     // Debug log to see what we're getting
     console.log('Manager summary data:', summaryData);
     
-    // Map summary data to expected format
-    if (summaryData && summaryData.engineers && summaryData.engineers.length > 0) {
+    // Check if we got USEFUL data (not just empty engineer list)
+    // The slow fallback returns engineers but with active_cases=0 and no stats
+    const hasUsefulData = summaryData && 
+        summaryData.engineers && 
+        summaryData.engineers.length > 0 &&
+        summaryData.stats &&
+        (summaryData.stats.total_active_cases > 0 || summaryData.stats.total_cases > 0);
+    
+    if (hasUsefulData) {
         state.engineers = summaryData.engineers;
         state.managerStats = summaryData.stats || {};
     } else {
-        // Fallback to slow method if fast endpoint fails or returns empty
-        console.log('Fast endpoint returned no data, falling back to slow method');
+        // Fast endpoint returned incomplete data, use slow method to load all cases
+        console.log('Fast endpoint returned incomplete data, falling back to slow method');
         const [engineersData, casesData] = await Promise.all([
             getEngineers(),
             getCases()
         ]);
-        state.engineers = engineersData?.engineers || engineersData || [];
         
-        // Build stats from cases
+        const engineers = engineersData?.engineers || engineersData || [];
         const allCases = casesData?.cases || casesData || [];
         const activeCases = allCases.filter(c => c.status === 'active');
         const resolvedCases = allCases.filter(c => c.status === 'resolved');
         
         state.managerStats = {
-            total_engineers: state.engineers.length,
+            total_engineers: engineers.length,
             total_active_cases: activeCases.length,
             total_resolved_cases: resolvedCases.length,
             total_cases: allCases.length
         };
         
-        // Compute active_cases per engineer from the cases data
-        state.engineers = state.engineers.map(eng => {
+        // Compute metrics per engineer from the cases data
+        state.engineers = engineers.map(eng => {
             const engActiveCases = activeCases.filter(c => c.owner?.id === eng.id);
             const engResolvedCases = resolvedCases.filter(c => c.owner?.id === eng.id);
+            
+            // Calculate average sentiment for this engineer's active cases
+            const avgSentiment = engActiveCases.length > 0
+                ? engActiveCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engActiveCases.length
+                : 0.5;
+            
+            // Determine risk level based on sentiment
+            let riskLevel = 'healthy';
+            if (engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.35)) {
+                riskLevel = 'critical';
+            } else if (engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.55)) {
+                riskLevel = 'at_risk';
+            }
+            
             return {
                 ...eng,
                 active_cases: engActiveCases.length,
                 resolved_cases: engResolvedCases.length,
-                risk_level: engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.35) ? 'critical' 
-                    : engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.55) ? 'at_risk' : 'healthy'
+                risk_level: riskLevel,
+                avg_sentiment: avgSentiment
             };
         });
     }
@@ -1135,8 +1155,10 @@ function renderTeamDashboardContent() {
         const maxDaysComm = eng.max_days_since_comm || 0;
         const avgDaysComm = eng.avg_days_since_comm || 0;
         
-        // Map risk level to sentiment score for display
-        const engAvgSentiment = riskLevel === 'critical' ? 0.35 : riskLevel === 'at_risk' ? 0.55 : 0.75;
+        // Use actual sentiment if available, otherwise estimate from risk level
+        const engAvgSentiment = eng.avg_sentiment 
+            ? eng.avg_sentiment 
+            : (riskLevel === 'critical' ? 0.35 : riskLevel === 'at_risk' ? 0.55 : 0.75);
         
         // Supportive status badges based on risk_level from server
         let statusBadge, statusClass;
