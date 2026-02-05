@@ -18,7 +18,7 @@
 
 ---
 
-## �📋 Project Status
+## 📋 Project Status
 
 ### ✅ Completed (Dev Environment)
 
@@ -27,14 +27,26 @@
 | **Frontend UI** | ✅ Running | **Microsoft Learn-style HTML/CSS/JS at `/ui`** |
 | Azure SQL Database | ✅ Deployed | 12 tables, 8 test cases with timelines |
 | App Service | ✅ Running | Python 3.11, VNet integrated, private endpoints |
-| Azure OpenAI | ✅ Connected | GPT-4o via MSI authentication |
+| Azure OpenAI | ✅ Connected | GPT-4o via Managed Identity |
+| Azure AI Content Safety | ✅ Connected | PII detection via Managed Identity |
 | Semantic Kernel Agent | ✅ Working | Function calling with CSAT rules plugin |
-| MSI Authentication | ✅ Working | No API keys - SQL and OpenAI both use managed identity |
+| **Security Hardening** | ✅ Complete | **Local auth DISABLED on all services** |
 | `/ui` | ✅ Working | **Static frontend served by FastAPI** |
 | `/api/health` | ✅ Working | Health check endpoint |
 | `/api/cases` | ✅ Working | Lists cases from Azure SQL |
 | `/api/analyze/{id}` | ✅ Working | Sentiment analysis (AI-powered) |
 | `/api/chat` | ✅ Working | Conversational CSAT coaching |
+
+### 🔒 Security Status
+
+> **All Azure services use Managed Identity authentication. Local auth (API keys) is DISABLED.**
+
+| Service | Local Auth | Auth Method |
+|---------|------------|-------------|
+| Azure SQL | ❌ Disabled | Managed Identity |
+| Azure OpenAI | ❌ Disabled | Managed Identity |
+| Azure AI Content Safety | ❌ Disabled | Managed Identity |
+| Key Vault | ❌ Disabled | Managed Identity (RBAC) |
 
 ### 🔄 Pending (For Production)
 
@@ -42,7 +54,6 @@
 |------|----------|--------|-------|
 | DfM/Kusto Integration | High | ⏳ Awaiting access | Data is in Azure Data Explorer (Kusto), not D365 OData |
 | Teams Bot Integration | High | ⏳ Awaiting security approval | Need approval for Azure Function gateway |
-| Directory Readers Role | Medium | ⏳ Awaiting Entra admin | SQL Server MSI needs this for least-privilege |
 | CI/CD Pipeline | Low | Blocked | Network restrictions prevent GitHub Actions |
 
 ---

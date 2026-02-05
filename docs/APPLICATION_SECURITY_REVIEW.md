@@ -6,7 +6,17 @@
 **Purpose:** Proactive customer support experience optimization through AI-powered sentiment analysis and engineer coaching  
 **Requestor:** Kyle Monteagudo  
 **Date:** January 22, 2026  
+**Last Updated:** February 4, 2026  
 **Classification:** Internal Enterprise Tool  
+
+### Security Highlights (Updated Feb 2026)
+
+| Security Control | Status |
+|-----------------|--------|
+| Local Auth (API Keys) | ❌ **DISABLED** on all Azure services |
+| Authentication | ✅ Managed Identity only |
+| Network Access | ✅ Private Endpoints (no public access) |
+| PII Protection | ✅ Two-layer scrubbing (regex + Azure AI Content Safety) |
 
 ---
 

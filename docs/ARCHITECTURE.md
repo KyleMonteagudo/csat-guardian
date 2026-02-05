@@ -9,7 +9,10 @@
 | 3.0 | 2026-01-24 | Kyle Monteagudo | Updated for Commercial Azure (Central US), AI Foundry (AI Services + AI Hub) |
 | 4.0 | 2026-01-25 | Kyle Monteagudo | Fixed database concurrency, all analysis features working, Kudu deployment method |
 | 5.0 | 2026-01-26 | Kyle Monteagudo | **MSI Authentication**: Full managed identity implementation for SQL and OpenAI |
-| 6.0 | 2026-01-27 | Kyle Monteagudo | **DfM via Kusto**: DfM data is in Azure Data Explorer (ADX), not D365 OData. Teams Bot requires Azure Function gateway || 7.0 | 2026-02-03 | Kyle Monteagudo | **Static Frontend**: Microsoft Learn-style UI with HTML/CSS/JS served by FastAPI at `/ui` |
+| 6.0 | 2026-01-27 | Kyle Monteagudo | **DfM via Kusto**: DfM data is in Azure Data Explorer (ADX), not D365 OData. Teams Bot requires Azure Function gateway |
+| 7.0 | 2026-02-03 | Kyle Monteagudo | **Static Frontend**: Microsoft Learn-style UI with HTML/CSS/JS served by FastAPI at `/ui` |
+| 8.0 | 2026-02-04 | Kyle Monteagudo | **Security Hardening**: Local auth DISABLED on all services (SQL, OpenAI, Content Safety). All auth via Managed Identity only |
+
 ---
 
 ## Quick Links

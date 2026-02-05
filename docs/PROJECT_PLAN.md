@@ -12,6 +12,7 @@
 | 1.5 | 2026-01-24 | Kyle Monteagudo | Updated to App Service with VNet integration and private endpoints |
 | 1.6 | 2026-01-26 | Kyle Monteagudo | **MSI Authentication complete**: All services using managed identity, no API keys |
 | 1.7 | 2026-01-27 | Kyle Monteagudo | **DfM via Kusto**: Discovered DfM data is in Azure Data Explorer, updated integration approach. Target audience: GSX engineers |
+| 1.8 | 2026-02-04 | Kyle Monteagudo | **Security Hardening Complete**: Local auth disabled on all Azure services. Azure AI Content Safety integrated for PII detection |
 
 ---
 
@@ -30,7 +31,8 @@ This document outlines the Software Development Life Cycle (SDLC) plan for CSAT 
 | **Data Storage** | Azure SQL Database via private endpoint (no local data) |
 | **Application Hosting** | Azure App Service with VNet integration (no local hosting) |
 | **Network Security** | Private endpoints for all Azure services (no public access) |
-| **AI Services** | Azure OpenAI (gpt-4o) via private endpoint |
+| **AI Services** | Azure OpenAI (gpt-4o) + Azure AI Content Safety via Managed Identity |
+| **Authentication** | **Managed Identity ONLY** - local auth disabled on all services |
 
 ---
 

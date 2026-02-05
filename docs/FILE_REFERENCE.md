@@ -4,7 +4,7 @@
 > 
 > **Audience:** Developers, security auditors, project managers, and anyone who needs to understand this codebase.
 > 
-> **Last Updated:** February 3, 2026
+> **Last Updated:** February 4, 2026
 
 ---
 

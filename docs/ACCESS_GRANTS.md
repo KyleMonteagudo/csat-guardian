@@ -1,100 +1,96 @@
-# CSAT Guardian - Access Grants Tracking
+# CSAT Guardian - Access Grants & Security Status
 
-> **Purpose:** Track all access grants for future revocation when transitioning to private networking / jumpbox architecture.
+> **Purpose:** Track security configuration and access grants for Azure resources.
 > 
-> **Last Updated:** January 23, 2026
+> **Last Updated:** February 4, 2026
 
 ---
 
-## 🔐 Overview
+## 🔐 Security Status
 
-This document tracks all access grants made during development. When the project transitions to:
-- **Private networking** (VNet integration)
-- **Jumpbox architecture** (no local workstation access)
-- **Production deployment**
+> ✅ **Local authentication is DISABLED** on all services. All access uses Managed Identity.
 
-...these grants should be reviewed and revoked as appropriate.
+### Current Security Configuration
 
----
-
-## 📋 Active Access Grants
-
-### Azure SQL Server Firewall Rules
-
-| Rule Name | IP Range | Granted To | Date | Purpose | Revoke Command |
-|-----------|----------|------------|------|---------|----------------|
-| `AllowAzureServices` | 0.0.0.0 - 0.0.0.0 | Azure Services | 2026-01-23 | Allow Container Apps to access SQL | `az sql server firewall-rule delete --resource-group rg-csatguardian-dev --server sql-csatguardian-dev --name AllowAzureServices` |
-| `AllowKyleLocalDev` | 149.76.66.8 | Kyle Monteagudo (Local Dev - Home IP) | 2026-01-23 | Local development/testing (requires VPN disconnected) | `az sql server firewall-rule delete --resource-group rg-csatguardian-dev --server sql-csatguardian-dev --name AllowKyleLocalDev` |
-
-**Note:** VPN IPs (52.x.x.x range) were tested but removed. Local dev requires VPN disconnected or use jumpbox in future.
-
-### Azure Key Vault RBAC Assignments
-
-| Role | Principal | Principal ID | Date | Purpose | Revoke Command |
-|------|-----------|--------------|------|---------|----------------|
-| Key Vault Secrets Officer | Kyle Monteagudo | faead4f3-585b-450f-bd28-9c175c09260d | 2026-01-23 | Manage secrets during development | `az role assignment delete --assignee faead4f3-585b-450f-bd28-9c175c09260d --role "Key Vault Secrets Officer" --scope "/subscriptions/9ea57abb-990d-4601-94b5-2a2a6d418274/resourceGroups/rg-csatguardian-dev/providers/Microsoft.KeyVault/vaults/kv-csatguardian-dev"` |
-| Key Vault Secrets User | Container App (Managed Identity) | (system-assigned) | 2026-01-23 | App reads secrets at runtime | Keep for production |
+| Resource | Local Auth | Public Network | Auth Method |
+|----------|------------|----------------|-------------|
+| Azure SQL Server | ❌ Disabled | ❌ Disabled (Private Endpoint only) | Managed Identity |
+| Azure OpenAI (AI Services) | ❌ Disabled | ❌ Disabled (Private Endpoint only) | Managed Identity |
+| Azure AI Content Safety | ❌ Disabled | Via VNet | Managed Identity |
+| Key Vault | ❌ Disabled | ❌ Disabled (Private Endpoint only) | Managed Identity (RBAC) |
 
 ---
 
-## 🚀 Transition Checklist (Future)
+## 📋 Managed Identity Role Assignments
 
-When transitioning to jumpbox/private networking:
+### App Service Managed Identity
 
-### Phase 1: Set Up Private Networking
-- [ ] Create VNet for CSAT Guardian
-- [ ] Configure Private Endpoints for:
-  - [ ] Azure SQL Database
-  - [ ] Azure Key Vault
-  - [ ] Azure Container Registry
-  - [ ] Azure OpenAI (if supported)
-- [ ] Set up Jumpbox VM in the VNet
-- [ ] Configure NSG rules
+| Resource | Role | Purpose |
+|----------|------|---------|
+| Azure SQL Database | `db_datareader`, `db_datawriter` | Read/write case data |
+| Azure OpenAI (AI Services) | `Cognitive Services User` | GPT-4o sentiment analysis |
+| Azure AI Content Safety | `Cognitive Services User` | PII detection |
+| Key Vault | `Key Vault Secrets User` | Read secrets (if needed) |
 
-### Phase 2: Revoke Public Access
-- [ ] Remove `AllowKyleLocalDev` SQL firewall rule
-- [ ] Disable public network access on SQL Server
-- [ ] Disable public network access on Key Vault
-- [ ] Review and remove unnecessary RBAC assignments
+### SQL Server Entra Admin
 
-### Phase 3: Verify
-- [ ] Confirm app works via private endpoints
-- [ ] Confirm no public access remains
-- [ ] Update documentation
+| Principal | Role | Notes |
+|-----------|------|-------|
+| Kyle Monteagudo | SQL Admin | Entra ID authentication |
 
 ---
 
-## 📝 Commands to List Current Access
+## 🚀 Transition Checklist - COMPLETED ✅
 
-### List SQL Firewall Rules
+The following security hardening was completed in February 2026:
+
+### Phase 1: Private Networking ✅
+- [x] Create VNet for CSAT Guardian (`vnet-csatguardian-dev`)
+- [x] Configure Private Endpoints for:
+  - [x] Azure SQL Database (`pep-csatguardian-sql`)
+  - [x] Azure Key Vault (`pep-csatguardian-kv`)
+  - [x] Azure OpenAI / AI Services (`pep-csatguardian-ais`)
+- [x] Set up Devbox VM in the VNet (`vm-devbox-csatguardian`)
+- [x] Configure NSG rules
+
+### Phase 2: Disable Local Auth ✅
+- [x] Disable local auth on Azure SQL Server
+- [x] Disable local auth on Azure OpenAI (AI Services)
+- [x] Disable local auth on Azure AI Content Safety
+- [x] Disable public network access on Key Vault
+- [x] Configure App Service MSI with required RBAC roles
+
+### Phase 3: Verified ✅
+- [x] App works via private endpoints with managed identity
+- [x] No public access remains on backend services
+- [x] Documentation updated
+
+---
+
+## 📝 Commands to Verify Security Configuration
+
+### Check SQL Server Auth Settings
 ```powershell
-az sql server firewall-rule list --resource-group rg-csatguardian-dev --server sql-csatguardian-dev -o table
+az sql server show --resource-group CSAT_Guardian_Dev --name sql-csatguardian-dev --query "administrators"
 ```
 
-### List Key Vault RBAC Assignments
+### List Cognitive Services (AI Services) Settings
 ```powershell
-az role assignment list --scope "/subscriptions/9ea57abb-990d-4601-94b5-2a2a6d418274/resourceGroups/rg-csatguardian-dev/providers/Microsoft.KeyVault/vaults/kv-csatguardian-dev" -o table
+az cognitiveservices account show --resource-group CSAT_Guardian_Dev --name ais-csatguardian-dev --query "properties.disableLocalAuth"
 ```
 
-### List All Resource Group RBAC
+### List Key Vault Network Rules
 ```powershell
-az role assignment list --resource-group rg-csatguardian-dev -o table
+az keyvault show --name kv-csatguard-dev --query "properties.networkAcls"
 ```
 
----
-
-## 🗑️ Full Cleanup Commands (Emergency Revocation)
-
-If you need to quickly revoke all local dev access:
-
+### List App Service Identity
 ```powershell
-# Remove local dev SQL firewall rule
-az sql server firewall-rule delete --resource-group rg-csatguardian-dev --server sql-csatguardian-dev --name AllowKyleLocalDev --yes
-
-# Remove Key Vault Secrets Officer (keep if still needed for management)
-# az role assignment delete --assignee faead4f3-585b-450f-bd28-9c175c09260d --role "Key Vault Secrets Officer" --scope "/subscriptions/9ea57abb-990d-4601-94b5-2a2a6d418274/resourceGroups/rg-csatguardian-dev/providers/Microsoft.KeyVault/vaults/kv-csatguardian-dev"
+az webapp identity show --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev
 ```
 
 ---
+
+*This document was updated February 4, 2026 to reflect security hardening completion.*
 
 *This document should be updated whenever access is granted or revoked.*

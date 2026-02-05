@@ -1,12 +1,16 @@
 # CSAT Guardian - Quick Reference Card
 
-## 🔑 Credentials
+## 🔑 Authentication
 
-| Resource | Username | Password/Key |
-|----------|----------|--------------|
-| SQL Server | `sqladmin` | Key Vault: `sql-admin-password` |
-| Devbox VM | `testadmin` | Key Vault: `devbox-password` |
-| Azure OpenAI | - | Key Vault: `azure-openai-key` |
+> **⚠️ Local auth is DISABLED** on all Azure services. All authentication uses **Managed Identity**.
+
+| Resource | Auth Method | Notes |
+|----------|-------------|-------|
+| SQL Server | Managed Identity | App Service MSI has db_datareader/db_datawriter |
+| Azure OpenAI | Managed Identity | App Service MSI has Cognitive Services User role |
+| Azure AI Content Safety | Managed Identity | App Service MSI has Cognitive Services User role |
+| Key Vault | Managed Identity | RBAC-based access |
+| Devbox VM | `testadmin` | Password in Key Vault (for Bastion access only) |
 
 ---
 
@@ -53,16 +57,20 @@ az webapp restart --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev
 
 ## 🔧 Required App Settings
 
-| Setting | Value |
-|---------|-------|
-| `AZURE_OPENAI_ENDPOINT` | `https://ais-csatguardian-dev.cognitiveservices.azure.com/` |
-| `AZURE_OPENAI_API_KEY` | `@Microsoft.KeyVault(VaultName=kv-csatguard-dev;SecretName=azure-openai-key)` |
-| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` |
-| `DATABASE_CONNECTION_STRING` | `Server=tcp:sql-csatguardian-dev.database.windows.net,1433;...` |
-| `WEBSITE_VNET_ROUTE_ALL` | `1` |
-| `WEBSITES_PORT` | `8000` |
+| Setting | Value | Notes |
+|---------|-------|-------|
+| `AZURE_OPENAI_ENDPOINT` | `https://ais-csatguardian-dev.cognitiveservices.azure.com/` | |
+| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` | |
+| `USE_OPENAI_MANAGED_IDENTITY` | `true` | **Required** - local auth disabled |
+| `USE_SQL_MANAGED_IDENTITY` | `true` | **Required** - local auth disabled |
+| `DATABASE_SERVER` | `sql-csatguardian-dev.database.windows.net` | |
+| `DATABASE_NAME` | `sqldb-csatguardian-dev` | |
+| `CONTENT_SAFETY_ENDPOINT` | `https://csatguardcs.cognitiveservices.azure.com/` | For PII detection |
+| `USE_CONTENT_SAFETY_MANAGED_IDENTITY` | `true` | **Required** - local auth disabled |
+| `WEBSITE_VNET_ROUTE_ALL` | `1` | |
+| `WEBSITES_PORT` | `8000` | |
 
-⚠️ **Important**: Use `AZURE_OPENAI_DEPLOYMENT`, NOT `AZURE_OPENAI_DEPLOYMENT_NAME`
+⚠️ **Important**: API keys are NOT used - all services authenticate via Managed Identity
 
 ---
 
