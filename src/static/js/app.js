@@ -648,6 +648,9 @@ async function viewCase(caseId) {
         { text: caseId }
     ]);
     
+    // Determine if this is a resolved case
+    const isResolved = caseData.status === 'resolved' || caseData.status === 'cancelled';
+    
     // Fetch analysis in parallel
     const analysisPromise = analyzeCase(caseId);
     
@@ -656,6 +659,110 @@ async function viewCase(caseId) {
     const daysComm = Math.round(caseData.days_since_last_outbound || 0);
     const csatRisk = caseData.csat_risk || 'healthy';
     const sentimentScore = caseData.sentiment_score || 0.5;
+    const daysOpen = Math.round(caseData.days_open || caseData.days_since_creation || 0);
+    
+    // Different header for resolved vs active cases
+    const headerMetrics = isResolved ? `
+        <div style="display: flex; gap: 24px; text-align: right;">
+            <div>
+                <div class="metric-value">${daysOpen}</div>
+                <div class="metric-label">Days to Resolution</div>
+            </div>
+            <div>
+                <span class="badge badge-success" style="font-size: 1rem; padding: 8px 16px;">✅ RESOLVED</span>
+            </div>
+        </div>
+    ` : `
+        <div style="display: flex; gap: 24px; text-align: right;">
+            <div>
+                <div class="metric-value ${daysComm > 2 ? 'danger' : daysComm > 1 ? 'warning' : ''}">${daysComm}</div>
+                <div class="metric-label">Days Since Comm</div>
+            </div>
+            <div>
+                <div class="metric-value ${daysNote >= 7 ? 'danger' : daysNote >= 5 ? 'warning' : ''}">${daysNote}</div>
+                <div class="metric-label">Days Since Note</div>
+            </div>
+        </div>
+    `;
+    
+    // Different main content for resolved vs active cases
+    const mainContent = isResolved ? `
+        <!-- Post-Closure Analysis Section for Resolved Cases -->
+        <div id="analysis-section" class="analysis-section mb-lg">
+            <div class="loading"><div class="spinner"></div></div>
+            <p class="text-center text-muted">Analyzing case history...</p>
+        </div>
+        
+        <!-- Case History Summary -->
+        <div id="actions-section" class="card mb-lg" style="display: none;">
+            <h3>📚 Case Review & Learnings</h3>
+            <div id="actions-content" class="mt-md"></div>
+        </div>
+        
+        <!-- Chat Section for asking about resolved case -->
+        <div class="card">
+            <h3>💬 Ask CSAT Guardian About This Case</h3>
+            <p class="text-muted text-small mt-sm">Ask questions about how this case was handled or what could be improved.</p>
+            <div id="chat-container" class="mt-md">
+                <div id="chat-messages" style="max-height: 350px; overflow-y: auto; margin-bottom: var(--spacing-md); padding: var(--spacing-sm);">
+                    <div class="chat-message">
+                        <div class="chat-avatar">🤖</div>
+                        <div class="chat-bubble">
+                            <p>This case has been resolved. I can help you review it for learnings. You can ask me:</p>
+                            <ul style="margin: 8px 0 0 16px; font-size: 0.9rem;">
+                                <li>What went well on this case?</li>
+                                <li>What could have been done differently?</li>
+                                <li>How was the customer sentiment throughout?</li>
+                                <li>Summarize the resolution</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-sm">
+                    <input type="text" id="chat-input" class="form-input" placeholder="Ask a question about this resolved case..." onkeypress="handleChatKeypress(event)">
+                    <button class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    ` : `
+        <!-- AI Sentiment Analysis Section -->
+        <div id="analysis-section" class="analysis-section mb-lg">
+            <div class="loading"><div class="spinner"></div></div>
+            <p class="text-center text-muted">Analyzing case with Azure OpenAI...</p>
+        </div>
+        
+        <!-- Suggested Actions Section -->
+        <div id="actions-section" class="card mb-lg" style="display: none;">
+            <h3>💡 Suggested Actions</h3>
+            <div id="actions-content" class="mt-md"></div>
+        </div>
+        
+        <!-- Chat Section -->
+        <div class="card">
+            <h3>💬 Ask CSAT Guardian About This Case</h3>
+            <p class="text-muted text-small mt-sm">Ask questions about sentiment, customer concerns, or get coaching advice.</p>
+            <div id="chat-container" class="mt-md">
+                <div id="chat-messages" style="max-height: 350px; overflow-y: auto; margin-bottom: var(--spacing-md); padding: var(--spacing-sm);">
+                    <div class="chat-message">
+                        <div class="chat-avatar">🤖</div>
+                        <div class="chat-bubble">
+                            <p>I've analyzed this case. What would you like to know? You can ask me:</p>
+                            <ul style="margin: 8px 0 0 16px; font-size: 0.9rem;">
+                                <li>Why is the customer frustrated?</li>
+                                <li>What should I do next?</li>
+                                <li>Is there any risk of low CSAT?</li>
+                                <li>Summarize the customer's concerns</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-sm">
+                    <input type="text" id="chat-input" class="form-input" placeholder="Ask a question about this case..." onkeypress="handleChatKeypress(event)">
+                    <button class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    `;
     
     main.innerHTML = `
         <div class="content-header flex justify-between items-center">
@@ -664,16 +771,7 @@ async function viewCase(caseId) {
                 <h1>${caseData.title || caseId}</h1>
                 <p class="subtitle">${caseData.id} • ${caseData.customer?.company || 'Unknown Customer'} (${caseData.customer?.tier || 'Standard'})</p>
             </div>
-            <div style="display: flex; gap: 24px; text-align: right;">
-                <div>
-                    <div class="metric-value ${daysComm > 2 ? 'danger' : daysComm > 1 ? 'warning' : ''}">${daysComm}</div>
-                    <div class="metric-label">Days Since Comm</div>
-                </div>
-                <div>
-                    <div class="metric-value ${daysNote >= 7 ? 'danger' : daysNote >= 5 ? 'warning' : ''}">${daysNote}</div>
-                    <div class="metric-label">Days Since Note</div>
-                </div>
-            </div>
+            ${headerMetrics}
         </div>
         
         <div class="two-column">
@@ -683,7 +781,7 @@ async function viewCase(caseId) {
                     <h3>📋 Case Details</h3>
                     <div class="mt-md">
                         <div class="text-small text-muted">Status</div>
-                        <div><span class="badge badge-info">${caseData.status || 'Active'}</span></div>
+                        <div><span class="badge ${isResolved ? 'badge-success' : 'badge-info'}">${caseData.status || 'Active'}</span></div>
                     </div>
                     <div class="mt-md">
                         <div class="text-small text-muted">Severity</div>
@@ -694,8 +792,8 @@ async function viewCase(caseId) {
                         <div>${formatDateShort(caseData.created_on)}</div>
                     </div>
                     <div class="mt-md">
-                        <div class="text-small text-muted">Days Open</div>
-                        <div>${Math.round(caseData.days_open || caseData.days_since_creation || 0)} days</div>
+                        <div class="text-small text-muted">${isResolved ? 'Time to Resolution' : 'Days Open'}</div>
+                        <div>${daysOpen} days</div>
                     </div>
                     <div class="mt-md">
                         <div class="text-small text-muted">Owner</div>
@@ -719,43 +817,7 @@ async function viewCase(caseId) {
             </div>
             
             <div class="main-column">
-                <!-- AI Sentiment Analysis Section -->
-                <div id="analysis-section" class="analysis-section mb-lg">
-                    <div class="loading"><div class="spinner"></div></div>
-                    <p class="text-center text-muted">Analyzing case with Azure OpenAI...</p>
-                </div>
-                
-                <!-- Suggested Actions Section -->
-                <div id="actions-section" class="card mb-lg" style="display: none;">
-                    <h3>💡 Suggested Actions</h3>
-                    <div id="actions-content" class="mt-md"></div>
-                </div>
-                
-                <!-- Chat Section -->
-                <div class="card">
-                    <h3>💬 Ask CSAT Guardian About This Case</h3>
-                    <p class="text-muted text-small mt-sm">Ask questions about sentiment, customer concerns, or get coaching advice.</p>
-                    <div id="chat-container" class="mt-md">
-                        <div id="chat-messages" style="max-height: 350px; overflow-y: auto; margin-bottom: var(--spacing-md); padding: var(--spacing-sm);">
-                            <div class="chat-message">
-                                <div class="chat-avatar">🤖</div>
-                                <div class="chat-bubble">
-                                    <p>I've analyzed this case. What would you like to know? You can ask me:</p>
-                                    <ul style="margin: 8px 0 0 16px; font-size: 0.9rem;">
-                                        <li>Why is the customer frustrated?</li>
-                                        <li>What should I do next?</li>
-                                        <li>Is there any risk of low CSAT?</li>
-                                        <li>Summarize the customer's concerns</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex gap-sm">
-                            <input type="text" id="chat-input" class="form-input" placeholder="Ask a question about this case..." onkeypress="handleChatKeypress(event)">
-                            <button class="btn btn-primary" onclick="sendChatMessage()">Send</button>
-                        </div>
-                    </div>
-                </div>
+                ${mainContent}
             </div>
         </div>
     `;
@@ -799,16 +861,21 @@ function renderAnalysis(analysis, caseData) {
     const actionsSection = document.getElementById('actions-section');
     const actionsContent = document.getElementById('actions-content');
     
+    // Check if this is a resolved case
+    const isResolved = caseData?.status === 'resolved' || caseData?.status === 'cancelled';
+    
     if (!analysis) {
         container.innerHTML = `
-            <h3>🤖 AI Sentiment Analysis</h3>
+            <h3>🤖 ${isResolved ? 'Case History Analysis' : 'AI Sentiment Analysis'}</h3>
             <p class="text-muted mt-md">Unable to analyze case. AI service may be unavailable.</p>
         `;
         return;
     }
     
     const sentiment = analysis.sentiment || {};
-    const score = sentiment.score || 0.5;
+    // Use the sentiment score from the case list (calculated consistently) if available
+    // This ensures the list and detail views show the same number
+    const score = caseData?.sentiment_score || sentiment.score || 0.5;
     const label = sentiment.label || 'neutral';
     const trend = sentiment.trend || 'stable';
     const phrases = sentiment.key_phrases || [];
@@ -901,38 +968,99 @@ function renderAnalysis(analysis, caseData) {
         `;
     }
     
-    container.innerHTML = `
-        <h3>🤖 AI Sentiment Analysis</h3>
+    // Different display for resolved vs active cases
+    if (isResolved) {
+        // Resolved case: Show case history analysis
+        const daysToResolve = Math.round(caseData?.days_open || caseData?.days_since_creation || 0);
+        const finalSentiment = score >= 0.6 ? 'Positive' : score >= 0.4 ? 'Neutral' : 'Negative';
+        const outcome = score >= 0.6 ? '✅ Successful resolution - customer satisfied' : 
+                       score >= 0.4 ? '➡️ Neutral outcome - room for improvement' : 
+                       '⚠️ Customer may have been unsatisfied';
         
-        <div class="analysis-header mt-lg">
-            <div class="analysis-score ${sentimentClass}">${Math.round(score * 100)}%</div>
-            <div class="analysis-details">
-                <div class="analysis-label">${label.toUpperCase()}</div>
-                <div class="analysis-trend">Trend: ${trend}</div>
-                <div style="font-size: 0.8rem; color: var(--text-tertiary); margin-top: 4px;">
-                    Based on ${customerMessages.length} customer communication${customerMessages.length !== 1 ? 's' : ''}
+        container.innerHTML = `
+            <h3>📊 Case History Analysis</h3>
+            
+            <div class="analysis-header mt-lg">
+                <div class="analysis-score ${sentimentClass}">${Math.round(score * 100)}%</div>
+                <div class="analysis-details">
+                    <div class="analysis-label">FINAL SENTIMENT: ${finalSentiment.toUpperCase()}</div>
+                    <div class="analysis-trend">${outcome}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-tertiary); margin-top: 4px;">
+                        Resolved in ${daysToResolve} days • ${customerMessages.length} customer interaction${customerMessages.length !== 1 ? 's' : ''}
+                    </div>
                 </div>
             </div>
-        </div>
+            
+            ${evidenceHtml}
+            ${phrasesHtml}
+        `;
         
-        ${concernsHtml}
-        ${evidenceHtml}
-        ${phrasesHtml}
-    `;
-    
-    // Render recommendations in the separate actions section
-    if (recommendations.length > 0) {
+        // Show learnings instead of actions
         actionsSection.style.display = 'block';
+        
+        // Generate learnings based on the case
+        const learnings = [];
+        if (score >= 0.6) {
+            learnings.push('🌟 Customer expressed satisfaction - good communication maintained');
+            if (daysToResolve < 14) learnings.push('⚡ Quick resolution time contributed to positive outcome');
+            if (customerMessages.length >= 3) learnings.push('💬 Good engagement level with multiple touchpoints');
+        } else if (score >= 0.4) {
+            learnings.push('📝 Resolution achieved but customer sentiment was mixed');
+            learnings.push('💡 Consider more proactive communication on similar cases');
+        } else {
+            learnings.push('⚠️ Customer showed signs of frustration during this case');
+            learnings.push('💡 Earlier intervention on negative signals may help in future cases');
+            if (trend === 'declining') learnings.push('📉 Sentiment declined over time - watch for early warning signs');
+        }
+        
+        if (concerns.length > 0) {
+            learnings.push(`📋 Key concerns raised: ${concerns.slice(0, 2).join(', ')}`);
+        }
+        
         actionsContent.innerHTML = `
             <ul class="recommendations-list">
-                ${recommendations.slice(0, 5).map((r, i) => `
+                ${learnings.map((l, i) => `
                     <li class="recommendation-item">
-                        <span class="recommendation-number">#${i + 1}</span>
-                        <span class="recommendation-text">${r}</span>
+                        <span class="recommendation-text">${l}</span>
                     </li>
                 `).join('')}
             </ul>
         `;
+    } else {
+        // Active case: Show current analysis and recommendations
+        container.innerHTML = `
+            <h3>🤖 AI Sentiment Analysis</h3>
+            
+            <div class="analysis-header mt-lg">
+                <div class="analysis-score ${sentimentClass}">${Math.round(score * 100)}%</div>
+                <div class="analysis-details">
+                    <div class="analysis-label">${label.toUpperCase()}</div>
+                    <div class="analysis-trend">Trend: ${trend}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-tertiary); margin-top: 4px;">
+                        Based on ${customerMessages.length} customer communication${customerMessages.length !== 1 ? 's' : ''}
+                    </div>
+                </div>
+            </div>
+            
+            ${concernsHtml}
+            ${evidenceHtml}
+            ${phrasesHtml}
+        `;
+        
+        // Render recommendations in the separate actions section
+        if (recommendations.length > 0) {
+            actionsSection.style.display = 'block';
+            actionsContent.innerHTML = `
+                <ul class="recommendations-list">
+                    ${recommendations.slice(0, 5).map((r, i) => `
+                        <li class="recommendation-item">
+                            <span class="recommendation-number">#${i + 1}</span>
+                            <span class="recommendation-text">${r}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+        }
     }
 }
 

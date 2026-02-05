@@ -1698,6 +1698,35 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
         customer_ids = [c[0] for c in customers]
         
         # =====================================================================
+        # Case descriptions for realistic context
+        # =====================================================================
+        azure_descriptions = [
+            "Customer is experiencing intermittent connectivity issues affecting their production workloads. They report that the issue started after a recent infrastructure update and is impacting end-user experience.",
+            "The customer's application is showing degraded performance during peak hours. Initial investigation suggests resource constraints but further analysis is needed to identify the root cause.",
+            "Customer needs assistance with implementing a disaster recovery solution. They have specific RTO/RPO requirements and want to ensure their architecture meets compliance standards.",
+            "Production environment is experiencing unexpected behavior after deploying a new configuration. Customer needs urgent assistance to minimize business impact.",
+            "Customer is planning a major migration and needs architectural guidance to ensure best practices are followed. They have concerns about downtime during the transition.",
+            "Security team has identified potential vulnerabilities in the current setup. Customer requires assistance in implementing recommended security controls.",
+            "Customer is seeing unexpected charges and needs help understanding their resource consumption. They want to optimize costs while maintaining performance.",
+            "Integration with third-party system is failing intermittently. Customer needs help troubleshooting the connectivity and authentication issues.",
+            "Customer's monitoring alerts are not triggering as expected. They need help configuring proper thresholds and notification channels.",
+            "Performance degradation reported in customer's application. Need to analyze metrics and identify bottlenecks in the current architecture.",
+        ]
+        
+        m365_descriptions = [
+            "Users are reporting issues accessing collaboration tools. The problem appears to be affecting a specific subset of the organization.",
+            "Customer needs help configuring security policies to meet their compliance requirements. They have specific regulatory obligations to address.",
+            "Email flow is experiencing delays for certain recipients. Customer needs investigation into mail routing configuration.",
+            "Users are unable to complete certain workflows in the application. The issue started after a recent update was applied.",
+            "Customer wants to implement new features but is encountering configuration challenges. They need guidance on best practices.",
+            "License assignments are not applying correctly to new users. Customer needs help troubleshooting the provisioning process.",
+            "Customer is planning a tenant-to-tenant migration and needs guidance on the process and potential risks involved.",
+            "Authentication failures are occurring for a subset of users. Customer needs help identifying the root cause.",
+            "Customer wants to optimize their current deployment to improve user experience and reduce costs.",
+            "Reporting and analytics features are not showing expected data. Customer needs help verifying data collection is working correctly.",
+        ]
+        
+        # =====================================================================
         # Case titles for realistic variety
         # =====================================================================
         azure_titles = [
@@ -1870,13 +1899,19 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
                         days_comm = random.choices([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], weights=[0.05, 0.1, 0.1, 0.15, 0.15, 0.15, 0.1, 0.1, 0.05, 0.05])[0]
                         days_note = random.choices([2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14], weights=[0.05, 0.08, 0.1, 0.12, 0.15, 0.12, 0.12, 0.1, 0.08, 0.05, 0.03])[0]
                 
-                # Insert case
+                # Select a description based on team
+                if eng_id in ["eng-008", "eng-009", "eng-010"]:
+                    description = random.choice(m365_descriptions)
+                else:
+                    description = random.choice(azure_descriptions)
+                
+                # Insert case with description
                 cursor.execute(f"""
-                    INSERT INTO cases (id, title, status, priority, owner_id, customer_id, created_on, modified_on)
-                    VALUES (?, ?, ?, ?, ?, ?, 
+                    INSERT INTO cases (id, title, description, status, priority, owner_id, customer_id, created_on, modified_on)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 
                             DATEADD(day, -{days_created}, GETUTCDATE()),
                             DATEADD(day, -{min(days_comm, days_note)}, GETUTCDATE()))
-                """, (case_id, title, status, severity, eng_id, customer_id))
+                """, (case_id, title, description, status, severity, eng_id, customer_id))
                 cases_created += 1
                 
                 # =====================================================================
