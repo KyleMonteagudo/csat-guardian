@@ -323,6 +323,251 @@ async def test_pii_scrubbing(request: PIITestRequest):
 
 
 # =============================================================================
+# Fast Summary Endpoint (Performance Optimized)
+# =============================================================================
+
+@app.get("/api/manager/summary")
+async def get_manager_summary():
+    """
+    Fast summary endpoint for manager dashboard.
+    Uses SQL aggregation to avoid N+1 queries.
+    Returns engineer summaries with case counts and staleness metrics.
+    """
+    # Try to use direct SQL for performance
+    db_manager = None
+    try:
+        if app_state.dfm_client and hasattr(app_state.dfm_client, '_ensure_db'):
+            db_manager = app_state.dfm_client._ensure_db()
+        elif app_state.dfm_client and hasattr(app_state.dfm_client, '_db'):
+            db_manager = app_state.dfm_client._db
+    except:
+        pass
+    
+    if not db_manager:
+        # Fallback to slow method if no direct DB access
+        logger.warning("Manager summary: No direct DB access, using slow method")
+        return await _get_manager_summary_slow()
+    
+    try:
+        conn = db_manager.connect()
+        cursor = conn.cursor()
+        
+        # Single query to get engineer summaries with aggregated metrics
+        cursor.execute("""
+            SELECT 
+                e.id as engineer_id,
+                e.name as engineer_name,
+                e.email as engineer_email,
+                e.team as engineer_team,
+                COUNT(CASE WHEN c.status = 'active' THEN 1 END) as active_cases,
+                COUNT(CASE WHEN c.status = 'resolved' THEN 1 END) as resolved_cases,
+                COUNT(c.id) as total_cases,
+                MAX(CASE WHEN c.status = 'active' THEN 
+                    DATEDIFF(day, (
+                        SELECT MAX(te.created_on) FROM timeline_entries te 
+                        WHERE te.case_id = c.id AND te.entry_type IN ('email_sent', 'email_received')
+                    ), GETUTCDATE())
+                END) as max_days_since_comm,
+                AVG(CASE WHEN c.status = 'active' THEN 
+                    DATEDIFF(day, (
+                        SELECT MAX(te.created_on) FROM timeline_entries te 
+                        WHERE te.case_id = c.id AND te.entry_type IN ('email_sent', 'email_received')
+                    ), GETUTCDATE())
+                END) as avg_days_since_comm
+            FROM engineers e
+            LEFT JOIN cases c ON c.owner_id = e.id
+            WHERE e.id LIKE 'eng-%'
+            GROUP BY e.id, e.name, e.email, e.team
+            ORDER BY e.name
+        """)
+        
+        engineers = []
+        for row in cursor.fetchall():
+            # Determine risk level based on staleness
+            max_days = row.max_days_since_comm or 0
+            avg_days = row.avg_days_since_comm or 0
+            
+            if max_days >= 7:
+                risk_level = "critical"
+            elif max_days >= 4 or avg_days >= 3:
+                risk_level = "at_risk"
+            else:
+                risk_level = "healthy"
+            
+            engineers.append({
+                "id": row.engineer_id,
+                "name": row.engineer_name,
+                "email": row.engineer_email,
+                "team": row.engineer_team,
+                "active_cases": row.active_cases or 0,
+                "resolved_cases": row.resolved_cases or 0,
+                "total_cases": row.total_cases or 0,
+                "max_days_since_comm": max_days,
+                "avg_days_since_comm": round(avg_days, 1) if avg_days else 0,
+                "risk_level": risk_level
+            })
+        
+        # Get overall stats
+        cursor.execute("""
+            SELECT 
+                COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
+                COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved,
+                COUNT(*) as total
+            FROM cases
+        """)
+        stats_row = cursor.fetchone()
+        
+        conn.close()
+        
+        return {
+            "engineers": engineers,
+            "stats": {
+                "total_engineers": len(engineers),
+                "total_active_cases": stats_row.active or 0,
+                "total_resolved_cases": stats_row.resolved or 0,
+                "total_cases": stats_row.total or 0
+            }
+        }
+    except Exception as e:
+        logger.error(f"Manager summary SQL failed: {e}")
+        return await _get_manager_summary_slow()
+
+
+async def _get_manager_summary_slow():
+    """Fallback slow method for manager summary (loads all cases)."""
+    if not app_state.dfm_client:
+        raise HTTPException(status_code=503, detail="DfM client not available")
+    
+    engineers = await app_state.dfm_client.get_engineers()
+    return {
+        "engineers": [
+            {"id": e.id, "name": e.name, "email": e.email, "active_cases": 0, "risk_level": "unknown"}
+            for e in engineers if e.id.startswith('eng-')
+        ],
+        "stats": {"total_engineers": len([e for e in engineers if e.id.startswith('eng-')])}
+    }
+
+
+@app.get("/api/engineer/{engineer_id}/summary")
+async def get_engineer_summary(engineer_id: str):
+    """
+    Fast engineer detail endpoint using SQL aggregation.
+    Returns case list with staleness metrics without loading all timeline entries.
+    """
+    # Try to use direct SQL for performance
+    db_manager = None
+    try:
+        if app_state.dfm_client and hasattr(app_state.dfm_client, '_ensure_db'):
+            db_manager = app_state.dfm_client._ensure_db()
+        elif app_state.dfm_client and hasattr(app_state.dfm_client, '_db'):
+            db_manager = app_state.dfm_client._db
+    except:
+        pass
+    
+    if not db_manager:
+        raise HTTPException(status_code=503, detail="Direct database access required for performance")
+    
+    try:
+        conn = db_manager.connect()
+        cursor = conn.cursor()
+        
+        # Get engineer info
+        cursor.execute("""
+            SELECT id, name, email, team FROM engineers WHERE id = ?
+        """, (engineer_id,))
+        eng_row = cursor.fetchone()
+        if not eng_row:
+            raise HTTPException(status_code=404, detail="Engineer not found")
+        
+        # Get cases with computed staleness (single query with subqueries)
+        cursor.execute("""
+            SELECT 
+                c.id,
+                c.title,
+                c.status,
+                c.priority,
+                c.created_on,
+                cu.company as customer_name,
+                cu.tier as customer_tier,
+                DATEDIFF(day, (
+                    SELECT MAX(te.created_on) FROM timeline_entries te 
+                    WHERE te.case_id = c.id AND te.entry_type IN ('email_sent', 'email_received')
+                ), GETUTCDATE()) as days_since_comm,
+                DATEDIFF(day, (
+                    SELECT MAX(te.created_on) FROM timeline_entries te 
+                    WHERE te.case_id = c.id AND te.entry_type = 'note'
+                ), GETUTCDATE()) as days_since_note,
+                (SELECT COUNT(*) FROM timeline_entries te WHERE te.case_id = c.id) as timeline_count
+            FROM cases c
+            LEFT JOIN customers cu ON cu.id = c.customer_id
+            WHERE c.owner_id = ?
+            ORDER BY 
+                CASE WHEN c.status = 'active' THEN 0 ELSE 1 END,
+                c.created_on DESC
+        """, (engineer_id,))
+        
+        cases = []
+        active_count = 0
+        at_risk_count = 0
+        breach_count = 0
+        
+        for row in cursor.fetchall():
+            days_comm = row.days_since_comm if row.days_since_comm is not None else 999
+            days_note = row.days_since_note if row.days_since_note is not None else 999
+            
+            # Determine risk level
+            if row.status == 'active':
+                active_count += 1
+                if days_comm >= 7 or days_note >= 7:
+                    risk_level = "breach"
+                    breach_count += 1
+                elif days_comm >= 4 or days_note >= 4:
+                    risk_level = "at_risk"
+                    at_risk_count += 1
+                else:
+                    risk_level = "healthy"
+            else:
+                risk_level = "resolved"
+            
+            cases.append({
+                "id": row.id,
+                "title": row.title,
+                "status": row.status,
+                "priority": row.priority,
+                "created_on": row.created_on.isoformat() if row.created_on else None,
+                "customer_name": row.customer_name or "Unknown",
+                "customer_tier": row.customer_tier or "Unknown",
+                "days_since_comm": days_comm if days_comm < 999 else None,
+                "days_since_note": days_note if days_note < 999 else None,
+                "timeline_count": row.timeline_count or 0,
+                "risk_level": risk_level
+            })
+        
+        conn.close()
+        
+        return {
+            "engineer": {
+                "id": eng_row.id,
+                "name": eng_row.name,
+                "email": eng_row.email,
+                "team": eng_row.team
+            },
+            "summary": {
+                "total_cases": len(cases),
+                "active_cases": active_count,
+                "at_risk_count": at_risk_count,
+                "breach_count": breach_count
+            },
+            "cases": cases
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Engineer summary failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Engineer Endpoints
 # =============================================================================
 
