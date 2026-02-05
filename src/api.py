@@ -1292,11 +1292,26 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
     if secret != expected_secret:
         raise HTTPException(status_code=403, detail="Invalid secret")
     
-    if not app_state.dfm_client or not hasattr(app_state.dfm_client, 'db'):
-        raise HTTPException(status_code=503, detail="Database not available")
+    # Check for database - adapter uses _db (with underscore)
+    if not app_state.dfm_client:
+        raise HTTPException(status_code=503, detail="DFM client not available")
+    
+    # Get the underlying database manager
+    try:
+        if hasattr(app_state.dfm_client, '_ensure_db'):
+            # Azure SQL adapter - call _ensure_db() to get connection
+            db_manager = app_state.dfm_client._ensure_db()
+        elif hasattr(app_state.dfm_client, '_db'):
+            db_manager = app_state.dfm_client._db
+        elif hasattr(app_state.dfm_client, 'db'):
+            db_manager = app_state.dfm_client.db
+        else:
+            raise HTTPException(status_code=503, detail="Database not available - no db attribute found")
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
     
     try:
-        conn = app_state.dfm_client.db.connect()
+        conn = db_manager.connect()
         cursor = conn.cursor()
         
         # Set random seed for reproducibility
