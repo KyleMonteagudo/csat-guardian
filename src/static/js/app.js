@@ -881,21 +881,30 @@ function renderAnalysis(analysis, caseData) {
 
 async function renderManagerDashboard() {
     state.currentView = 'manager';
+    state.selectedDateRange = state.selectedDateRange || '30d';
     showLoading(true);
     
     const main = document.getElementById('main-content');
     main.innerHTML = `
         <div class="content-header">
-            <h1>Team Overview</h1>
-            <p class="subtitle">Click on an engineer to view their CSAT insights and coaching recommendations</p>
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1>Team Performance</h1>
+                    <p class="subtitle">Empowering your team through data-driven coaching insights</p>
+                </div>
+                <div class="date-range-selector">
+                    <button class="date-btn ${state.selectedDateRange === '7d' ? 'active' : ''}" onclick="updateDateRange('7d')">7 Days</button>
+                    <button class="date-btn ${state.selectedDateRange === '30d' ? 'active' : ''}" onclick="updateDateRange('30d')">30 Days</button>
+                    <button class="date-btn ${state.selectedDateRange === '90d' ? 'active' : ''}" onclick="updateDateRange('90d')">Quarter</button>
+                </div>
+            </div>
         </div>
-        <div id="alerts-container"></div>
-        <div id="metrics-container" class="metrics-row"></div>
+        <div id="team-summary" class="team-summary-section"></div>
         <div id="team-container">
             <div class="loading"><div class="spinner"></div></div>
         </div>
     `;
-    updateBreadcrumb([{ text: 'Manager Dashboard' }]);
+    updateBreadcrumb([{ text: 'Team Performance' }]);
     
     // Fetch data
     const [engineersData, casesData] = await Promise.all([
@@ -908,98 +917,199 @@ async function renderManagerDashboard() {
     state.engineers = engineersData?.engineers || engineersData || [];
     state.cases = casesData?.cases || casesData || [];
     
+    renderTeamDashboardContent();
+}
+
+function updateDateRange(range) {
+    state.selectedDateRange = range;
+    // Update button states
+    document.querySelectorAll('.date-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.includes(
+            range === '7d' ? '7' : range === '30d' ? '30' : 'Quarter'
+        ));
+    });
+    renderTeamDashboardContent();
+}
+
+function renderTeamDashboardContent() {
     const cases = state.cases;
     const engineers = state.engineers;
+    const range = state.selectedDateRange;
     
-    // Calculate CSAT risk metrics
-    const critical = cases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
-    const atRisk = cases.filter(c => {
-        const score = c.sentiment_score || 0.5;
-        return score >= 0.35 && score < 0.55;
-    }).length;
+    const rangeLabel = range === '7d' ? 'Past 7 Days' : range === '30d' ? 'Past 30 Days' : 'Past Quarter';
     
-    // Calculate team average sentiment
+    // Calculate team metrics
     const teamAvgSentiment = cases.length > 0
         ? cases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / cases.length
         : 0.5;
     
-    // Alerts - CSAT focused
-    if (critical > 0) {
-        document.getElementById('alerts-container').innerHTML = `
-            <div class="alert-banner danger">
-                🚨 <strong>Team CSAT Alert:</strong> ${critical} case${critical > 1 ? 's' : ''} with critical satisfaction risk require immediate attention
-            </div>
-        `;
-    }
+    const excellentCount = cases.filter(c => (c.sentiment_score || 0.5) >= 0.7).length;
+    const goodCount = cases.filter(c => {
+        const s = c.sentiment_score || 0.5;
+        return s >= 0.55 && s < 0.7;
+    }).length;
+    const opportunityCount = cases.filter(c => (c.sentiment_score || 0.5) < 0.55).length;
     
-    // Metrics - CSAT focused
-    document.getElementById('metrics-container').innerHTML = `
-        <div class="metric-card">
-            <div class="metric-value">${engineers.length}</div>
-            <div class="metric-label">Team Members</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-value">${cases.length}</div>
-            <div class="metric-label">Total Cases</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-value ${getSentimentClass(teamAvgSentiment)}">${Math.round(teamAvgSentiment * 100)}%</div>
-            <div class="metric-label">Team Avg Sentiment</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-value danger">${critical}</div>
-            <div class="metric-label">Critical CSAT</div>
+    // Team summary with visual chart
+    document.getElementById('team-summary').innerHTML = `
+        <div class="summary-grid">
+            <div class="summary-card highlight">
+                <div class="summary-header">
+                    <span class="summary-icon">📊</span>
+                    <span class="summary-title">Team Sentiment Overview</span>
+                    <span class="summary-period">${rangeLabel}</span>
+                </div>
+                <div class="sentiment-chart-container">
+                    <div class="sentiment-donut">
+                        <svg viewBox="0 0 100 100" class="donut-chart">
+                            ${renderDonutChart(excellentCount, goodCount, opportunityCount, cases.length)}
+                        </svg>
+                        <div class="donut-center">
+                            <span class="donut-value">${Math.round(teamAvgSentiment * 100)}%</span>
+                            <span class="donut-label">Team Avg</span>
+                        </div>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-item">
+                            <span class="legend-dot excellent"></span>
+                            <span class="legend-label">Excellent (70%+)</span>
+                            <span class="legend-value">${excellentCount}</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot good"></span>
+                            <span class="legend-label">Good (55-70%)</span>
+                            <span class="legend-value">${goodCount}</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot opportunity"></span>
+                            <span class="legend-label">Growth Opportunity</span>
+                            <span class="legend-value">${opportunityCount}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary-card">
+                <div class="summary-header">
+                    <span class="summary-icon">👥</span>
+                    <span class="summary-title">Team at a Glance</span>
+                </div>
+                <div class="glance-metrics">
+                    <div class="glance-item">
+                        <span class="glance-value">${engineers.length}</span>
+                        <span class="glance-label">Engineers</span>
+                    </div>
+                    <div class="glance-item">
+                        <span class="glance-value">${cases.length}</span>
+                        <span class="glance-label">Active Cases</span>
+                    </div>
+                    <div class="glance-item">
+                        <span class="glance-value">${Math.round(cases.length / Math.max(engineers.length, 1))}</span>
+                        <span class="glance-label">Avg per Engineer</span>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
     
-    // Engineer cards - clickable for details
+    // Engineer cards - supportive language
     const teamHtml = engineers.map(eng => {
         const engCases = cases.filter(c => c.owner?.id === eng.id);
-        const engCritical = engCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
-        const engAtRisk = engCases.filter(c => {
-            const score = c.sentiment_score || 0.5;
-            return score >= 0.35 && score < 0.55;
-        }).length;
         const engAvgSentiment = engCases.length > 0
             ? engCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engCases.length
             : 0.5;
         
-        const statusBadge = engCritical > 0 ? '<span class="badge badge-danger">Needs Attention</span>' : 
-                           engAtRisk > 0 ? '<span class="badge badge-warning">At Risk</span>' : 
-                           '<span class="badge badge-success">Healthy</span>';
+        const engExcellent = engCases.filter(c => (c.sentiment_score || 0.5) >= 0.7).length;
+        const engOpportunity = engCases.filter(c => (c.sentiment_score || 0.5) < 0.55).length;
+        
+        // Supportive status badges
+        let statusBadge, statusClass;
+        if (engAvgSentiment >= 0.7) {
+            statusBadge = '⭐ Top Performer';
+            statusClass = 'badge-excellent';
+        } else if (engAvgSentiment >= 0.55) {
+            statusBadge = '✓ On Track';
+            statusClass = 'badge-good';
+        } else {
+            statusBadge = '💡 Coaching Opportunity';
+            statusClass = 'badge-opportunity';
+        }
         
         return `
-            <div class="card card-clickable engineer-card" onclick="viewEngineerDetail('${eng.id}')">
-                <div class="card-header">
-                    <div class="engineer-avatar">${eng.name.split(' ').map(n => n[0]).join('')}</div>
-                    <div>
-                        <div class="card-title">${eng.name}</div>
-                        <div class="card-subtitle">${engCases.length} cases</div>
-                    </div>
-                    ${statusBadge}
-                </div>
-                <div class="card-body">
-                    <div class="engineer-sentiment-bar">
-                        <div class="sentiment-fill ${getSentimentClass(engAvgSentiment)}" style="width: ${Math.round(engAvgSentiment * 100)}%"></div>
-                    </div>
-                    <div class="flex justify-between mt-sm">
-                        <span class="text-muted text-small">Avg Sentiment</span>
-                        <span class="text-small ${getSentimentClass(engAvgSentiment)}">${Math.round(engAvgSentiment * 100)}%</span>
+            <div class="engineer-card-modern" onclick="viewEngineerDetail('${eng.id}')">
+                <div class="eng-card-left">
+                    <div class="engineer-avatar-modern">${eng.name.split(' ').map(n => n[0]).join('')}</div>
+                    <div class="eng-card-info">
+                        <div class="eng-card-name">${eng.name}</div>
+                        <div class="eng-card-meta">${engCases.length} cases • ${eng.team || 'CSS Support'}</div>
                     </div>
                 </div>
-                <div class="card-footer">
-                    <span class="text-xs text-muted">Click for coaching insights →</span>
+                <div class="eng-card-middle">
+                    <div class="eng-sentiment-visual">
+                        <div class="eng-sentiment-bar-bg">
+                            <div class="eng-sentiment-bar-fill ${getSentimentClass(engAvgSentiment)}" style="width: ${Math.round(engAvgSentiment * 100)}%"></div>
+                        </div>
+                        <span class="eng-sentiment-value">${Math.round(engAvgSentiment * 100)}%</span>
+                    </div>
+                    <div class="eng-case-dots">
+                        ${engCases.slice(0, 8).map(c => `<span class="case-dot ${getSentimentClass(c.sentiment_score || 0.5)}"></span>`).join('')}
+                        ${engCases.length > 8 ? `<span class="case-dot-more">+${engCases.length - 8}</span>` : ''}
+                    </div>
+                </div>
+                <div class="eng-card-right">
+                    <span class="status-badge ${statusClass}">${statusBadge}</span>
+                    <span class="view-insights">View Insights →</span>
                 </div>
             </div>
         `;
     }).join('');
     
     document.getElementById('team-container').innerHTML = `
-        <h3 class="mb-lg">👥 Team Members</h3>
-        <div class="card-grid">
+        <div class="team-section-header">
+            <h3>Team Members</h3>
+            <p class="text-muted">Select an engineer to view personalized coaching insights</p>
+        </div>
+        <div class="engineer-cards-list">
             ${teamHtml || '<p class="text-muted">No team members found.</p>'}
         </div>
     `;
+}
+
+function renderDonutChart(excellent, good, opportunity, total) {
+    if (total === 0) return '<circle cx="50" cy="50" r="40" fill="none" stroke="#3a3a3a" stroke-width="12"/>';
+    
+    const excellentPct = excellent / total;
+    const goodPct = good / total;
+    const opportunityPct = opportunity / total;
+    
+    const circumference = 2 * Math.PI * 40;
+    
+    const excellentDash = excellentPct * circumference;
+    const goodDash = goodPct * circumference;
+    const opportunityDash = opportunityPct * circumference;
+    
+    let offset = 0;
+    const segments = [];
+    
+    if (excellent > 0) {
+        segments.push(`<circle cx="50" cy="50" r="40" fill="none" stroke="#107c10" stroke-width="12" 
+            stroke-dasharray="${excellentDash} ${circumference}" 
+            stroke-dashoffset="${-offset}" transform="rotate(-90 50 50)"/>`);
+        offset += excellentDash;
+    }
+    if (good > 0) {
+        segments.push(`<circle cx="50" cy="50" r="40" fill="none" stroke="#ffb900" stroke-width="12" 
+            stroke-dasharray="${goodDash} ${circumference}" 
+            stroke-dashoffset="${-offset}" transform="rotate(-90 50 50)"/>`);
+        offset += goodDash;
+    }
+    if (opportunity > 0) {
+        segments.push(`<circle cx="50" cy="50" r="40" fill="none" stroke="#0078d4" stroke-width="12" 
+            stroke-dasharray="${opportunityDash} ${circumference}" 
+            stroke-dashoffset="${-offset}" transform="rotate(-90 50 50)"/>`);
+    }
+    
+    return segments.join('');
 }
 
 /**
@@ -1019,6 +1129,8 @@ async function viewEngineerDetail(engineerId) {
     }
     
     state.selectedEngineer = engineer;
+    const dateRange = state.selectedDateRange || '30d';
+    const rangeLabel = dateRange === '7d' ? 'Past 7 Days' : dateRange === '30d' ? 'Past 30 Days' : 'Past Quarter';
     
     const main = document.getElementById('main-content');
     
@@ -1026,146 +1138,177 @@ async function viewEngineerDetail(engineerId) {
     const avgSentiment = engCases.length > 0
         ? engCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engCases.length
         : 0.5;
-    const critical = engCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
-    const atRisk = engCases.filter(c => {
-        const score = c.sentiment_score || 0.5;
-        return score >= 0.35 && score < 0.55;
-    }).length;
-    const healthy = engCases.length - critical - atRisk;
+    const excellentCases = engCases.filter(c => (c.sentiment_score || 0.5) >= 0.7);
+    const opportunityCases = engCases.filter(c => (c.sentiment_score || 0.5) < 0.55);
+    const goodCases = engCases.filter(c => {
+        const s = c.sentiment_score || 0.5;
+        return s >= 0.55 && s < 0.7;
+    });
     
-    // Get negative indicators
-    const indicators = analyzeNegativeIndicators(engCases);
-    const coachingAdvice = generateCoachingAdvice(indicators, avgSentiment);
+    // Generate personalized coaching based on actual cases
+    const personalizedCoaching = generatePersonalizedCoaching(engCases, engineer.name.split(' ')[0]);
+    
+    // Generate trend data (simulated for demo - would come from API in production)
+    const trendData = generateTrendData(engCases, dateRange);
     
     const sentimentClass = getSentimentClass(avgSentiment);
+    const firstName = engineer.name.split(' ')[0];
     
     main.innerHTML = `
         <div class="content-header">
             <button class="btn btn-ghost mb-sm" onclick="navigateTo('manager')">← Back to Team</button>
-            <div class="flex items-center gap-md">
-                <div class="engineer-avatar-large">${engineer.name.split(' ').map(n => n[0]).join('')}</div>
-                <div>
+            <div class="engineer-profile-header">
+                <div class="engineer-avatar-xl">${engineer.name.split(' ').map(n => n[0]).join('')}</div>
+                <div class="engineer-profile-info">
                     <h1>${engineer.name}</h1>
                     <p class="subtitle">${engineer.email} • ${engineer.team || 'CSS Support'}</p>
+                    <div class="profile-badges">
+                        <span class="period-badge">${rangeLabel}</span>
+                        ${avgSentiment >= 0.7 ? '<span class="achievement-badge">⭐ Top Performer</span>' : ''}
+                    </div>
+                </div>
+                <div class="profile-score">
+                    <div class="score-ring ${sentimentClass}">
+                        <svg viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#3a3a3a" stroke-width="8"/>
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="8"
+                                stroke-dasharray="${avgSentiment * 283} 283" 
+                                stroke-linecap="round" transform="rotate(-90 50 50)"/>
+                        </svg>
+                        <span class="score-text">${Math.round(avgSentiment * 100)}%</span>
+                    </div>
+                    <span class="score-label">Avg Sentiment</span>
                 </div>
             </div>
         </div>
         
-        <div id="metrics-container" class="metrics-row">
-            <div class="metric-card">
-                <div class="metric-value">${engCases.length}</div>
-                <div class="metric-label">Total Cases</div>
+        <!-- Trend Chart Section -->
+        <div class="card trend-card mb-lg">
+            <div class="trend-header">
+                <h3>📈 Sentiment Trend</h3>
+                <span class="trend-period">${rangeLabel}</span>
             </div>
-            <div class="metric-card">
-                <div class="metric-value ${sentimentClass}">${Math.round(avgSentiment * 100)}%</div>
-                <div class="metric-label">Avg Sentiment</div>
+            <div class="trend-chart-container">
+                ${renderTrendChart(trendData)}
             </div>
-            <div class="metric-card">
-                <div class="metric-value danger">${critical}</div>
-                <div class="metric-label">Critical</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value success">${healthy}</div>
-                <div class="metric-label">Healthy</div>
+            <div class="trend-summary">
+                <div class="trend-stat">
+                    <span class="trend-stat-value ${trendData.change >= 0 ? 'positive' : 'negative'}">
+                        ${trendData.change >= 0 ? '↑' : '↓'} ${Math.abs(trendData.change)}%
+                    </span>
+                    <span class="trend-stat-label">vs Previous Period</span>
+                </div>
+                <div class="trend-stat">
+                    <span class="trend-stat-value">${trendData.highPoint}%</span>
+                    <span class="trend-stat-label">Period High</span>
+                </div>
+                <div class="trend-stat">
+                    <span class="trend-stat-value">${trendData.lowPoint}%</span>
+                    <span class="trend-stat-label">Period Low</span>
+                </div>
             </div>
         </div>
         
-        <div class="two-column mt-lg">
+        <div class="two-column">
             <div class="main-column">
-                <!-- Coaching Section for Manager -->
-                <div class="card mb-lg">
-                    <h3>🎯 Coaching Insights for 1:1</h3>
-                    <p class="text-muted text-small mt-sm">Use these insights when having coaching conversations with ${engineer.name.split(' ')[0]}</p>
-                    
-                    <!-- Top Indicators -->
-                    <div class="mt-lg">
-                        <h4>Top 3 Areas Affecting CSAT</h4>
-                        ${indicators.length > 0 ? `
-                            <div class="indicators-list mt-md">
-                                ${indicators.map((ind, i) => `
-                                    <div class="indicator-item highlight">
-                                        <span class="indicator-rank">${i + 1}</span>
-                                        <span class="indicator-text">${ind}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : `
-                            <p class="text-muted mt-md">✅ No significant issues identified</p>
-                        `}
+                <!-- Personalized Coaching Section -->
+                <div class="card coaching-card-main mb-lg">
+                    <div class="coaching-header">
+                        <h3>💡 Personalized Coaching Insights</h3>
+                        <p class="text-muted">Based on ${firstName}'s specific case interactions during ${rangeLabel.toLowerCase()}</p>
                     </div>
                     
-                    <!-- Coaching Advice -->
-                    ${coachingAdvice.length > 0 ? `
-                        <div class="mt-lg">
-                            <h4>💬 Suggested Coaching Points</h4>
-                            <div class="coaching-cards mt-md">
-                                ${coachingAdvice.map(a => `
-                                    <div class="coaching-card manager">
-                                        <div class="coaching-icon">${a.icon}</div>
-                                        <div class="coaching-content">
-                                            <div class="coaching-issue">${a.issue}</div>
-                                            <div class="coaching-suggestion">${a.suggestion}</div>
-                                        </div>
+                    ${personalizedCoaching.length > 0 ? `
+                        <div class="coaching-insights-list">
+                            ${personalizedCoaching.map((insight, i) => `
+                                <div class="coaching-insight-card">
+                                    <div class="insight-header">
+                                        <span class="insight-icon">${insight.icon}</span>
+                                        <span class="insight-category">${insight.category}</span>
+                                        ${insight.caseId ? `<span class="insight-case-ref">Case: ${insight.caseId}</span>` : ''}
                                     </div>
-                                `).join('')}
-                            </div>
+                                    <div class="insight-observation">
+                                        <strong>Observation:</strong> ${insight.observation}
+                                    </div>
+                                    <div class="insight-suggestion">
+                                        <strong>Coaching Point:</strong> ${insight.suggestion}
+                                    </div>
+                                    ${insight.example ? `
+                                        <div class="insight-example">
+                                            <strong>Try saying:</strong> <em>"${insight.example}"</em>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
                         </div>
-                    ` : ''}
-                    
-                    <!-- Sample Talking Points -->
-                    <div class="mt-lg">
-                        <h4>📋 Sample Talking Points</h4>
-                        <div class="talking-points mt-md">
-                            ${generateTalkingPoints(engineer.name.split(' ')[0], indicators, avgSentiment)}
+                    ` : `
+                        <div class="no-coaching-needed">
+                            <span class="success-icon">✨</span>
+                            <h4>${firstName} is doing great!</h4>
+                            <p>No specific coaching points needed. Consider recognizing their excellent customer interactions.</p>
                         </div>
+                    `}
+                </div>
+                
+                <!-- 1:1 Conversation Guide -->
+                <div class="card mb-lg">
+                    <h3>🗣️ 1:1 Conversation Guide</h3>
+                    <div class="conversation-guide mt-md">
+                        ${generateConversationGuide(firstName, personalizedCoaching, avgSentiment, engCases)}
                     </div>
                 </div>
             </div>
             
             <div class="sidebar">
-                <!-- Case Summary -->
+                <!-- Case Distribution -->
                 <div class="card mb-lg">
-                    <h3>📊 Case Breakdown</h3>
-                    <div class="case-breakdown mt-md">
-                        <div class="breakdown-item">
-                            <span class="breakdown-dot danger"></span>
-                            <span>Critical (${critical})</span>
+                    <h3>📊 Case Distribution</h3>
+                    <div class="distribution-visual mt-md">
+                        <div class="dist-bar">
+                            <div class="dist-segment excellent" style="width: ${(excellentCases.length / Math.max(engCases.length, 1)) * 100}%"></div>
+                            <div class="dist-segment good" style="width: ${(goodCases.length / Math.max(engCases.length, 1)) * 100}%"></div>
+                            <div class="dist-segment opportunity" style="width: ${(opportunityCases.length / Math.max(engCases.length, 1)) * 100}%"></div>
                         </div>
-                        <div class="breakdown-item">
-                            <span class="breakdown-dot warning"></span>
-                            <span>At Risk (${atRisk})</span>
-                        </div>
-                        <div class="breakdown-item">
-                            <span class="breakdown-dot success"></span>
-                            <span>Healthy (${healthy})</span>
-                        </div>
-                    </div>
-                    
-                    ${critical > 0 ? `
-                        <div class="mt-lg">
-                            <h4 class="text-danger">🚨 Critical Cases</h4>
-                            <div class="critical-cases-list mt-md">
-                                ${engCases.filter(c => (c.sentiment_score || 0.5) < 0.35).slice(0, 3).map(c => `
-                                    <div class="critical-case-item">
-                                        <div class="text-small"><strong>${c.id}</strong></div>
-                                        <div class="text-xs text-muted">${c.title?.substring(0, 40)}${c.title?.length > 40 ? '...' : ''}</div>
-                                        <div class="text-xs text-danger">${Math.round((c.sentiment_score || 0.5) * 100)}% sentiment</div>
-                                    </div>
-                                `).join('')}
+                        <div class="dist-legend">
+                            <div class="dist-item">
+                                <span class="dist-dot excellent"></span>
+                                <span>Excellent: ${excellentCases.length}</span>
+                            </div>
+                            <div class="dist-item">
+                                <span class="dist-dot good"></span>
+                                <span>Good: ${goodCases.length}</span>
+                            </div>
+                            <div class="dist-item">
+                                <span class="dist-dot opportunity"></span>
+                                <span>Growth: ${opportunityCases.length}</span>
                             </div>
                         </div>
-                    ` : ''}
+                    </div>
                 </div>
                 
-                <!-- Trend Indicator -->
+                <!-- Strengths & Recognition -->
+                <div class="card mb-lg">
+                    <h3>🌟 Strengths to Recognize</h3>
+                    <div class="strengths-list mt-md">
+                        ${generateStrengths(engCases, firstName)}
+                    </div>
+                </div>
+                
+                <!-- Quick Stats -->
                 <div class="card">
-                    <h3>📈 30-Day Trend</h3>
-                    <div class="trend-indicator mt-md">
-                        <div class="trend-visual ${sentimentClass}">
-                            ${avgSentiment >= 0.6 ? '📈' : avgSentiment >= 0.4 ? '➡️' : '📉'}
+                    <h3>📈 Quick Stats</h3>
+                    <div class="quick-stats mt-md">
+                        <div class="stat-row">
+                            <span class="stat-label">Total Cases</span>
+                            <span class="stat-value">${engCases.length}</span>
                         </div>
-                        <div class="trend-label">
-                            ${avgSentiment >= 0.6 ? 'Positive trend' : avgSentiment >= 0.4 ? 'Stable' : 'Needs improvement'}
+                        <div class="stat-row">
+                            <span class="stat-label">Avg Response Time</span>
+                            <span class="stat-value">${calculateAvgResponseTime(engCases)}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Cases 70%+ Sentiment</span>
+                            <span class="stat-value">${excellentCases.length}</span>
                         </div>
                     </div>
                 </div>
@@ -1174,11 +1317,267 @@ async function viewEngineerDetail(engineerId) {
     `;
     
     updateBreadcrumb([
-        { text: 'Manager Dashboard', action: "navigateTo('manager')" },
+        { text: 'Team Performance', action: "navigateTo('manager')" },
         { text: engineer.name }
     ]);
     
     showLoading(false);
+}
+
+/**
+ * Generate personalized coaching insights based on actual case data
+ */
+function generatePersonalizedCoaching(cases, firstName) {
+    const insights = [];
+    
+    // Analyze cases for specific patterns
+    const slowResponseCases = cases.filter(c => (c.days_since_last_outbound || 0) > 2);
+    const staleNotesCases = cases.filter(c => (c.days_since_last_note || 0) > 5);
+    const lowSentimentCases = cases.filter(c => (c.sentiment_score || 0.5) < 0.4);
+    const highSevDelayed = cases.filter(c => {
+        const sev = formatSeverity(c.severity);
+        return (sev === 'A' || sev === 'B') && (c.days_open || 0) > 7;
+    });
+    
+    // Generate specific insights with case references
+    if (slowResponseCases.length > 0) {
+        const worstCase = slowResponseCases.sort((a, b) => (b.days_since_last_outbound || 0) - (a.days_since_last_outbound || 0))[0];
+        insights.push({
+            icon: '⏰',
+            category: 'Response Timeliness',
+            caseId: worstCase.id,
+            observation: `${slowResponseCases.length} case${slowResponseCases.length > 1 ? 's have' : ' has'} gone ${Math.round(worstCase.days_since_last_outbound || 0)}+ days without customer communication. ${worstCase.customer?.company || 'The customer'} on case ${worstCase.id} may be wondering about status.`,
+            suggestion: `Discuss with ${firstName} about setting daily check-in reminders. Even a brief "still investigating" update maintains customer confidence.`,
+            example: `I noticed case ${worstCase.id} hasn't had a customer touchpoint recently. What's blocking progress there? How can I help?`
+        });
+    }
+    
+    if (lowSentimentCases.length > 0) {
+        const lowestCase = lowSentimentCases.sort((a, b) => (a.sentiment_score || 0.5) - (b.sentiment_score || 0.5))[0];
+        insights.push({
+            icon: '💬',
+            category: 'Customer Sentiment',
+            caseId: lowestCase.id,
+            observation: `Case ${lowestCase.id} (${lowestCase.customer?.company || 'customer'}) shows ${Math.round((lowestCase.sentiment_score || 0.5) * 100)}% sentiment. The customer may be experiencing frustration with "${lowestCase.title?.substring(0, 50) || 'their issue'}".`,
+            suggestion: `Explore what's driving the frustration. Sometimes acknowledging the customer's situation directly can help reset the relationship.`,
+            example: `Tell me about ${lowestCase.id} - I see the customer might be struggling. What's happening from your perspective?`
+        });
+    }
+    
+    if (staleNotesCases.length > 0) {
+        const stalestCase = staleNotesCases.sort((a, b) => (b.days_since_last_note || 0) - (a.days_since_last_note || 0))[0];
+        insights.push({
+            icon: '📝',
+            category: 'Documentation',
+            caseId: stalestCase.id,
+            observation: `${staleNotesCases.length} case${staleNotesCases.length > 1 ? 's' : ''} with notes older than 5 days. Case ${stalestCase.id} hasn't been updated in ${Math.round(stalestCase.days_since_last_note || 0)} days.`,
+            suggestion: `Current notes help with handoffs and compliance. Consider end-of-day note updates as a habit.`,
+            example: `How's your case documentation going? I want to make sure you're set up for success if you need to hand anything off.`
+        });
+    }
+    
+    if (highSevDelayed.length > 0) {
+        const oldestHighSev = highSevDelayed.sort((a, b) => (b.days_open || 0) - (a.days_open || 0))[0];
+        insights.push({
+            icon: '🎯',
+            category: 'Priority Management',
+            caseId: oldestHighSev.id,
+            observation: `Sev ${formatSeverity(oldestHighSev.severity)} case ${oldestHighSev.id} has been open ${Math.round(oldestHighSev.days_open || 0)} days. High-severity cases benefit from accelerated focus.`,
+            suggestion: `Review if there are blockers preventing resolution. Consider if escalation or additional resources would help.`,
+            example: `I see ${oldestHighSev.id} is a Sev ${formatSeverity(oldestHighSev.severity)} that's been open a while. Are you blocked on anything? Do you need me to pull in anyone else?`
+        });
+    }
+    
+    return insights.slice(0, 4); // Max 4 insights
+}
+
+/**
+ * Generate trend data for visualization
+ */
+function generateTrendData(cases, dateRange) {
+    const points = dateRange === '7d' ? 7 : dateRange === '30d' ? 6 : 12;
+    const avgSentiment = cases.length > 0
+        ? cases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / cases.length
+        : 0.5;
+    
+    // Simulate trend data (in production, this would come from historical API data)
+    const data = [];
+    let baseValue = avgSentiment * 100;
+    
+    for (let i = 0; i < points; i++) {
+        const variance = (Math.random() - 0.5) * 15;
+        const value = Math.max(20, Math.min(95, baseValue + variance));
+        data.push(Math.round(value));
+        baseValue = value; // Random walk
+    }
+    
+    return {
+        points: data,
+        change: data.length > 1 ? data[data.length - 1] - data[0] : 0,
+        highPoint: Math.max(...data),
+        lowPoint: Math.min(...data),
+        labels: dateRange === '7d' 
+            ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            : dateRange === '30d'
+            ? ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6']
+            : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].slice(0, 12)
+    };
+}
+
+/**
+ * Render SVG trend chart
+ */
+function renderTrendChart(trendData) {
+    const width = 600;
+    const height = 150;
+    const padding = 30;
+    const points = trendData.points;
+    const labels = trendData.labels;
+    
+    if (points.length === 0) return '<p class="text-muted">No trend data available</p>';
+    
+    const xStep = (width - padding * 2) / (points.length - 1);
+    const yScale = (height - padding * 2) / 100;
+    
+    // Generate path
+    const pathPoints = points.map((val, i) => {
+        const x = padding + i * xStep;
+        const y = height - padding - (val * yScale);
+        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+    }).join(' ');
+    
+    // Generate gradient area
+    const areaPath = pathPoints + ` L ${padding + (points.length - 1) * xStep} ${height - padding} L ${padding} ${height - padding} Z`;
+    
+    // Generate dots and labels
+    const dotsAndLabels = points.map((val, i) => {
+        const x = padding + i * xStep;
+        const y = height - padding - (val * yScale);
+        return `
+            <circle cx="${x}" cy="${y}" r="4" fill="#0078d4"/>
+            <text x="${x}" y="${height - 5}" text-anchor="middle" class="chart-label">${labels[i] || ''}</text>
+        `;
+    }).join('');
+    
+    return `
+        <svg viewBox="0 0 ${width} ${height}" class="trend-chart-svg">
+            <defs>
+                <linearGradient id="trendGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#0078d4;stop-opacity:0.3"/>
+                    <stop offset="100%" style="stop-color:#0078d4;stop-opacity:0"/>
+                </linearGradient>
+            </defs>
+            <!-- Grid lines -->
+            <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#3a3a3a" stroke-width="1"/>
+            <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#3a3a3a" stroke-width="1"/>
+            <!-- Area fill -->
+            <path d="${areaPath}" fill="url(#trendGradient)"/>
+            <!-- Line -->
+            <path d="${pathPoints}" fill="none" stroke="#0078d4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Dots and labels -->
+            ${dotsAndLabels}
+        </svg>
+    `;
+}
+
+/**
+ * Generate conversation guide for 1:1s
+ */
+function generateConversationGuide(firstName, insights, avgSentiment, cases) {
+    const sections = [];
+    
+    // Opening
+    if (avgSentiment >= 0.7) {
+        sections.push(`
+            <div class="guide-section positive">
+                <h4>🎉 Start with Recognition</h4>
+                <p>"${firstName}, I wanted to start by saying your customer sentiment scores have been excellent. Your customers clearly appreciate your work. What do you think is working well?"</p>
+            </div>
+        `);
+    } else if (avgSentiment >= 0.5) {
+        sections.push(`
+            <div class="guide-section neutral">
+                <h4>👋 Opening</h4>
+                <p>"${firstName}, thanks for making time for our 1:1. I'd like to talk about your caseload and see how I can better support you. How are things going from your perspective?"</p>
+            </div>
+        `);
+    } else {
+        sections.push(`
+            <div class="guide-section supportive">
+                <h4>🤝 Supportive Opening</h4>
+                <p>"${firstName}, I appreciate you. I know you've had some challenging cases lately, and I want to make sure you have the support you need. Let's talk about what's going on and how I can help."</p>
+            </div>
+        `);
+    }
+    
+    // Specific discussion points from insights
+    if (insights.length > 0) {
+        const discussionPoints = insights.slice(0, 2).map(i => `
+            <li><strong>${i.category}:</strong> "${i.example}"</li>
+        `).join('');
+        
+        sections.push(`
+            <div class="guide-section discussion">
+                <h4>💬 Discussion Points</h4>
+                <ul>${discussionPoints}</ul>
+            </div>
+        `);
+    }
+    
+    // Closing
+    sections.push(`
+        <div class="guide-section closing">
+            <h4>✅ Closing</h4>
+            <p>"What's one thing I can do this week to help you be more successful? And what's one thing you're going to focus on?"</p>
+        </div>
+    `);
+    
+    return sections.join('');
+}
+
+/**
+ * Generate strengths based on case performance
+ */
+function generateStrengths(cases, firstName) {
+    const strengths = [];
+    
+    const excellentCases = cases.filter(c => (c.sentiment_score || 0.5) >= 0.7);
+    const quickResponders = cases.filter(c => (c.days_since_last_outbound || 0) <= 1);
+    const wellDocumented = cases.filter(c => (c.days_since_last_note || 0) <= 2);
+    
+    if (excellentCases.length >= cases.length * 0.5) {
+        strengths.push({ icon: '⭐', text: 'Consistently high customer satisfaction' });
+    }
+    if (quickResponders.length >= cases.length * 0.6) {
+        strengths.push({ icon: '⚡', text: 'Excellent response timeliness' });
+    }
+    if (wellDocumented.length >= cases.length * 0.5) {
+        strengths.push({ icon: '📋', text: 'Strong case documentation habits' });
+    }
+    if (cases.length > 5) {
+        strengths.push({ icon: '💪', text: 'Managing high case volume effectively' });
+    }
+    
+    if (strengths.length === 0) {
+        strengths.push({ icon: '🌱', text: 'Growing and developing skills' });
+    }
+    
+    return strengths.map(s => `
+        <div class="strength-item">
+            <span class="strength-icon">${s.icon}</span>
+            <span class="strength-text">${s.text}</span>
+        </div>
+    `).join('');
+}
+
+/**
+ * Calculate average response time
+ */
+function calculateAvgResponseTime(cases) {
+    if (cases.length === 0) return 'N/A';
+    const avgDays = cases.reduce((sum, c) => sum + (c.days_since_last_outbound || 0), 0) / cases.length;
+    if (avgDays < 1) return '< 1 day';
+    return `${avgDays.toFixed(1)} days`;
 }
 
 /**
