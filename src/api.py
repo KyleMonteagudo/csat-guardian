@@ -1806,9 +1806,11 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
             # Generate 60 cases per engineer (20/month for 3 months)
             active_count = 0
             
+            # Base sequence for realistic case IDs (each engineer gets a unique range)
+            eng_num = int(eng_id[-3:])  # 1-10
+            base_seq = 4000000000 + (eng_num * 10000)  # Each engineer gets 10000 case numbers
+            
             for case_num in range(1, 61):
-                case_id = f"case-{eng_id[-3:]}-{case_num:03d}"
-                
                 # Distribute cases across the quarter
                 # Month 1: cases 1-20 (60-90 days ago)
                 # Month 2: cases 21-40 (30-60 days ago)
@@ -1819,6 +1821,14 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
                     days_created = random.randint(30, 59)
                 else:
                     days_created = random.randint(0, 29)
+                
+                # Generate realistic case ID: YYMMDD + 10-digit sequence
+                # Format: 2602040040006999 (YY=26, MM=02, DD=04, seq=0040006999)
+                from datetime import datetime, timedelta
+                case_date = datetime.utcnow() - timedelta(days=days_created)
+                date_prefix = case_date.strftime("%y%m%d")
+                seq_num = base_seq + case_num
+                case_id = f"{date_prefix}{seq_num:010d}"
                 
                 # Determine status: active vs resolved
                 # More recent cases are more likely to be active
