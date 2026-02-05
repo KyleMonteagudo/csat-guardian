@@ -104,6 +104,35 @@ class PIITestResponse(BaseModel):
     content_safety_enabled: bool
 
 
+class FeedbackRequest(BaseModel):
+    """Request for submitting user feedback."""
+    rating: str = Field(..., description="'positive' or 'negative'")
+    comment: Optional[str] = Field(None, description="Optional feedback comment")
+    category: str = Field("general", description="Feedback category")
+    page: Optional[str] = Field(None, description="Page/view where feedback was submitted")
+    engineer_id: Optional[str] = Field(None, description="Current engineer ID if logged in")
+    user_agent: Optional[str] = Field(None, description="Browser user agent")
+
+
+class FeedbackResponse(BaseModel):
+    """Response for feedback submission."""
+    id: str
+    success: bool
+    message: str
+
+
+class FeedbackItem(BaseModel):
+    """A single feedback entry."""
+    id: str
+    rating: str
+    comment: Optional[str]
+    category: str
+    page: Optional[str]
+    engineer_id: Optional[str]
+    created_at: str
+    user_agent: Optional[str]
+
+
 # =============================================================================
 # Application State
 # =============================================================================
@@ -908,6 +937,330 @@ async def list_alerts(
     except Exception as e:
         logger.error(f"Failed to list alerts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Feedback Endpoints
+# =============================================================================
+
+# In-memory feedback store (for demo/mock mode)
+# In production, this would be stored in Azure SQL
+_feedback_store: List[dict] = []
+
+@app.post("/api/feedback", response_model=FeedbackResponse)
+async def submit_feedback(feedback: FeedbackRequest):
+    """
+    Submit user feedback (thumbs up/down with optional comment).
+    
+    Stores feedback in Azure SQL database when available,
+    or in-memory for demo/mock mode.
+    """
+    import uuid
+    
+    feedback_id = str(uuid.uuid4())[:8]
+    feedback_entry = {
+        "id": feedback_id,
+        "rating": feedback.rating,
+        "comment": feedback.comment,
+        "category": feedback.category,
+        "page": feedback.page,
+        "engineer_id": feedback.engineer_id,
+        "user_agent": feedback.user_agent,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    
+    # Try to store in database if available
+    if app_state.dfm_client and hasattr(app_state.dfm_client, 'db'):
+        try:
+            db = app_state.dfm_client.db
+            db.execute("""
+                INSERT INTO feedback (id, rating, comment, category, page, engineer_id, user_agent, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                feedback_id,
+                feedback.rating,
+                feedback.comment,
+                feedback.category,
+                feedback.page,
+                feedback.engineer_id,
+                feedback.user_agent,
+                datetime.utcnow().isoformat()
+            ))
+            db.commit()
+            logger.info(f"Feedback {feedback_id} stored in database")
+        except Exception as e:
+            logger.warning(f"Database storage failed, using in-memory: {e}")
+            _feedback_store.append(feedback_entry)
+    else:
+        # Use in-memory store for demo mode
+        _feedback_store.append(feedback_entry)
+        logger.info(f"Feedback {feedback_id} stored in memory")
+    
+    return FeedbackResponse(
+        id=feedback_id,
+        success=True,
+        message="Thank you for your feedback!"
+    )
+
+
+@app.get("/api/feedback")
+async def list_feedback(
+    limit: int = Query(50, ge=1, le=500, description="Maximum feedback entries to return"),
+    rating: Optional[str] = Query(None, description="Filter by rating: 'positive' or 'negative'"),
+    category: Optional[str] = Query(None, description="Filter by category")
+):
+    """
+    List all submitted feedback.
+    
+    Returns feedback from database or in-memory store.
+    """
+    feedback_list = []
+    
+    # Try to get from database first
+    if app_state.dfm_client and hasattr(app_state.dfm_client, 'db'):
+        try:
+            db = app_state.dfm_client.db
+            query = "SELECT * FROM feedback"
+            conditions = []
+            params = []
+            
+            if rating:
+                conditions.append("rating = ?")
+                params.append(rating)
+            if category:
+                conditions.append("category = ?")
+                params.append(category)
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            
+            query += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor = db.execute(query, params)
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                feedback_list.append({
+                    "id": row[0],
+                    "rating": row[1],
+                    "comment": row[2],
+                    "category": row[3],
+                    "page": row[4],
+                    "engineer_id": row[5],
+                    "user_agent": row[6],
+                    "created_at": row[7]
+                })
+        except Exception as e:
+            logger.warning(f"Database query failed, using in-memory: {e}")
+            feedback_list = _feedback_store.copy()
+    else:
+        # Use in-memory store
+        feedback_list = _feedback_store.copy()
+    
+    # Apply filters to in-memory data if database failed
+    if rating:
+        feedback_list = [f for f in feedback_list if f.get("rating") == rating]
+    if category:
+        feedback_list = [f for f in feedback_list if f.get("category") == category]
+    
+    # Sort by created_at descending and limit
+    feedback_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    feedback_list = feedback_list[:limit]
+    
+    return {
+        "count": len(feedback_list),
+        "feedback": feedback_list
+    }
+
+
+@app.get("/feedback", response_class=HTMLResponse)
+async def feedback_page():
+    """
+    Render feedback dashboard page.
+    """
+    html_content = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSAT Guardian - Feedback Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .feedback-dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .feedback-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .feedback-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--background-card);
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+        }
+        .stat-value.positive { color: var(--accent-success); }
+        .stat-value.negative { color: var(--accent-warning); }
+        .stat-label {
+            color: var(--text-tertiary);
+            margin-top: 0.5rem;
+        }
+        .feedback-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .feedback-entry {
+            background: var(--background-card);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--accent-primary);
+        }
+        .feedback-entry.positive {
+            border-left-color: var(--accent-success);
+        }
+        .feedback-entry.negative {
+            border-left-color: var(--accent-warning);
+        }
+        .feedback-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+            margin-top: 0.5rem;
+        }
+        .feedback-rating {
+            font-size: 1.5rem;
+        }
+        .no-feedback {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-tertiary);
+        }
+        .back-link {
+            color: var(--text-link);
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <div class="nav-brand">
+            <span style="font-size: 1.5rem;">🛡️</span>
+            <span class="nav-product-name" style="font-weight: 600; font-size: 1.1rem;">CSAT Guardian</span>
+        </div>
+    </nav>
+    
+    <div class="feedback-dashboard">
+        <div class="feedback-header">
+            <div>
+                <a href="/ui" class="back-link">← Back to App</a>
+                <h1 style="margin-top: 1rem;">📊 Feedback Dashboard</h1>
+                <p class="text-muted">User feedback and satisfaction metrics</p>
+            </div>
+        </div>
+        
+        <div id="feedback-stats" class="feedback-stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-count">-</div>
+                <div class="stat-label">Total Feedback</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value positive" id="positive-count">-</div>
+                <div class="stat-label">👍 Positive</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value negative" id="negative-count">-</div>
+                <div class="stat-label">👎 Needs Work</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="satisfaction-rate">-</div>
+                <div class="stat-label">Satisfaction Rate</div>
+            </div>
+        </div>
+        
+        <h2>Recent Feedback</h2>
+        <div id="feedback-list" class="feedback-list">
+            <div class="no-feedback">Loading feedback...</div>
+        </div>
+    </div>
+    
+    <script>
+        async function loadFeedback() {
+            try {
+                const response = await fetch('/api/feedback?limit=100');
+                const data = await response.json();
+                
+                const positive = data.feedback.filter(f => f.rating === 'positive').length;
+                const negative = data.feedback.filter(f => f.rating === 'negative').length;
+                const total = data.feedback.length;
+                const satisfactionRate = total > 0 ? Math.round((positive / total) * 100) : 0;
+                
+                document.getElementById('total-count').textContent = total;
+                document.getElementById('positive-count').textContent = positive;
+                document.getElementById('negative-count').textContent = negative;
+                document.getElementById('satisfaction-rate').textContent = satisfactionRate + '%';
+                
+                const listEl = document.getElementById('feedback-list');
+                
+                if (data.feedback.length === 0) {
+                    listEl.innerHTML = '<div class="no-feedback">No feedback submitted yet</div>';
+                    return;
+                }
+                
+                listEl.innerHTML = data.feedback.map(f => `
+                    <div class="feedback-entry ${f.rating}">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <span class="feedback-rating">${f.rating === 'positive' ? '👍' : '👎'}</span>
+                                <strong style="margin-left: 0.5rem;">${f.category || 'General'}</strong>
+                            </div>
+                            <span class="text-muted text-small">${new Date(f.created_at).toLocaleString()}</span>
+                        </div>
+                        ${f.comment ? `<p style="margin: 1rem 0 0; color: var(--text-secondary);">${f.comment}</p>` : ''}
+                        <div class="feedback-meta">
+                            <span>Page: ${f.page || 'Unknown'}</span>
+                            ${f.engineer_id ? `<span>Engineer: ${f.engineer_id}</span>` : ''}
+                            <span>ID: ${f.id}</span>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Error loading feedback:', error);
+                document.getElementById('feedback-list').innerHTML = 
+                    '<div class="no-feedback">Error loading feedback</div>';
+            }
+        }
+        
+        loadFeedback();
+        // Refresh every 30 seconds
+        setInterval(loadFeedback, 30000);
+    </script>
+</body>
+</html>
+    """
+    return HTMLResponse(content=html_content, status_code=200)
 
 
 # =============================================================================

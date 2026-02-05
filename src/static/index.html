@@ -24,8 +24,61 @@
                 <span class="status-dot checking"></span>
                 <span class="status-text">Checking...</span>
             </div>
+            
+            <!-- Feedback Button -->
+            <div class="feedback-trigger">
+                <button id="feedback-btn" class="feedback-btn" title="Share Feedback">
+                    <span class="feedback-icon">💬</span>
+                    <span class="feedback-label">Feedback</span>
+                </button>
+            </div>
         </div>
     </nav>
+    
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal-overlay hidden">
+        <div class="modal-content feedback-modal">
+            <div class="modal-header">
+                <h3>Share Your Feedback</h3>
+                <button class="modal-close" onclick="closeFeedbackModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-md">How was your experience with CSAT Guardian?</p>
+                
+                <div class="feedback-rating">
+                    <button class="rating-btn" data-rating="positive" onclick="selectRating('positive')">
+                        <span class="rating-icon">👍</span>
+                        <span class="rating-label">Helpful</span>
+                    </button>
+                    <button class="rating-btn" data-rating="negative" onclick="selectRating('negative')">
+                        <span class="rating-icon">👎</span>
+                        <span class="rating-label">Needs Work</span>
+                    </button>
+                </div>
+                
+                <div class="feedback-comment mt-lg">
+                    <label for="feedback-text">Additional Comments (optional)</label>
+                    <textarea id="feedback-text" placeholder="Tell us more about your experience..." rows="4"></textarea>
+                </div>
+                
+                <div class="feedback-category mt-md">
+                    <label for="feedback-category">Category</label>
+                    <select id="feedback-category">
+                        <option value="general">General Feedback</option>
+                        <option value="ui">User Interface</option>
+                        <option value="coaching">Coaching Insights</option>
+                        <option value="performance">Performance</option>
+                        <option value="feature">Feature Request</option>
+                        <option value="bug">Bug Report</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeFeedbackModal()">Cancel</button>
+                <button id="submit-feedback-btn" class="btn btn-primary" onclick="submitFeedback()" disabled>Submit Feedback</button>
+            </div>
+        </div>
+    </div>
     
     <!-- Breadcrumb -->
     <div class="breadcrumb">
@@ -53,7 +106,7 @@
     
     <!-- Footer -->
     <footer style="text-align: center; padding: var(--spacing-xl); color: var(--text-tertiary); font-size: 0.75rem; border-top: 1px solid var(--border-subtle); margin-top: var(--spacing-2xl);">
-        <p>CSAT Guardian &copy; 2026 Microsoft CSS • AI-Powered Customer Satisfaction Monitoring</p>
+        <p>CSAT Guardian &copy; 2026 EngOps / GSX • AI-Powered Customer Satisfaction Monitoring</p>
         <p style="margin-top: var(--spacing-sm);">
             Built with Azure OpenAI • Semantic Kernel • FastAPI
         </p>

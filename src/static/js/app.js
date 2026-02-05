@@ -1757,6 +1757,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderLandingPage();
         console.log('Landing page rendered');
         
+        // Initialize feedback button listener
+        initFeedbackSystem();
+        
         // Check backend health in background
         checkHealth().catch(e => console.warn('Health check failed:', e));
         
@@ -1772,3 +1775,158 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
     }
 });
+
+// =============================================================================
+// Feedback System
+// =============================================================================
+
+let selectedFeedbackRating = null;
+
+/**
+ * Initialize the feedback system event listeners
+ */
+function initFeedbackSystem() {
+    const feedbackBtn = document.getElementById('feedback-btn');
+    if (feedbackBtn) {
+        feedbackBtn.addEventListener('click', openFeedbackModal);
+    }
+    
+    // Close modal on overlay click
+    const modal = document.getElementById('feedback-modal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeFeedbackModal();
+            }
+        });
+    }
+    
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeFeedbackModal();
+        }
+    });
+}
+
+/**
+ * Open the feedback modal
+ */
+function openFeedbackModal() {
+    const modal = document.getElementById('feedback-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        
+        // Reset form
+        selectedFeedbackRating = null;
+        document.querySelectorAll('.rating-btn').forEach(btn => btn.classList.remove('selected'));
+        document.getElementById('feedback-text').value = '';
+        document.getElementById('feedback-category').value = 'general';
+        document.getElementById('submit-feedback-btn').disabled = true;
+    }
+}
+
+/**
+ * Close the feedback modal
+ */
+function closeFeedbackModal() {
+    const modal = document.getElementById('feedback-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+}
+
+/**
+ * Select a feedback rating (thumbs up/down)
+ */
+function selectRating(rating) {
+    selectedFeedbackRating = rating;
+    
+    // Update button states
+    document.querySelectorAll('.rating-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.rating === rating);
+    });
+    
+    // Enable submit button
+    document.getElementById('submit-feedback-btn').disabled = false;
+}
+
+/**
+ * Submit feedback to the API
+ */
+async function submitFeedback() {
+    if (!selectedFeedbackRating) {
+        alert('Please select a rating (thumbs up or down)');
+        return;
+    }
+    
+    const comment = document.getElementById('feedback-text').value.trim();
+    const category = document.getElementById('feedback-category').value;
+    
+    const submitBtn = document.getElementById('submit-feedback-btn');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/feedback`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                rating: selectedFeedbackRating,
+                comment: comment || null,
+                category: category,
+                page: state.currentView,
+                engineer_id: state.currentEngineer?.id || null,
+                user_agent: navigator.userAgent,
+            }),
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to submit feedback');
+        }
+        
+        const result = await response.json();
+        
+        // Show success message
+        closeFeedbackModal();
+        showToast('Thank you for your feedback! 🎉', 'success');
+        
+    } catch (error) {
+        console.error('Error submitting feedback:', error);
+        showToast('Failed to submit feedback. Please try again.', 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+}
+
+/**
+ * Show a toast notification
+ */
+function showToast(message, type = 'info') {
+    // Remove existing toast
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.innerHTML = `
+        <span class="toast-message">${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        toast.classList.add('toast-fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
