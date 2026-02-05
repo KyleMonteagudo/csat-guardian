@@ -116,14 +116,26 @@ Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/chat"
 
 ## 📁 Key File Locations
 
-| File | Purpose |
-|------|---------|
-| `src/api.py` | FastAPI endpoints + static file serving |
-| `src/static/index.html` | **Frontend UI (Microsoft Learn-style)** |
-| `src/static/css/styles.css` | **Frontend styles (Fluent Design)** |
-| `src/static/js/app.js` | **Frontend JavaScript (~870 lines)** |
-| `src/agent/guardian_agent.py` | Semantic Kernel agent |
-| `src/db_sync.py` | Azure SQL database client |
-| `src/models.py` | Pydantic data models |
-| `infrastructure/sql/001-schema-complete.sql` | Database schema |
-| `infrastructure/sql/002-seed-data.sql` | Test data (8 cases) |
+| File | Purpose | Lines |
+|------|---------|-------|
+| `src/api.py` | FastAPI endpoints + static file serving | ~805 |
+| `src/static/index.html` | **Frontend UI (Microsoft Learn-style)** | ~300 |
+| `src/static/css/styles.css` | **Design system (Glassmorphism + Fluent)** | ~2,770 |
+| `src/static/js/app.js` | **Frontend JavaScript (animations, state)** | ~2,793 |
+| `src/agent/guardian_agent.py` | Semantic Kernel agent | ~640 |
+| `src/db_sync.py` | Azure SQL database client | ~457 |
+| `src/models.py` | Pydantic data models | ~677 |
+| `infrastructure/sql/001-schema-complete.sql` | Database schema | - |
+| `infrastructure/sql/002-seed-data.sql` | Test data (8 cases) | - |
+
+## 🎨 Frontend UI Features
+
+| Feature | CSS/JS | Description |
+|---------|--------|-------------|
+| **Glassmorphism** | `--glass-background` | Frosted glass cards with backdrop blur |
+| **Sentiment Rings** | `createSentimentRing()` | Animated SVG circular progress |
+| **Animated Counters** | `animateCounter()` | Numbers count up with easing |
+| **Skeleton Loading** | `.skeleton` class | Shimmer placeholders while loading |
+| **Page Transitions** | `animatePageTransition()` | Staggered fade-in animations |
+| **Button Ripples** | `@keyframes ripple` | Click effect on buttons |
+| **Theme Toggle** | `[data-theme]` | Dark/Light mode support |

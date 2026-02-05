@@ -3,15 +3,16 @@
 ## Hackathon Submission Video
 **Target Duration:** 2:00 minutes  
 **Speaker:** Kyle Monteagudo  
-**Last Updated:** February 3, 2026
+**Last Updated:** February 5, 2026
 
 ---
 
 ## DEMO ENVIRONMENT
 
 - **URL:** `https://app-csatguardian-dev.azurewebsites.net/ui`
-- **Frontend:** Microsoft Learn-style static HTML/CSS/JS
+- **Frontend:** Microsoft Learn-style with glassmorphism, animated sentiment rings, skeleton loading
 - **Backend:** FastAPI + Semantic Kernel + Azure OpenAI GPT-4o
+- **Design:** Frosted glass cards, gradient accents, animated counters, micro-interactions
 
 ---
 
@@ -40,13 +41,13 @@
 
 > "First, let's look at the **Engineer Dashboard**."
 
-*[Dashboard loads - point to alert banner and metrics cards]*
+*[Dashboard loads with skeleton animation, then content fades in]*
 
-> "Immediately, I can see my case metrics - total cases, at-risk cases, and my average CSAT score. The dashboard shows all my active cases with their sentiment status - critical in red, at-risk in yellow, or positive in green."
+> "Notice the smooth loading animation - we show skeleton placeholders while data loads. Immediately, I can see my case metrics with animated counters - total cases, at-risk cases, and my average CSAT score."
 
-*[Point to the sentiment indicators on case cards]*
+*[Point to the sentiment rings on case cards]*
 
-> "For each case, our AI provides a real-time analysis. Here, we've detected that this customer is frustrated due to extended downtime."
+> "Each case shows a **sentiment ring** - these animated circular indicators instantly show case health. Red for critical, yellow for at-risk, green for positive. The frosted glass cards use glassmorphism for a modern, premium look."
 
 *[Click Analyze button on a case]*
 
@@ -119,6 +120,8 @@
 - "Detect frustration as it happens"
 - "AI-powered recommendations"
 - "Enterprise-grade PII protection"
+- "Animated sentiment rings"
+- "Modern glassmorphism design"
 - "Stop reacting. Start preventing."
 
 ---

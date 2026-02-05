@@ -24,13 +24,14 @@
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Frontend UI** | ✅ Running | **Microsoft Learn-style HTML/CSS/JS at `/ui`** |
+| **Frontend UI** | ✅ Running | **Glassmorphism design, animated sentiment rings, skeleton loading** |
 | Azure SQL Database | ✅ Deployed | 12 tables, 8 test cases with timelines |
 | App Service | ✅ Running | Python 3.11, VNet integrated, private endpoints |
 | Azure OpenAI | ✅ Connected | GPT-4o via Managed Identity |
 | Azure AI Content Safety | ✅ Connected | PII detection via Managed Identity |
 | Semantic Kernel Agent | ✅ Working | Function calling with CSAT rules plugin |
 | **Security Hardening** | ✅ Complete | **Local auth DISABLED on all services** |
+| **UI Animations** | ✅ Working | **Counters, rings, transitions, micro-interactions** |
 | `/ui` | ✅ Working | **Static frontend served by FastAPI** |
 | `/api/health` | ✅ Working | Health check endpoint |
 | `/api/cases` | ✅ Working | Lists cases from Azure SQL |

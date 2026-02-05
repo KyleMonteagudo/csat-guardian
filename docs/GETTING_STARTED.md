@@ -108,6 +108,9 @@ az webapp deploy --resource-group CSAT_Guardian_Dev --name app-csatguardian-dev 
 | Component | Description |
 |-----------|-------------|
 | **Fluent Design** | Microsoft's design language (dark theme) |
+| **Glassmorphism** | Frosted glass effect cards with backdrop blur |
+| **Animated UI** | Sentiment rings, number counters, page transitions |
+| **Skeleton Loading** | Shimmer placeholders while data loads |
 | **Static Files** | Pure HTML/CSS/JS served by FastAPI at `/ui` |
 | **No Build Step** | No npm, webpack, or bundler required |
 | **Responsive** | Works on desktop and mobile |
@@ -249,4 +252,4 @@ csat-guardian/
 
 ---
 
-*Last Updated: January 28, 2026*
+*Last Updated: February 5, 2026*

@@ -4,7 +4,7 @@
 > 
 > **Audience:** Developers, security auditors, project managers, and anyone who needs to understand this codebase.
 > 
-> **Last Updated:** February 4, 2026
+> **Last Updated:** February 5, 2026
 
 ---
 
@@ -51,10 +51,11 @@ Imagine you're a support engineer with 10 open cases. It's hard to remember:
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Core API | ✅ Working | All endpoints functional |
-| **Frontend UI** | ✅ Working | **Microsoft Learn-style HTML/CSS/JS at `/ui`** |
+| **Frontend UI** | ✅ Working | **Microsoft Learn-style with glassmorphism, animations** |
 | AI Analysis | ✅ Working | Azure OpenAI GPT-4o |
 | Database | ✅ Working | Azure SQL with MSI auth |
 | PII Protection | ✅ Working | Two-layer scrubbing |
+| **UI Animations** | ✅ Working | **Sentiment rings, counters, skeleton loading** |
 | Teams Integration | ⏳ Pending | Awaiting security approval |
 | Real DfM Data | ⏳ Pending | Using mock data for now |
 
@@ -104,14 +105,16 @@ CSAT Guardian acts like a vigilant assistant that:
 │   │                                                                   │      │
 │   │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │      │
 │   │   │  index.html  │  │ styles.css   │  │   app.js     │          │      │
-│   │   │  (HTML5 UI)  │  │ (Fluent CSS) │  │ (870 lines)  │          │      │
+│   │   │  (HTML5 UI)  │  │ (2,770 lines)│  │(2,793 lines) │          │      │
 │   │   └──────────────┘  └──────────────┘  └──────────────┘          │      │
 │   │                                                                   │      │
 │   │   Features:                                                       │      │
-│   │   • Engineer Dashboard (case list, sentiment status)              │      │
-│   │   • Manager Dashboard (team overview, critical cases)             │      │
-│   │   • Real-time Sentiment Analysis with AI                         │      │
-│   │   • AI Chat Interface with CSAT coaching                         │      │
+│   │   • Glassmorphism cards with backdrop-filter blur                │      │
+│   │   • Animated sentiment rings with SVG gradients                  │      │
+│   │   • Animated number counters with easing                         │      │
+│   │   • Skeleton loading states with shimmer effect                  │      │
+│   │   • Micro-interactions (button ripples, card hover)              │      │
+│   │   • Theme support (dark/light mode)                              │      │
 │   └───────────────────────────┬───────────────────────────────────┘      │
 │                                  │ fetch() API calls                         │
 └──────────────────────────────────┼───────────────────────────────────────────┘
@@ -356,6 +359,33 @@ Private DNS Zones (ensure internal name resolution):
 | `interactive_demo.py` | ~300 | Demo interface | Console-based chat demo |
 | `requirements.txt` | ~103 | Python dependencies | All pip packages |
 | `__init__.py` | ~5 | Package marker | Empty or minimal |
+
+### /src/static (Frontend UI)
+
+| File | Lines | Purpose | Key Contents |
+|------|-------|---------|--------------|
+| `index.html` | ~300 | Main HTML page | SPA structure, semantic markup |
+| `css/styles.css` | ~2,770 | Design system | Glassmorphism, animations, Fluent Design tokens |
+| `js/app.js` | ~2,793 | Frontend logic | State management, API calls, rendering |
+
+**CSS Features (styles.css):**
+| Feature | Description |
+|---------|-------------|
+| CSS Variables | Complete design token system for colors, spacing, shadows |
+| Glassmorphism | `--glass-background`, `backdrop-filter: blur()` |
+| Gradient Accents | `--gradient-primary`, `--gradient-success`, `--gradient-danger` |
+| Keyframe Animations | `fadeInUp`, `slideInRight`, `shimmer`, `countUp`, `ringFill` |
+| Skeleton Loading | `.skeleton` class with shimmer animation |
+| Theme Support | `[data-theme="light"]` and `[data-theme="dark"]` variables |
+
+**JavaScript Features (app.js):**
+| Feature | Description |
+|---------|-------------|
+| `animateCounter()` | Animated number counting with easing |
+| `createSentimentRing()` | SVG circular progress with gradient fills |
+| `createSkeleton()` | Dynamic skeleton placeholder generation |
+| `animatePageTransition()` | Staggered fade-in animations on view change |
+| `calculateCSATPrediction()` | AI-like CSAT score prediction algorithm |
 
 ### /src/agent (AI Agent)
 
