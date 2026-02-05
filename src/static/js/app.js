@@ -283,6 +283,141 @@ function getLivePulseClass(caseData) {
 }
 
 // =============================================================================
+// UI Enhancement Functions - Animations & Visual Effects
+// =============================================================================
+
+/**
+ * Animate a number counting up from 0 to target
+ */
+function animateCounter(element, targetValue, duration = 1000, suffix = '') {
+    const startTime = performance.now();
+    const startValue = 0;
+    
+    function updateCounter(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function (ease-out cubic)
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        const currentValue = Math.round(startValue + (targetValue - startValue) * easeOut);
+        
+        element.textContent = currentValue + suffix;
+        
+        if (progress < 1) {
+            requestAnimationFrame(updateCounter);
+        }
+    }
+    
+    requestAnimationFrame(updateCounter);
+}
+
+/**
+ * Initialize all animated counters on the page
+ */
+function initAnimatedCounters() {
+    const counters = document.querySelectorAll('[data-animate-count]');
+    counters.forEach(counter => {
+        const target = parseFloat(counter.dataset.animateCount);
+        const suffix = counter.dataset.suffix || '';
+        const duration = parseInt(counter.dataset.duration) || 1000;
+        animateCounter(counter, target, duration, suffix);
+    });
+}
+
+/**
+ * Create an animated sentiment ring SVG
+ */
+function createSentimentRing(score, size = 'normal') {
+    const percentage = Math.round(score * 100);
+    const circumference = 251.2; // 2 * PI * 40 (radius)
+    const offset = circumference - (circumference * score);
+    const sentimentClass = getSentimentClass(score);
+    
+    const sizeClass = size === 'mini' ? 'sentiment-ring-mini' : 'sentiment-ring';
+    const showValue = size !== 'mini';
+    
+    return `
+        <div class="${sizeClass}">
+            <svg viewBox="0 0 100 100">
+                <defs>
+                    <linearGradient id="gradientSuccess" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#107c10"/>
+                        <stop offset="100%" style="stop-color:#6ccb5f"/>
+                    </linearGradient>
+                    <linearGradient id="gradientWarning" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#ff8c00"/>
+                        <stop offset="100%" style="stop-color:#ffb900"/>
+                    </linearGradient>
+                    <linearGradient id="gradientDanger" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#d13438"/>
+                        <stop offset="100%" style="stop-color:#ff6b6b"/>
+                    </linearGradient>
+                </defs>
+                <circle class="sentiment-ring-bg" cx="50" cy="50" r="40"/>
+                <circle class="sentiment-ring-fill ${sentimentClass}" cx="50" cy="50" r="40" 
+                    style="stroke-dashoffset: ${offset}"/>
+            </svg>
+            ${showValue ? `
+                <div class="sentiment-ring-value">
+                    <div class="sentiment-ring-number" data-animate-count="${percentage}" data-suffix="%">${percentage}%</div>
+                    <div class="sentiment-ring-label">Sentiment</div>
+                </div>
+            ` : `
+                <div class="sentiment-ring-value">${percentage}%</div>
+            `}
+        </div>
+    `;
+}
+
+/**
+ * Create skeleton loading placeholder
+ */
+function createSkeleton(type = 'card', count = 1) {
+    const skeletons = {
+        card: '<div class="skeleton skeleton-card"></div>',
+        metric: '<div class="skeleton skeleton-metric"></div>',
+        row: '<div class="skeleton skeleton-row"></div>',
+        text: '<div class="skeleton skeleton-text medium"></div>',
+        textShort: '<div class="skeleton skeleton-text short"></div>',
+    };
+    
+    return Array(count).fill(skeletons[type] || skeletons.card).join('');
+}
+
+/**
+ * Create skeleton loading for metrics row
+ */
+function createMetricsSkeleton(count = 4) {
+    return `
+        <div class="metrics-row">
+            ${Array(count).fill('<div class="metric-card skeleton skeleton-metric" style="height: 100px;"></div>').join('')}
+        </div>
+    `;
+}
+
+/**
+ * Create skeleton loading for table
+ */
+function createTableSkeleton(rows = 5) {
+    return `
+        <div class="table-container">
+            <div style="padding: var(--spacing-md);">
+                ${Array(rows).fill('<div class="skeleton skeleton-row"></div>').join('')}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Add page transition animation class
+ */
+function animatePageTransition(element) {
+    element.classList.add('page-enter');
+    // Remove class after animation completes
+    setTimeout(() => element.classList.remove('page-enter'), 600);
+}
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 
@@ -665,12 +800,13 @@ function renderLandingPage() {
             </div>
         </div>
         
-        <div class="text-center mt-lg">
-            <h3>Powered by Azure AI</h3>
+        <div class="text-center mt-lg" style="animation: fadeInUp 0.6s ease-out 0.5s both;">
+            <h3 style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Powered by Azure AI</h3>
             <p class="text-muted">Azure OpenAI • Azure SQL • Semantic Kernel • FastAPI</p>
         </div>
     `;
     updateBreadcrumb([]);
+    animatePageTransition(main);
 }
 
 async function renderEngineerDashboard() {
@@ -678,24 +814,28 @@ async function renderEngineerDashboard() {
     showLoading(true);
     
     const main = document.getElementById('main-content');
+    // Show skeleton loading first
     main.innerHTML = `
-        <div class="content-header">
+        <div class="content-header page-enter">
             <h1>My Dashboard</h1>
             <p class="subtitle">Your CSAT performance insights and case management</p>
         </div>
         <div id="alerts-container"></div>
         
-        <!-- Personal Analytics Section -->
+        <!-- Personal Analytics Section - Skeleton -->
         <div id="analytics-section" class="card mb-lg">
-            <div class="loading"><div class="spinner"></div></div>
-            <p class="text-center text-muted">Loading your performance analytics...</p>
+            ${createSkeleton('metric', 1)}
+            <div class="skeleton skeleton-text long mt-md"></div>
+            <div class="skeleton skeleton-text medium"></div>
         </div>
         
-        <div id="metrics-container" class="metrics-row"></div>
+        <div id="metrics-container" class="metrics-row">
+            ${createMetricsSkeleton(4).replace('<div class="metrics-row">', '').replace('</div>', '')}
+        </div>
         
-        <!-- My Cases Section -->
+        <!-- My Cases Section - Skeleton -->
         <div id="cases-container">
-            <div class="loading"><div class="spinner"></div></div>
+            ${createTableSkeleton(5)}
         </div>
     `;
     updateBreadcrumb([{ text: 'Engineer Dashboard' }]);
@@ -1419,8 +1559,9 @@ async function renderManagerDashboard() {
     showLoading(true);
     
     const main = document.getElementById('main-content');
+    // Show skeleton loading first for instant feedback
     main.innerHTML = `
-        <div class="content-header">
+        <div class="content-header page-enter">
             <div class="flex justify-between items-center">
                 <div>
                     <h1>Team Performance</h1>
@@ -1433,9 +1574,11 @@ async function renderManagerDashboard() {
                 </div>
             </div>
         </div>
-        <div id="team-summary" class="team-summary-section"></div>
+        <div id="team-summary" class="team-summary-section">
+            ${createMetricsSkeleton(5)}
+        </div>
         <div id="team-container">
-            <div class="loading"><div class="spinner"></div></div>
+            ${createTableSkeleton(6)}
         </div>
     `;
     updateBreadcrumb([{ text: 'Team Performance' }]);
@@ -1584,7 +1727,7 @@ function renderTeamDashboardContent() {
     // Team summary with visual chart
     teamSummaryEl.innerHTML = `
         <div class="summary-grid">
-            <div class="summary-card highlight">
+            <div class="summary-card highlight card-glass">
                 <div class="summary-header">
                     <span class="summary-icon">📊</span>
                     <span class="summary-title">Team Sentiment Overview</span>
@@ -1592,60 +1735,68 @@ function renderTeamDashboardContent() {
                 </div>
                 <div class="sentiment-chart-container">
                     <div class="sentiment-donut">
-                        <svg viewBox="0 0 100 100" class="donut-chart">
-                            ${renderDonutChart(excellentCount, goodCount, opportunityCount, totalActiveCases)}
-                        </svg>
-                        <div class="donut-center">
-                            <span class="donut-value">${Math.round(teamAvgSentiment * 100)}%</span>
-                            <span class="donut-label">Team Avg</span>
-                        </div>
+                        ${createSentimentRing(teamAvgSentiment)}
                     </div>
                     <div class="chart-legend">
                         <div class="legend-item">
                             <span class="legend-dot excellent"></span>
                             <span class="legend-label">Excellent (70%+)</span>
-                            <span class="legend-value">${excellentCount}</span>
+                            <span class="legend-value" data-animate-count="${excellentCount}">${excellentCount}</span>
                         </div>
                         <div class="legend-item">
                             <span class="legend-dot good"></span>
                             <span class="legend-label">Good (55-70%)</span>
-                            <span class="legend-value">${goodCount}</span>
+                            <span class="legend-value" data-animate-count="${goodCount}">${goodCount}</span>
                         </div>
                         <div class="legend-item">
                             <span class="legend-dot opportunity"></span>
                             <span class="legend-label">Growth Opportunity</span>
-                            <span class="legend-value">${opportunityCount}</span>
+                            <span class="legend-value" data-animate-count="${opportunityCount}">${opportunityCount}</span>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <div class="summary-card">
+            <div class="summary-card card-glass">
                 <div class="summary-header">
                     <span class="summary-icon">👥</span>
                     <span class="summary-title">Team at a Glance</span>
                 </div>
                 <div class="glance-metrics">
                     <div class="glance-item">
-                        <span class="glance-value">${engineers.length}</span>
+                        <span class="glance-value" data-animate-count="${engineers.length}">${engineers.length}</span>
                         <span class="glance-label">Engineers</span>
                     </div>
                     <div class="glance-item">
-                        <span class="glance-value">${totalActiveCases}</span>
+                        <span class="glance-value" data-animate-count="${totalActiveCases}">${totalActiveCases}</span>
                         <span class="glance-label">Active Cases</span>
                     </div>
                     <div class="glance-item">
-                        <span class="glance-value">${totalResolvedCases}</span>
+                        <span class="glance-value" data-animate-count="${totalResolvedCases}">${totalResolvedCases}</span>
                         <span class="glance-label">Resolved (${rangeLabel})</span>
                     </div>
                     <div class="glance-item">
-                        <span class="glance-value">${Math.round(totalActiveCases / Math.max(engineers.length, 1))}</span>
+                        <span class="glance-value" data-animate-count="${Math.round(totalActiveCases / Math.max(engineers.length, 1))}">${Math.round(totalActiveCases / Math.max(engineers.length, 1))}</span>
                         <span class="glance-label">Avg Active/Engineer</span>
                     </div>
                 </div>
             </div>
         </div>
     `;
+    
+    // Trigger counter animations
+    setTimeout(() => initAnimatedCounters(), 100);
+    
+    // Animate the sentiment ring
+    setTimeout(() => {
+        const ring = teamSummaryEl.querySelector('.sentiment-ring-fill');
+        if (ring) {
+            const score = teamAvgSentiment;
+            const circumference = 251.2;
+            const offset = circumference - (circumference * score);
+            ring.style.strokeDashoffset = offset;
+        }
+    }, 200);
     
     // Engineer cards - using data from fast summary endpoint
     const teamHtml = engineers.map(eng => {
