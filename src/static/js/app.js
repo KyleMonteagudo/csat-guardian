@@ -424,7 +424,6 @@ async function renderEngineerDashboard() {
         <div id="metrics-container" class="metrics-row"></div>
         
         <!-- My Cases Section -->
-        <h3 class="mt-lg mb-md">📋 My Cases</h3>
         <div id="cases-container">
             <div class="loading"><div class="spinner"></div></div>
         </div>
@@ -444,47 +443,53 @@ async function renderEngineerDashboard() {
         return;
     }
     
-    state.cases = casesData.cases || casesData || [];
+    const allCases = casesData.cases || casesData || [];
     
-    // Calculate CSAT risk metrics (focus on sentiment, not just days)
-    const critical = state.cases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
-    const atRisk = state.cases.filter(c => {
+    // Separate active and resolved cases
+    const activeCases = allCases.filter(c => c.status === 'active');
+    const resolvedCases = allCases.filter(c => c.status === 'resolved');
+    
+    state.cases = allCases;
+    
+    // Calculate CSAT risk metrics for ACTIVE cases only
+    const critical = activeCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
+    const atRisk = activeCases.filter(c => {
         const score = c.sentiment_score || 0.5;
         return score >= 0.35 && score < 0.55;
     }).length;
-    const healthy = state.cases.length - critical - atRisk;
+    const healthy = activeCases.length - critical - atRisk;
     
-    // Calculate average sentiment
-    const avgSentiment = state.cases.length > 0 
-        ? state.cases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / state.cases.length 
+    // Calculate average sentiment for ACTIVE cases only
+    const avgSentiment = activeCases.length > 0 
+        ? activeCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / activeCases.length 
         : 0.5;
     
-    // Find top negative indicators
-    const negativeIndicators = analyzeNegativeIndicators(state.cases);
+    // Find top negative indicators from ACTIVE cases
+    const negativeIndicators = analyzeNegativeIndicators(activeCases);
     
     // Render personal analytics
-    renderPersonalAnalytics(avgSentiment, negativeIndicators, state.cases);
+    renderPersonalAnalytics(avgSentiment, negativeIndicators, activeCases);
     
-    // Render alerts - focus on CSAT risk, not SLA
+    // Render alerts - ONLY for ACTIVE cases with critical risk
     if (critical > 0) {
         document.getElementById('alerts-container').innerHTML = `
             <div class="alert-banner danger">
-                🚨 <strong>CSAT Alert:</strong> ${critical} case${critical > 1 ? 's' : ''} with critical customer satisfaction risk - immediate attention needed
+                🚨 <strong>CSAT Alert:</strong> ${critical} active case${critical > 1 ? 's' : ''} with critical customer satisfaction risk - immediate attention needed
             </div>
         `;
     } else if (atRisk > 0) {
         document.getElementById('alerts-container').innerHTML = `
             <div class="alert-banner warning">
-                ⚠️ <strong>CSAT Warning:</strong> ${atRisk} case${atRisk > 1 ? 's' : ''} showing signs of declining customer satisfaction
+                ⚠️ <strong>CSAT Warning:</strong> ${atRisk} active case${atRisk > 1 ? 's' : ''} showing signs of declining customer satisfaction
             </div>
         `;
     }
     
-    // Render metrics - CSAT focused
+    // Render metrics - CSAT focused on ACTIVE cases
     document.getElementById('metrics-container').innerHTML = `
         <div class="metric-card">
-            <div class="metric-value">${state.cases.length}</div>
-            <div class="metric-label">Total Cases</div>
+            <div class="metric-value">${activeCases.length}</div>
+            <div class="metric-label">Active Cases</div>
         </div>
         <div class="metric-card">
             <div class="metric-value danger">${critical}</div>
@@ -498,41 +503,60 @@ async function renderEngineerDashboard() {
             <div class="metric-value success">${healthy}</div>
             <div class="metric-label">Healthy</div>
         </div>
+        <div class="metric-card">
+            <div class="metric-value">${resolvedCases.length}</div>
+            <div class="metric-label">Resolved</div>
+        </div>
     `;
     
-    // Render cases table
-    if (state.cases.length === 0) {
-        document.getElementById('cases-container').innerHTML = `
-            <div class="card">
-                <p class="text-muted text-center">No cases assigned to you.</p>
-            </div>
-        `;
-        return;
-    }
-    
+    // Render cases in separate sections
     document.getElementById('cases-container').innerHTML = `
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Case ID</th>
-                        <th>Title</th>
-                        <th>Status</th>
-                        <th>Severity</th>
-                        <th>Customer</th>
-                        <th>CSAT Risk</th>
-                        <th>Sentiment</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${state.cases.map(c => renderCaseRow(c)).join('')}
-                </tbody>
-            </table>
-        </div>
+        <!-- Active Cases Section -->
+        <h3 class="mt-lg mb-md">📋 Active Cases (${activeCases.length})</h3>
+        ${activeCases.length > 0 ? `
+            <div class="table-container mb-lg">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Case ID</th>
+                            <th>Title</th>
+                            <th>Severity</th>
+                            <th>Customer</th>
+                            <th>CSAT Risk</th>
+                            <th>Sentiment</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${activeCases.map(c => renderCaseRow(c, false)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<p class="text-muted mb-lg">No active cases - great job!</p>'}
+        
+        <!-- Resolved Cases Section -->
+        <h3 class="mt-lg mb-md">✅ Resolved Cases (${resolvedCases.length})</h3>
+        ${resolvedCases.length > 0 ? `
+            <div class="table-container">
+                <table class="resolved-table">
+                    <thead>
+                        <tr>
+                            <th>Case ID</th>
+                            <th>Title</th>
+                            <th>Severity</th>
+                            <th>Customer</th>
+                            <th>Final Sentiment</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${resolvedCases.map(c => renderCaseRow(c, true)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<p class="text-muted">No resolved cases yet this quarter.</p>'}
     `;
 }
 
-function renderCaseRow(caseData) {
+function renderCaseRow(caseData, isResolved = false) {
     const sentiment = caseData.sentiment_score || 0.5;
     const csatRisk = caseData.csat_risk || 'healthy';
     
@@ -557,6 +581,25 @@ function renderCaseRow(caseData) {
     const sevLetter = formatSeverity(caseData.severity);
     const sevClass = getSeverityBadgeClass(caseData.severity);
     
+    // Simplified row for resolved cases
+    if (isResolved) {
+        return `
+            <tr class="clickable resolved-row" onclick="viewCase('${caseData.id}')">
+                <td><strong>${caseData.id}</strong></td>
+                <td>${caseData.title || 'Untitled'}</td>
+                <td><span class="badge ${sevClass}">Sev ${sevLetter}</span></td>
+                <td>${caseData.customer?.company || 'Unknown'}</td>
+                <td>
+                    <div class="sentiment-indicator">
+                        <span class="sentiment-dot sentiment-${sentimentClass}"></span>
+                        ${Math.round(sentiment * 100)}%
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+    
+    // Full row for active cases
     return `
         <tr class="clickable" onclick="viewCase('${caseData.id}')">
             <td><strong>${caseData.id}</strong></td>
@@ -925,31 +968,46 @@ async function renderManagerDashboard() {
     
     showLoading(false);
     
+    // Debug log to see what we're getting
+    console.log('Manager summary data:', summaryData);
+    
     // Map summary data to expected format
-    if (summaryData && summaryData.engineers) {
+    if (summaryData && summaryData.engineers && summaryData.engineers.length > 0) {
         state.engineers = summaryData.engineers;
         state.managerStats = summaryData.stats || {};
-        // Create synthetic cases array for compatibility with existing rendering
-        state.cases = [];
-        summaryData.engineers.forEach(eng => {
-            // Add placeholder cases for the engineer (we'll lazy-load details)
-            for (let i = 0; i < (eng.active_cases || 0); i++) {
-                state.cases.push({
-                    id: `${eng.id}-case-${i}`,
-                    owner: { id: eng.id },
-                    sentiment_score: eng.risk_level === 'critical' ? 0.3 : eng.risk_level === 'at_risk' ? 0.5 : 0.7,
-                    csat_risk: eng.risk_level
-                });
-            }
-        });
     } else {
-        // Fallback to slow method if fast endpoint fails
+        // Fallback to slow method if fast endpoint fails or returns empty
+        console.log('Fast endpoint returned no data, falling back to slow method');
         const [engineersData, casesData] = await Promise.all([
             getEngineers(),
             getCases()
         ]);
         state.engineers = engineersData?.engineers || engineersData || [];
-        state.cases = casesData?.cases || casesData || [];
+        
+        // Build stats from cases
+        const allCases = casesData?.cases || casesData || [];
+        const activeCases = allCases.filter(c => c.status === 'active');
+        const resolvedCases = allCases.filter(c => c.status === 'resolved');
+        
+        state.managerStats = {
+            total_engineers: state.engineers.length,
+            total_active_cases: activeCases.length,
+            total_resolved_cases: resolvedCases.length,
+            total_cases: allCases.length
+        };
+        
+        // Compute active_cases per engineer from the cases data
+        state.engineers = state.engineers.map(eng => {
+            const engActiveCases = activeCases.filter(c => c.owner?.id === eng.id);
+            const engResolvedCases = resolvedCases.filter(c => c.owner?.id === eng.id);
+            return {
+                ...eng,
+                active_cases: engActiveCases.length,
+                resolved_cases: engResolvedCases.length,
+                risk_level: engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.35) ? 'critical' 
+                    : engActiveCases.some(c => (c.sentiment_score || 0.5) < 0.55) ? 'at_risk' : 'healthy'
+            };
+        });
     }
     
     renderTeamDashboardContent();
@@ -1109,7 +1167,7 @@ function renderTeamDashboardContent() {
                     <div class="engineer-avatar-modern">${(eng.name || 'Unknown').split(' ').map(n => n[0]).join('')}</div>
                     <div class="eng-card-info">
                         <div class="eng-card-name">${eng.name || 'Unknown'}</div>
-                        <div class="eng-card-meta">${activeCases} active cases • ${eng.team || 'CSS Support'}</div>
+                        <div class="eng-card-meta">${activeCases} active cases • ${eng.team || 'GSX Support'}</div>
                         ${stalenessIndicator}
                     </div>
                 </div>
@@ -1253,7 +1311,7 @@ async function viewEngineerDetail(engineerId) {
                 <div class="engineer-avatar-xl">${engineer.name.split(' ').map(n => n[0]).join('')}</div>
                 <div class="engineer-profile-info">
                     <h1>${engineer.name}</h1>
-                    <p class="subtitle">${engineer.email} • ${engineer.team || 'CSS Support'}</p>
+                    <p class="subtitle">${engineer.email} • ${engineer.team || 'Support'}</p>
                     <div class="profile-badges">
                         <span class="period-badge">${rangeLabel}</span>
                         <span class="case-count-badge">${activeCases.length} active</span>

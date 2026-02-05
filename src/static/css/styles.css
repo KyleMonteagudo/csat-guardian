@@ -2450,3 +2450,16 @@ textarea.form-input {
         grid-template-columns: 1fr;
     }
 }
+
+/* Resolved cases table styling */
+.resolved-table tbody tr {
+    opacity: 0.8;
+}
+
+.resolved-table tbody tr:hover {
+    opacity: 1;
+}
+
+.resolved-row td {
+    color: var(--text-secondary);
+}
