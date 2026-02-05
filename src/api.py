@@ -1885,45 +1885,49 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
                 # Generate 3-6 timeline entries per case
                 num_entries = random.randint(3, 6)
                 
-                # Sentiment values based on pattern
-                if sentiment_pattern == "happy":
-                    sentiments = [0.6, 0.7, 0.75, 0.8, 0.85, 0.9]
-                elif sentiment_pattern == "frustrated":
-                    sentiments = [0.4, 0.3, 0.25, 0.2, 0.15, 0.1]
-                elif sentiment_pattern == "declining":
-                    sentiments = [0.6, 0.5, 0.4, 0.35, 0.3, 0.25]
-                else:  # neutral
-                    sentiments = [0.5, 0.55, 0.5, 0.52, 0.48, 0.55]
-                
-                # Content templates
+                # Content templates - keywords match sentiment indicators in _calculate_csat_risk
                 happy_contents = [
-                    "Thank you for the quick response!",
-                    "This solution worked perfectly.",
-                    "Great support, really appreciated.",
-                    "Exactly what we needed, thanks!",
-                    "Excellent documentation provided.",
+                    "Thank you so much for the quick response! This is exactly what we needed.",
+                    "This solution worked perfectly. Great job and really appreciate the help!",
+                    "Excellent support! You've been incredibly helpful with this issue.",
+                    "Wonderful news - everything is working now. Thanks for the fantastic assistance!",
+                    "Amazing work! The fix resolved our problem completely. Much appreciated!",
+                    "Perfect solution! Thank you for the excellent documentation provided.",
+                    "You saved us! This works great and we're very impressed with the support.",
+                    "Awesome response time and the solution was spot on. Well done!",
                 ]
                 frustrated_contents = [
-                    "Still waiting for a response...",
-                    "This has been ongoing for too long.",
-                    "We need this resolved urgently!",
-                    "Escalating to management.",
-                    "Unacceptable service level.",
+                    "Still waiting for a response after several days. This is unacceptable.",
+                    "We are extremely frustrated - this has been going on for too long!",
+                    "URGENT: We need this resolved immediately! Our business is impacted.",
+                    "I am escalating to your manager. This service level is terrible.",
+                    "No response again?! This is ridiculous and completely unacceptable.",
+                    "We've been waiting for hours with no update. This is a nightmare!",
+                    "Still no progress? We're considering legal options if this isn't resolved.",
+                    "This is the worst support experience. I'm furious about the delays.",
+                    "Disappointed that we've been ignored for days. Need urgent escalation!",
                 ]
                 neutral_contents = [
-                    "Following up on our request.",
-                    "Please see attached logs.",
-                    "Can you provide an update?",
-                    "Acknowledged, will review.",
-                    "Working on the analysis.",
+                    "Following up on our request. Can you provide an update?",
+                    "Please see attached logs for the issue we discussed.",
+                    "Can you provide an update on the current status?",
+                    "Acknowledged, we'll review and get back to you.",
+                    "Just checking in on the progress of this case.",
+                ]
+                declining_contents = [
+                    "Thank you for looking into this, but we're still waiting for a resolution.",
+                    "Appreciate the update but getting frustrated with the delays.",
+                    "Still no resolution? We expected better. This is taking too long.",
+                    "Disappointed that there's still no progress after all this time.",
+                    "We've been waiting for days now. When will this be resolved?",
                 ]
                 note_contents = [
-                    "Reviewed customer request.",
-                    "Sent documentation and guidance.",
-                    "Escalated to product team.",
-                    "Awaiting customer response.",
-                    "Implemented suggested fix.",
-                    "Scheduled follow-up call.",
+                    "Reviewed customer request and identified root cause.",
+                    "Sent documentation and step-by-step guidance to customer.",
+                    "Escalated to product team for further investigation.",
+                    "Awaiting customer response to implement fix.",
+                    "Implemented suggested fix, monitoring for confirmation.",
+                    "Scheduled follow-up call with customer for tomorrow.",
                 ]
                 
                 # Space entries across case lifetime
@@ -1944,26 +1948,37 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
                         entry_type = "note"
                         content = random.choice(note_contents)
                         direction = None
+                        created_by = eng_id  # Note by engineer
+                        is_customer_comm = 0
                     elif i % 2 == 0:
                         entry_type = "email_received"
+                        # For declining pattern, start happy and get worse
                         if sentiment_pattern == "happy":
                             content = random.choice(happy_contents)
                         elif sentiment_pattern == "frustrated":
                             content = random.choice(frustrated_contents)
-                        else:
+                        elif sentiment_pattern == "declining":
+                            # Earlier emails more positive, later ones more negative
+                            if i < num_entries // 2:
+                                content = random.choice(neutral_contents)
+                            else:
+                                content = random.choice(declining_contents + frustrated_contents[:3])
+                        else:  # neutral
                             content = random.choice(neutral_contents)
                         direction = "inbound"
+                        created_by = "Customer"  # Customer email
+                        is_customer_comm = 1
                     else:
                         entry_type = "email_sent"
                         content = random.choice(note_contents)
                         direction = "outbound"
-                    
-                    sentiment = sentiments[min(i, len(sentiments)-1)]
+                        created_by = eng_id  # Engineer response
+                        is_customer_comm = 0
                     
                     cursor.execute(f"""
-                        INSERT INTO timeline_entries (id, case_id, entry_type, content, created_by, direction, created_on)
-                        VALUES (?, ?, ?, ?, 'system', ?, DATEADD(day, -{entry_days_ago}, GETUTCDATE()))
-                    """, (entry_id, case_id, entry_type, content, direction))
+                        INSERT INTO timeline_entries (id, case_id, entry_type, content, created_by, direction, is_customer_communication, created_on)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, DATEADD(day, -{entry_days_ago}, GETUTCDATE()))
+                    """, (entry_id, case_id, entry_type, content, created_by, direction, is_customer_comm))
                     timeline_created += 1
             
             # Commit after each engineer to avoid transaction size issues
