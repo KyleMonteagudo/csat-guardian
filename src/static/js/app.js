@@ -28,7 +28,259 @@ const state = {
     isLoading: false,
     backendStatus: 'checking',  // checking, online, offline
     chatHistory: [],
+    theme: localStorage.getItem('csat-theme') || 'dark',
 };
+
+// =============================================================================
+// Theme Management
+// =============================================================================
+
+/**
+ * Initialize theme based on stored preference
+ */
+function initializeTheme() {
+    document.documentElement.setAttribute('data-theme', state.theme);
+    updateThemeToggle();
+}
+
+/**
+ * Toggle between light and dark theme
+ */
+function toggleTheme() {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', state.theme);
+    localStorage.setItem('csat-theme', state.theme);
+    updateThemeToggle();
+}
+
+/**
+ * Update theme toggle button appearance
+ */
+function updateThemeToggle() {
+    const toggle = document.getElementById('theme-toggle');
+    if (toggle) {
+        toggle.innerHTML = state.theme === 'dark' ? '☀️' : '🌙';
+        toggle.title = state.theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    }
+}
+
+// =============================================================================
+// CSAT Prediction Engine
+// =============================================================================
+
+/**
+ * Calculate predicted CSAT score for a case
+ * Uses multiple signals to estimate likely CSAT outcome
+ */
+function calculateCSATPrediction(caseData) {
+    // Base score from current sentiment (40% weight)
+    const sentiment = caseData.sentiment_score || 0.5;
+    let score = sentiment * 4; // Scale 0-1 to 0-4
+    
+    // Adjustment factors
+    const factors = [];
+    
+    // Response time factor (20% weight)
+    const daysComm = caseData.days_since_last_outbound || 0;
+    if (daysComm <= 1) {
+        score += 0.4;
+        factors.push({ text: 'Fast response time', positive: true });
+    } else if (daysComm > 3) {
+        score -= 0.3 * Math.min(daysComm - 3, 3);
+        factors.push({ text: `${daysComm} days since last communication`, positive: false });
+    }
+    
+    // Severity handling factor (15% weight)
+    const sev = formatSeverity(caseData.severity);
+    const daysOpen = caseData.days_open || caseData.days_since_creation || 0;
+    if (sev === 'A' && daysOpen > 3) {
+        score -= 0.5;
+        factors.push({ text: 'Sev A case open longer than expected', positive: false });
+    } else if (sev === 'A' && daysOpen <= 3) {
+        factors.push({ text: 'Sev A handled promptly', positive: true });
+    }
+    
+    // Sentiment trend factor (15% weight)
+    if (caseData.sentiment_trend === 'improving') {
+        score += 0.3;
+        factors.push({ text: 'Customer sentiment improving', positive: true });
+    } else if (caseData.sentiment_trend === 'declining') {
+        score -= 0.4;
+        factors.push({ text: 'Customer sentiment declining', positive: false });
+    }
+    
+    // Note freshness factor (10% weight)
+    const daysNote = caseData.days_since_last_note || 0;
+    if (daysNote > 7) {
+        score -= 0.2;
+        factors.push({ text: 'Case notes need updating', positive: false });
+    }
+    
+    // Clamp score to 1-5 range
+    score = Math.max(1, Math.min(5, score + 1));
+    
+    // Determine confidence level
+    let confidence = 'Medium';
+    if (sentiment > 0.7 || sentiment < 0.3) {
+        confidence = 'High';
+    }
+    if (daysOpen < 2) {
+        confidence = 'Low'; // Not enough history
+    }
+    
+    return {
+        score: Math.round(score * 10) / 10,
+        factors: factors.slice(0, 4),
+        confidence,
+        trend: caseData.sentiment_trend || 'stable'
+    };
+}
+
+/**
+ * Render CSAT prediction card for case detail view
+ */
+function renderCSATPrediction(caseData) {
+    const prediction = calculateCSATPrediction(caseData);
+    const scoreClass = prediction.score >= 4 ? 'success' : prediction.score >= 3 ? 'warning' : 'danger';
+    
+    return `
+        <div class="csat-prediction">
+            <div class="csat-prediction-header">
+                <span>🔮</span>
+                <span>Predicted CSAT Score</span>
+                <span class="badge badge-${prediction.confidence === 'High' ? 'success' : prediction.confidence === 'Medium' ? 'info' : 'neutral'}">${prediction.confidence} Confidence</span>
+            </div>
+            <div class="csat-prediction-score">
+                <span class="csat-prediction-value" style="color: var(--accent-${scoreClass})">${prediction.score}</span>
+                <span class="csat-prediction-max">/ 5</span>
+            </div>
+            <div class="csat-prediction-label">Based on current sentiment and case activity</div>
+            ${prediction.factors.length > 0 ? `
+                <div class="csat-prediction-factors">
+                    ${prediction.factors.map(f => `
+                        <div class="prediction-factor ${f.positive ? 'positive' : 'negative'}">
+                            <span>${f.positive ? '✓' : '✗'}</span>
+                            <span>${f.text}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// =============================================================================
+// Success Story Detection
+// =============================================================================
+
+/**
+ * Detect if a case qualifies as a success story
+ * Success stories show significant improvement or exemplary handling
+ */
+function isSuccessStory(caseData) {
+    // Criteria for success story:
+    // 1. Current sentiment >= 0.75
+    // 2. Sentiment improved OR consistently high
+    // 3. Case handled within expected timeframe for severity
+    
+    const sentiment = caseData.sentiment_score || 0.5;
+    const trend = caseData.sentiment_trend || 'stable';
+    const daysOpen = caseData.days_open || caseData.days_since_creation || 0;
+    const sev = formatSeverity(caseData.severity);
+    
+    if (sentiment < 0.7) return false;
+    
+    // Significant improvement
+    if (trend === 'improving' && sentiment >= 0.75) return true;
+    
+    // Consistently excellent handling
+    if (sentiment >= 0.85 && trend !== 'declining') return true;
+    
+    // Fast resolution of high-severity case
+    if ((sev === 'A' || sev === 'B') && daysOpen <= 5 && sentiment >= 0.7) return true;
+    
+    return false;
+}
+
+/**
+ * Get success story details
+ */
+function getSuccessStoryDetails(caseData) {
+    const sentiment = caseData.sentiment_score || 0.5;
+    const trend = caseData.sentiment_trend || 'stable';
+    const daysOpen = caseData.days_open || caseData.days_since_creation || 0;
+    const sev = formatSeverity(caseData.severity);
+    
+    let reason = '';
+    if (trend === 'improving') {
+        reason = 'Customer sentiment significantly improved during this case - great recovery!';
+    } else if (sentiment >= 0.85) {
+        reason = 'Consistently high customer satisfaction throughout the case lifecycle.';
+    } else if ((sev === 'A' || sev === 'B') && daysOpen <= 5) {
+        reason = `Quick resolution of Severity ${sev} case with excellent customer satisfaction.`;
+    }
+    
+    return {
+        sentimentStart: Math.round((sentiment - 0.15) * 100), // Estimate
+        sentimentEnd: Math.round(sentiment * 100),
+        improvement: trend === 'improving' ? '+15%' : 'Stable',
+        reason
+    };
+}
+
+/**
+ * Render success story highlight card
+ */
+function renderSuccessStoryCard(caseData) {
+    if (!isSuccessStory(caseData)) return '';
+    
+    const details = getSuccessStoryDetails(caseData);
+    
+    return `
+        <div class="success-story-card">
+            <div class="success-story-header">
+                <span>🌟</span>
+                <span>Success Story</span>
+                <span class="badge badge-success-story">Exemplary Case</span>
+            </div>
+            <div class="success-story-metrics">
+                <div class="success-metric">
+                    <div class="success-metric-value" style="color: var(--accent-success)">${details.sentimentEnd}%</div>
+                    <div class="success-metric-label">Final Sentiment</div>
+                </div>
+                <div class="success-metric">
+                    <div class="success-metric-value" style="color: var(--accent-info)">${details.improvement}</div>
+                    <div class="success-metric-label">Improvement</div>
+                </div>
+            </div>
+            <div class="success-story-detail">${details.reason}</div>
+        </div>
+    `;
+}
+
+// =============================================================================
+// Live Sentiment Indicators
+// =============================================================================
+
+/**
+ * Get live pulse class for sentiment-based animations
+ */
+function getLivePulseClass(caseData) {
+    const sentiment = caseData.sentiment_score || 0.5;
+    const trend = caseData.sentiment_trend || 'stable';
+    
+    // Critical: Low sentiment AND declining
+    if (sentiment < 0.35 && trend === 'declining') {
+        return 'live-pulse-critical';
+    }
+    
+    // Warning: Low sentiment OR declining from moderate
+    if (sentiment < 0.4 || (sentiment < 0.55 && trend === 'declining')) {
+        return 'live-pulse-warning';
+    }
+    
+    return '';
+}
 
 // =============================================================================
 // Helper Functions
@@ -613,12 +865,18 @@ function renderCaseRow(caseData, isResolved = false) {
     const sevLetter = formatSeverity(caseData.severity);
     const sevClass = getSeverityBadgeClass(caseData.severity);
     
+    // Live pulse class for critical/declining sentiment
+    const pulseClass = getLivePulseClass(caseData);
+    
+    // Success story badge
+    const successBadge = isSuccessStory(caseData) ? '<span class="badge badge-success-story">🌟</span>' : '';
+    
     // Simplified row for resolved cases
     if (isResolved) {
         return `
-            <tr class="clickable resolved-row" onclick="viewCase('${caseData.id}')">
+            <tr class="clickable resolved-row ${pulseClass}" onclick="viewCase('${caseData.id}')">
                 <td><strong>${caseData.id}</strong></td>
-                <td>${caseData.title || 'Untitled'}</td>
+                <td>${caseData.title || 'Untitled'} ${successBadge}</td>
                 <td><span class="badge ${sevClass}">Sev ${sevLetter}</span></td>
                 <td>${caseData.customer?.company || 'Unknown'}</td>
                 <td>
@@ -633,7 +891,7 @@ function renderCaseRow(caseData, isResolved = false) {
     
     // Full row for active cases
     return `
-        <tr class="clickable" onclick="viewCase('${caseData.id}')">
+        <tr class="clickable ${pulseClass}" onclick="viewCase('${caseData.id}')">
             <td><strong>${caseData.id}</strong></td>
             <td>${caseData.title || 'Untitled'}</td>
             <td><span class="badge badge-info">${caseData.status || 'Active'}</span></td>
@@ -725,6 +983,9 @@ async function viewCase(caseId) {
             <p class="text-center text-muted">Analyzing case history...</p>
         </div>
         
+        <!-- Success Story Highlight (if applicable) -->
+        ${renderSuccessStoryCard(caseData)}
+        
         <!-- Case History Summary -->
         <div id="actions-section" class="card mb-lg" style="display: none;">
             <h3>📚 Case Review & Learnings</h3>
@@ -762,6 +1023,12 @@ async function viewCase(caseId) {
             <div class="loading"><div class="spinner"></div></div>
             <p class="text-center text-muted">Analyzing case with Azure OpenAI...</p>
         </div>
+        
+        <!-- CSAT Prediction Card -->
+        ${renderCSATPrediction(caseData)}
+        
+        <!-- Success Story Highlight (if applicable) -->
+        ${renderSuccessStoryCard(caseData)}
         
         <!-- Suggested Actions Section -->
         <div id="actions-section" class="card mb-lg" style="display: none;">
@@ -2282,6 +2549,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('CSAT Guardian initializing...');
     
     try {
+        // Initialize theme first (before any rendering)
+        initializeTheme();
+        
         // Render landing page immediately (don't wait for health check)
         renderLandingPage();
         console.log('Landing page rendered');
