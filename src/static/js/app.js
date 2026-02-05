@@ -289,6 +289,20 @@ async function getEngineers() {
     return await apiGet('/api/engineers');
 }
 
+/**
+ * Fast manager summary - uses SQL aggregation for performance
+ */
+async function getManagerSummary() {
+    return await apiGet('/api/manager/summary');
+}
+
+/**
+ * Fast engineer summary - uses SQL aggregation for performance
+ */
+async function getEngineerSummary(engineerId) {
+    return await apiGet(`/api/engineer/${engineerId}/summary`);
+}
+
 async function analyzeCase(caseId) {
     return await apiPost(`/api/analyze/${caseId}`, { include_recommendations: true });
 }
@@ -906,16 +920,37 @@ async function renderManagerDashboard() {
     `;
     updateBreadcrumb([{ text: 'Team Performance' }]);
     
-    // Fetch data
-    const [engineersData, casesData] = await Promise.all([
-        getEngineers(),
-        getCases()
-    ]);
+    // Use fast summary endpoint for performance (avoids N+1 queries)
+    const summaryData = await getManagerSummary();
     
     showLoading(false);
     
-    state.engineers = engineersData?.engineers || engineersData || [];
-    state.cases = casesData?.cases || casesData || [];
+    // Map summary data to expected format
+    if (summaryData && summaryData.engineers) {
+        state.engineers = summaryData.engineers;
+        state.managerStats = summaryData.stats || {};
+        // Create synthetic cases array for compatibility with existing rendering
+        state.cases = [];
+        summaryData.engineers.forEach(eng => {
+            // Add placeholder cases for the engineer (we'll lazy-load details)
+            for (let i = 0; i < (eng.active_cases || 0); i++) {
+                state.cases.push({
+                    id: `${eng.id}-case-${i}`,
+                    owner: { id: eng.id },
+                    sentiment_score: eng.risk_level === 'critical' ? 0.3 : eng.risk_level === 'at_risk' ? 0.5 : 0.7,
+                    csat_risk: eng.risk_level
+                });
+            }
+        });
+    } else {
+        // Fallback to slow method if fast endpoint fails
+        const [engineersData, casesData] = await Promise.all([
+            getEngineers(),
+            getCases()
+        ]);
+        state.engineers = engineersData?.engineers || engineersData || [];
+        state.cases = casesData?.cases || casesData || [];
+    }
     
     renderTeamDashboardContent();
 }
@@ -934,21 +969,29 @@ function updateDateRange(range) {
 function renderTeamDashboardContent() {
     const cases = state.cases;
     const engineers = state.engineers;
+    const stats = state.managerStats || {};
     const range = state.selectedDateRange;
     
     const rangeLabel = range === '7d' ? 'Past 7 Days' : range === '30d' ? 'Past 30 Days' : 'Past Quarter';
     
-    // Calculate team metrics
-    const teamAvgSentiment = cases.length > 0
-        ? cases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / cases.length
-        : 0.5;
+    // Use pre-computed stats from fast endpoint if available
+    const totalActiveCases = stats.total_active_cases || cases.length;
     
-    const excellentCount = cases.filter(c => (c.sentiment_score || 0.5) >= 0.7).length;
-    const goodCount = cases.filter(c => {
-        const s = c.sentiment_score || 0.5;
-        return s >= 0.55 && s < 0.7;
-    }).length;
-    const opportunityCount = cases.filter(c => (c.sentiment_score || 0.5) < 0.55).length;
+    // Calculate risk metrics from engineer summaries (fast endpoint provides risk_level)
+    const healthyEngineers = engineers.filter(e => e.risk_level === 'healthy').length;
+    const atRiskEngineers = engineers.filter(e => e.risk_level === 'at_risk').length;
+    const criticalEngineers = engineers.filter(e => e.risk_level === 'critical').length;
+    
+    // Estimate sentiment from risk levels for display
+    const excellentCount = engineers.reduce((sum, e) => sum + (e.risk_level === 'healthy' ? (e.active_cases || 0) : 0), 0);
+    const goodCount = engineers.reduce((sum, e) => sum + (e.risk_level === 'at_risk' ? Math.floor((e.active_cases || 0) / 2) : 0), 0);
+    const opportunityCount = engineers.reduce((sum, e) => sum + (e.risk_level === 'critical' ? (e.active_cases || 0) : (e.risk_level === 'at_risk' ? Math.ceil((e.active_cases || 0) / 2) : 0)), 0);
+    
+    // Calculate team average sentiment based on risk distribution
+    const totalForAvg = excellentCount + goodCount + opportunityCount;
+    const teamAvgSentiment = totalForAvg > 0
+        ? (excellentCount * 0.8 + goodCount * 0.6 + opportunityCount * 0.35) / totalForAvg
+        : 0.5;
     
     // Team summary with visual chart
     document.getElementById('team-summary').innerHTML = `
@@ -1012,36 +1055,48 @@ function renderTeamDashboardContent() {
         </div>
     `;
     
-    // Engineer cards - supportive language
+    // Engineer cards - using data from fast summary endpoint
     const teamHtml = engineers.map(eng => {
-        const engCases = cases.filter(c => c.owner?.id === eng.id);
-        const engAvgSentiment = engCases.length > 0
-            ? engCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engCases.length
-            : 0.5;
+        // Use pre-computed risk_level from fast endpoint
+        const riskLevel = eng.risk_level || 'healthy';
+        const activeCases = eng.active_cases || 0;
+        const maxDaysComm = eng.max_days_since_comm || 0;
+        const avgDaysComm = eng.avg_days_since_comm || 0;
         
-        const engExcellent = engCases.filter(c => (c.sentiment_score || 0.5) >= 0.7).length;
-        const engOpportunity = engCases.filter(c => (c.sentiment_score || 0.5) < 0.55).length;
+        // Map risk level to sentiment score for display
+        const engAvgSentiment = riskLevel === 'critical' ? 0.35 : riskLevel === 'at_risk' ? 0.55 : 0.75;
         
-        // Supportive status badges
+        // Supportive status badges based on risk_level from server
         let statusBadge, statusClass;
-        if (engAvgSentiment >= 0.7) {
+        if (riskLevel === 'healthy') {
             statusBadge = '⭐ Top Performer';
             statusClass = 'badge-excellent';
-        } else if (engAvgSentiment >= 0.55) {
+        } else if (riskLevel === 'at_risk') {
+            statusBadge = '⚠️ Needs Attention';
+            statusClass = 'badge-good';
+        } else if (riskLevel === 'critical') {
+            statusBadge = '🚨 Coaching Opportunity';
+            statusClass = 'badge-opportunity';
+        } else {
             statusBadge = '✓ On Track';
             statusClass = 'badge-good';
-        } else {
-            statusBadge = '💡 Coaching Opportunity';
-            statusClass = 'badge-opportunity';
         }
+        
+        // Show communication staleness indicator
+        const stalenessIndicator = maxDaysComm >= 7 
+            ? `<span class="staleness-warning">⏰ ${maxDaysComm}d since comm</span>`
+            : maxDaysComm >= 4
+                ? `<span class="staleness-caution">📅 ${maxDaysComm}d since comm</span>`
+                : '';
         
         return `
             <div class="engineer-card-modern" onclick="viewEngineerDetail('${eng.id}')">
                 <div class="eng-card-left">
-                    <div class="engineer-avatar-modern">${eng.name.split(' ').map(n => n[0]).join('')}</div>
+                    <div class="engineer-avatar-modern">${(eng.name || 'Unknown').split(' ').map(n => n[0]).join('')}</div>
                     <div class="eng-card-info">
-                        <div class="eng-card-name">${eng.name}</div>
-                        <div class="eng-card-meta">${engCases.length} cases • ${eng.team || 'CSS Support'}</div>
+                        <div class="eng-card-name">${eng.name || 'Unknown'}</div>
+                        <div class="eng-card-meta">${activeCases} active cases • ${eng.team || 'CSS Support'}</div>
+                        ${stalenessIndicator}
                     </div>
                 </div>
                 <div class="eng-card-middle">
@@ -1051,9 +1106,9 @@ function renderTeamDashboardContent() {
                         </div>
                         <span class="eng-sentiment-value">${Math.round(engAvgSentiment * 100)}%</span>
                     </div>
-                    <div class="eng-case-dots">
-                        ${engCases.slice(0, 8).map(c => `<span class="case-dot ${getSentimentClass(c.sentiment_score || 0.5)}"></span>`).join('')}
-                        ${engCases.length > 8 ? `<span class="case-dot-more">+${engCases.length - 8}</span>` : ''}
+                    <div class="eng-case-summary">
+                        <span class="case-count-badge">${activeCases} active</span>
+                        ${(eng.resolved_cases || 0) > 0 ? `<span class="case-count-badge resolved">${eng.resolved_cases} resolved</span>` : ''}
                     </div>
                 </div>
                 <div class="eng-card-right">
@@ -1114,45 +1169,61 @@ function renderDonutChart(excellent, good, opportunity, total) {
 
 /**
  * View individual engineer details (for managers)
+ * Uses fast engineer summary endpoint for performance
  */
 async function viewEngineerDetail(engineerId) {
     state.currentView = 'engineer-detail';
     showLoading(true);
     
-    const engineer = state.engineers.find(e => e.id === engineerId);
-    const engCases = state.cases.filter(c => c.owner?.id === engineerId);
+    const main = document.getElementById('main-content');
+    main.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
-    if (!engineer) {
+    // Use fast engineer summary endpoint
+    const summaryData = await getEngineerSummary(engineerId);
+    
+    if (!summaryData || !summaryData.engineer) {
         showLoading(false);
-        alert('Engineer not found');
+        main.innerHTML = `
+            <div class="card">
+                <p class="text-muted">Unable to load engineer details.</p>
+                <button class="btn btn-secondary mt-md" onclick="navigateTo('manager')">← Back to Team</button>
+            </div>
+        `;
         return;
     }
+    
+    const engineer = summaryData.engineer;
+    const engCases = summaryData.cases || [];
+    const summary = summaryData.summary || {};
     
     state.selectedEngineer = engineer;
     const dateRange = state.selectedDateRange || '30d';
     const rangeLabel = dateRange === '7d' ? 'Past 7 Days' : dateRange === '30d' ? 'Past 30 Days' : 'Past Quarter';
     
-    const main = document.getElementById('main-content');
-    
-    // Calculate metrics
+    // Calculate metrics from the summary data
+    // Map risk_level to sentiment scores for display
     const avgSentiment = engCases.length > 0
-        ? engCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / engCases.length
+        ? engCases.reduce((sum, c) => {
+            const riskScore = c.risk_level === 'breach' ? 0.25 : c.risk_level === 'at_risk' ? 0.5 : c.risk_level === 'resolved' ? 0.7 : 0.8;
+            return sum + riskScore;
+        }, 0) / engCases.length
         : 0.5;
-    const excellentCases = engCases.filter(c => (c.sentiment_score || 0.5) >= 0.7);
-    const opportunityCases = engCases.filter(c => (c.sentiment_score || 0.5) < 0.55);
-    const goodCases = engCases.filter(c => {
-        const s = c.sentiment_score || 0.5;
-        return s >= 0.55 && s < 0.7;
-    });
     
-    // Generate personalized coaching based on actual cases
-    const personalizedCoaching = generatePersonalizedCoaching(engCases, engineer.name.split(' ')[0]);
+    // Count cases by risk level for distribution
+    const excellentCases = engCases.filter(c => c.risk_level === 'healthy' || c.risk_level === 'resolved');
+    const goodCases = engCases.filter(c => c.risk_level === 'at_risk');
+    const opportunityCases = engCases.filter(c => c.risk_level === 'breach');
+    
+    // Generate personalized coaching based on actual case data
+    const personalizedCoaching = generatePersonalizedCoachingFromSummary(engCases, engineer.name.split(' ')[0]);
     
     // Generate trend data (simulated for demo - would come from API in production)
     const trendData = generateTrendData(engCases, dateRange);
     
     const sentimentClass = getSentimentClass(avgSentiment);
     const firstName = engineer.name.split(' ')[0];
+    
+    showLoading(false);
     
     main.innerHTML = `
         <div class="content-header">
@@ -1331,46 +1402,49 @@ function generatePersonalizedCoaching(cases, firstName) {
     const insights = [];
     
     // Analyze cases for specific patterns
-    const slowResponseCases = cases.filter(c => (c.days_since_last_outbound || 0) > 2);
-    const staleNotesCases = cases.filter(c => (c.days_since_last_note || 0) > 5);
-    const lowSentimentCases = cases.filter(c => (c.sentiment_score || 0.5) < 0.4);
+    const slowResponseCases = cases.filter(c => (c.days_since_last_outbound || c.days_since_comm || 0) > 2);
+    const staleNotesCases = cases.filter(c => (c.days_since_last_note || c.days_since_note || 0) > 5);
+    const lowSentimentCases = cases.filter(c => (c.sentiment_score || 0.5) < 0.4 || c.risk_level === 'breach');
     const highSevDelayed = cases.filter(c => {
-        const sev = formatSeverity(c.severity);
+        const sev = formatSeverity(c.severity || c.priority);
         return (sev === 'A' || sev === 'B') && (c.days_open || 0) > 7;
     });
     
     // Generate specific insights with case references
     if (slowResponseCases.length > 0) {
-        const worstCase = slowResponseCases.sort((a, b) => (b.days_since_last_outbound || 0) - (a.days_since_last_outbound || 0))[0];
+        const worstCase = slowResponseCases.sort((a, b) => (b.days_since_last_outbound || b.days_since_comm || 0) - (a.days_since_last_outbound || a.days_since_comm || 0))[0];
+        const daysComm = worstCase.days_since_last_outbound || worstCase.days_since_comm || 0;
         insights.push({
             icon: '⏰',
             category: 'Response Timeliness',
             caseId: worstCase.id,
-            observation: `${slowResponseCases.length} case${slowResponseCases.length > 1 ? 's have' : ' has'} gone ${Math.round(worstCase.days_since_last_outbound || 0)}+ days without customer communication. ${worstCase.customer?.company || 'The customer'} on case ${worstCase.id} may be wondering about status.`,
+            observation: `${slowResponseCases.length} case${slowResponseCases.length > 1 ? 's have' : ' has'} gone ${Math.round(daysComm)}+ days without customer communication. ${worstCase.customer?.company || worstCase.customer_name || 'The customer'} on case ${worstCase.id} may be wondering about status.`,
             suggestion: `Discuss with ${firstName} about setting daily check-in reminders. Even a brief "still investigating" update maintains customer confidence.`,
             example: `I noticed case ${worstCase.id} hasn't had a customer touchpoint recently. What's blocking progress there? How can I help?`
         });
     }
     
     if (lowSentimentCases.length > 0) {
-        const lowestCase = lowSentimentCases.sort((a, b) => (a.sentiment_score || 0.5) - (b.sentiment_score || 0.5))[0];
+        const lowestCase = lowSentimentCases[0];
+        const sentimentPct = lowestCase.sentiment_score ? Math.round(lowestCase.sentiment_score * 100) : (lowestCase.risk_level === 'breach' ? 25 : 40);
         insights.push({
             icon: '💬',
             category: 'Customer Sentiment',
             caseId: lowestCase.id,
-            observation: `Case ${lowestCase.id} (${lowestCase.customer?.company || 'customer'}) shows ${Math.round((lowestCase.sentiment_score || 0.5) * 100)}% sentiment. The customer may be experiencing frustration with "${lowestCase.title?.substring(0, 50) || 'their issue'}".`,
+            observation: `Case ${lowestCase.id} (${lowestCase.customer?.company || lowestCase.customer_name || 'customer'}) shows ${sentimentPct}% sentiment. The customer may be experiencing frustration with "${lowestCase.title?.substring(0, 50) || 'their issue'}".`,
             suggestion: `Explore what's driving the frustration. Sometimes acknowledging the customer's situation directly can help reset the relationship.`,
             example: `Tell me about ${lowestCase.id} - I see the customer might be struggling. What's happening from your perspective?`
         });
     }
     
     if (staleNotesCases.length > 0) {
-        const stalestCase = staleNotesCases.sort((a, b) => (b.days_since_last_note || 0) - (a.days_since_last_note || 0))[0];
+        const stalestCase = staleNotesCases.sort((a, b) => (b.days_since_last_note || b.days_since_note || 0) - (a.days_since_last_note || a.days_since_note || 0))[0];
+        const daysNote = stalestCase.days_since_last_note || stalestCase.days_since_note || 0;
         insights.push({
             icon: '📝',
             category: 'Documentation',
             caseId: stalestCase.id,
-            observation: `${staleNotesCases.length} case${staleNotesCases.length > 1 ? 's' : ''} with notes older than 5 days. Case ${stalestCase.id} hasn't been updated in ${Math.round(stalestCase.days_since_last_note || 0)} days.`,
+            observation: `${staleNotesCases.length} case${staleNotesCases.length > 1 ? 's' : ''} with notes older than 5 days. Case ${stalestCase.id} hasn't been updated in ${Math.round(daysNote)} days.`,
             suggestion: `Current notes help with handoffs and compliance. Consider end-of-day note updates as a habit.`,
             example: `How's your case documentation going? I want to make sure you're set up for success if you need to hand anything off.`
         });
@@ -1382,9 +1456,75 @@ function generatePersonalizedCoaching(cases, firstName) {
             icon: '🎯',
             category: 'Priority Management',
             caseId: oldestHighSev.id,
-            observation: `Sev ${formatSeverity(oldestHighSev.severity)} case ${oldestHighSev.id} has been open ${Math.round(oldestHighSev.days_open || 0)} days. High-severity cases benefit from accelerated focus.`,
+            observation: `Sev ${formatSeverity(oldestHighSev.severity || oldestHighSev.priority)} case ${oldestHighSev.id} has been open ${Math.round(oldestHighSev.days_open || 0)} days. High-severity cases benefit from accelerated focus.`,
             suggestion: `Review if there are blockers preventing resolution. Consider if escalation or additional resources would help.`,
-            example: `I see ${oldestHighSev.id} is a Sev ${formatSeverity(oldestHighSev.severity)} that's been open a while. Are you blocked on anything? Do you need me to pull in anyone else?`
+            example: `I see ${oldestHighSev.id} is a Sev ${formatSeverity(oldestHighSev.severity || oldestHighSev.priority)} that's been open a while. Are you blocked on anything? Do you need me to pull in anyone else?`
+        });
+    }
+    
+    return insights.slice(0, 4); // Max 4 insights
+}
+
+/**
+ * Generate personalized coaching from fast summary endpoint data
+ * Works with the simplified case objects from /api/engineer/{id}/summary
+ */
+function generatePersonalizedCoachingFromSummary(cases, firstName) {
+    const insights = [];
+    
+    // Filter to only active cases
+    const activeCases = cases.filter(c => c.status === 'active');
+    
+    // Analyze cases using summary endpoint fields
+    const slowResponseCases = activeCases.filter(c => (c.days_since_comm || 0) > 2);
+    const staleNotesCases = activeCases.filter(c => (c.days_since_note || 0) > 5);
+    const breachCases = activeCases.filter(c => c.risk_level === 'breach');
+    const atRiskCases = activeCases.filter(c => c.risk_level === 'at_risk');
+    
+    // Generate specific insights
+    if (slowResponseCases.length > 0) {
+        const worstCase = slowResponseCases.sort((a, b) => (b.days_since_comm || 0) - (a.days_since_comm || 0))[0];
+        insights.push({
+            icon: '⏰',
+            category: 'Response Timeliness',
+            caseId: worstCase.id,
+            observation: `${slowResponseCases.length} case${slowResponseCases.length > 1 ? 's have' : ' has'} gone ${worstCase.days_since_comm}+ days without customer communication. ${worstCase.customer_name || 'The customer'} on case ${worstCase.id} may be wondering about status.`,
+            suggestion: `Discuss with ${firstName} about setting daily check-in reminders. Even a brief "still investigating" update maintains customer confidence.`,
+            example: `I noticed case ${worstCase.id} hasn't had a customer touchpoint recently. What's blocking progress there? How can I help?`
+        });
+    }
+    
+    if (breachCases.length > 0) {
+        const worstCase = breachCases[0];
+        insights.push({
+            icon: '🚨',
+            category: 'Critical Attention Needed',
+            caseId: worstCase.id,
+            observation: `Case ${worstCase.id} (${worstCase.customer_name || 'customer'}) is in breach state - ${worstCase.days_since_comm || worstCase.days_since_note || 7}+ days without activity. This needs immediate attention.`,
+            suggestion: `Prioritize reaching out to this customer today. Even a brief status update can prevent escalation.`,
+            example: `I see ${worstCase.id} needs urgent attention. What do you need from me to unblock this?`
+        });
+    }
+    
+    if (staleNotesCases.length > 0) {
+        const stalestCase = staleNotesCases.sort((a, b) => (b.days_since_note || 0) - (a.days_since_note || 0))[0];
+        insights.push({
+            icon: '📝',
+            category: 'Documentation',
+            caseId: stalestCase.id,
+            observation: `${staleNotesCases.length} case${staleNotesCases.length > 1 ? 's' : ''} with notes older than 5 days. Case ${stalestCase.id} hasn't been updated in ${stalestCase.days_since_note} days.`,
+            suggestion: `Current notes help with handoffs and compliance. Consider end-of-day note updates as a habit.`,
+            example: `How's your case documentation going? I want to make sure you're set up for success if you need to hand anything off.`
+        });
+    }
+    
+    if (atRiskCases.length > 0 && insights.length < 4) {
+        insights.push({
+            icon: '⚠️',
+            category: 'At Risk Cases',
+            observation: `${atRiskCases.length} case${atRiskCases.length > 1 ? 's are' : ' is'} approaching SLA thresholds. Cases: ${atRiskCases.slice(0, 3).map(c => c.id).join(', ')}${atRiskCases.length > 3 ? '...' : ''}`,
+            suggestion: `Review these cases together and identify any blockers. Proactive updates now can prevent customer frustration.`,
+            example: `Let's look at your at-risk cases together. Are there any patterns or blockers I can help with?`
         });
     }
     

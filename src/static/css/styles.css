@@ -2342,3 +2342,47 @@ textarea.form-input {
 .toast-close:hover {
     color: var(--text-primary);
 }
+
+/* =============================================================================
+   Staleness Indicators & Case Summary Badges (for fast endpoints)
+   ============================================================================= */
+
+.staleness-warning {
+    display: inline-block;
+    font-size: 0.7rem;
+    color: var(--accent-danger);
+    background: rgba(209, 52, 56, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 4px;
+}
+
+.staleness-caution {
+    display: inline-block;
+    font-size: 0.7rem;
+    color: var(--accent-warning);
+    background: rgba(255, 185, 0, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 4px;
+}
+
+.eng-case-summary {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.case-count-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+}
+
+.case-count-badge.resolved {
+    background: rgba(16, 124, 16, 0.15);
+    color: var(--accent-success);
+}
