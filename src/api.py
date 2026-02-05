@@ -340,8 +340,8 @@ async def get_manager_summary():
             db_manager = app_state.dfm_client._ensure_db()
         elif app_state.dfm_client and hasattr(app_state.dfm_client, '_db'):
             db_manager = app_state.dfm_client._db
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Could not get db_manager: {e}")
     
     if not db_manager:
         # Fallback to slow method if no direct DB access
@@ -352,7 +352,8 @@ async def get_manager_summary():
         conn = db_manager.connect()
         cursor = conn.cursor()
         
-        # Single query to get engineer summaries with aggregated metrics
+        # Simpler, faster query - avoids correlated subqueries that can timeout
+        # Get engineer info and case counts
         cursor.execute("""
             SELECT 
                 e.id as engineer_id,
@@ -361,19 +362,7 @@ async def get_manager_summary():
                 e.team as engineer_team,
                 COUNT(CASE WHEN c.status = 'active' THEN 1 END) as active_cases,
                 COUNT(CASE WHEN c.status = 'resolved' THEN 1 END) as resolved_cases,
-                COUNT(c.id) as total_cases,
-                MAX(CASE WHEN c.status = 'active' THEN 
-                    DATEDIFF(day, (
-                        SELECT MAX(te.created_on) FROM timeline_entries te 
-                        WHERE te.case_id = c.id AND te.entry_type IN ('email_sent', 'email_received')
-                    ), GETUTCDATE())
-                END) as max_days_since_comm,
-                AVG(CASE WHEN c.status = 'active' THEN 
-                    DATEDIFF(day, (
-                        SELECT MAX(te.created_on) FROM timeline_entries te 
-                        WHERE te.case_id = c.id AND te.entry_type IN ('email_sent', 'email_received')
-                    ), GETUTCDATE())
-                END) as avg_days_since_comm
+                COUNT(c.id) as total_cases
             FROM engineers e
             LEFT JOIN cases c ON c.owner_id = e.id
             WHERE e.id LIKE 'eng-%'
@@ -383,17 +372,6 @@ async def get_manager_summary():
         
         engineers = []
         for row in cursor.fetchall():
-            # Determine risk level based on staleness
-            max_days = row.max_days_since_comm or 0
-            avg_days = row.avg_days_since_comm or 0
-            
-            if max_days >= 7:
-                risk_level = "critical"
-            elif max_days >= 4 or avg_days >= 3:
-                risk_level = "at_risk"
-            else:
-                risk_level = "healthy"
-            
             engineers.append({
                 "id": row.engineer_id,
                 "name": row.engineer_name,
@@ -402,9 +380,7 @@ async def get_manager_summary():
                 "active_cases": row.active_cases or 0,
                 "resolved_cases": row.resolved_cases or 0,
                 "total_cases": row.total_cases or 0,
-                "max_days_since_comm": max_days,
-                "avg_days_since_comm": round(avg_days, 1) if avg_days else 0,
-                "risk_level": risk_level
+                "risk_level": "healthy"  # Will be calculated by frontend from case data
             })
         
         # Get overall stats
@@ -417,7 +393,48 @@ async def get_manager_summary():
         """)
         stats_row = cursor.fetchone()
         
+        # Get avg sentiment per engineer from timeline analysis (simplified)
+        # This gets the latest customer message sentiment indicator per active case
+        cursor.execute("""
+            SELECT 
+                c.owner_id,
+                AVG(
+                    CASE 
+                        WHEN te.content LIKE '%thank%' OR te.content LIKE '%great%' OR te.content LIKE '%appreciate%' 
+                             OR te.content LIKE '%excellent%' OR te.content LIKE '%helpful%' THEN 0.8
+                        WHEN te.content LIKE '%frustrated%' OR te.content LIKE '%disappointed%' OR te.content LIKE '%unacceptable%'
+                             OR te.content LIKE '%urgent%' OR te.content LIKE '%escalate%' OR te.content LIKE '%waiting%' THEN 0.3
+                        ELSE 0.5
+                    END
+                ) as avg_sentiment
+            FROM cases c
+            LEFT JOIN timeline_entries te ON te.case_id = c.id AND te.is_customer_communication = 1
+            WHERE c.status = 'active' AND c.owner_id LIKE 'eng-%'
+            GROUP BY c.owner_id
+        """)
+        
+        sentiment_map = {}
+        for row in cursor.fetchall():
+            sentiment_map[row.owner_id] = row.avg_sentiment or 0.5
+        
         conn.close()
+        
+        # Add sentiment and risk level to engineers
+        for eng in engineers:
+            avg_sent = sentiment_map.get(eng['id'], 0.5)
+            eng['avg_sentiment'] = round(avg_sent, 2)
+            
+            # Determine risk level
+            if eng['active_cases'] == 0:
+                eng['risk_level'] = 'no_cases'
+            elif avg_sent < 0.35:
+                eng['risk_level'] = 'critical'
+            elif avg_sent < 0.55:
+                eng['risk_level'] = 'at_risk'
+            else:
+                eng['risk_level'] = 'healthy'
+        
+        logger.info(f"Fast manager summary: {len(engineers)} engineers, {stats_row.active} active cases")
         
         return {
             "engineers": engineers,
@@ -429,23 +446,76 @@ async def get_manager_summary():
             }
         }
     except Exception as e:
-        logger.error(f"Manager summary SQL failed: {e}")
+        logger.error(f"Manager summary SQL failed: {e}", exc_info=True)
         return await _get_manager_summary_slow()
 
 
 async def _get_manager_summary_slow():
     """Fallback slow method for manager summary (loads all cases)."""
+    logger.info("Using slow manager summary method")
+    
     if not app_state.dfm_client:
         raise HTTPException(status_code=503, detail="DfM client not available")
     
-    engineers = await app_state.dfm_client.get_engineers()
-    return {
-        "engineers": [
-            {"id": e.id, "name": e.name, "email": e.email, "active_cases": 0, "risk_level": "unknown"}
-            for e in engineers if e.id.startswith('eng-')
-        ],
-        "stats": {"total_engineers": len([e for e in engineers if e.id.startswith('eng-')])}
-    }
+    try:
+        # Get all engineers and cases
+        engineers = await app_state.dfm_client.get_engineers()
+        cases = await app_state.dfm_client.get_cases()
+        
+        active_cases = [c for c in cases if c.status.value == 'active']
+        resolved_cases = [c for c in cases if c.status.value == 'resolved']
+        
+        engineer_list = []
+        for e in engineers:
+            if not e.id.startswith('eng-'):
+                continue
+                
+            eng_active = [c for c in active_cases if c.owner and c.owner.id == e.id]
+            eng_resolved = [c for c in resolved_cases if c.owner and c.owner.id == e.id]
+            
+            # Calculate sentiment from case data
+            if eng_active:
+                sentiments = [_calculate_csat_risk(c) for c in eng_active]
+                avg_sentiment = sum(sentiments) / len(sentiments)
+            else:
+                avg_sentiment = None
+            
+            # Determine risk level
+            if len(eng_active) == 0:
+                risk_level = 'no_cases'
+            elif avg_sentiment and avg_sentiment < 0.35:
+                risk_level = 'critical'
+            elif avg_sentiment and avg_sentiment < 0.55:
+                risk_level = 'at_risk'
+            else:
+                risk_level = 'healthy'
+            
+            engineer_list.append({
+                "id": e.id,
+                "name": e.name,
+                "email": e.email,
+                "team": getattr(e, 'team', None),
+                "active_cases": len(eng_active),
+                "resolved_cases": len(eng_resolved),
+                "total_cases": len(eng_active) + len(eng_resolved),
+                "risk_level": risk_level,
+                "avg_sentiment": round(avg_sentiment, 2) if avg_sentiment else None
+            })
+        
+        logger.info(f"Slow manager summary: {len(engineer_list)} engineers, {len(active_cases)} active cases")
+        
+        return {
+            "engineers": engineer_list,
+            "stats": {
+                "total_engineers": len(engineer_list),
+                "total_active_cases": len(active_cases),
+                "total_resolved_cases": len(resolved_cases),
+                "total_cases": len(cases)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Slow manager summary failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/engineer/{engineer_id}/summary")

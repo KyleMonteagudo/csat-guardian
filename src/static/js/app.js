@@ -1099,20 +1099,20 @@ async function renderManagerDashboard() {
     // Debug log to see what we're getting
     console.log('Manager summary data:', summaryData);
     
-    // Check if we got USEFUL data (not just empty engineer list)
-    // The slow fallback returns engineers but with active_cases=0 and no stats
+    // Check if we got USEFUL data from the fast endpoint
     const hasUsefulData = summaryData && 
         summaryData.engineers && 
         summaryData.engineers.length > 0 &&
         summaryData.stats &&
-        (summaryData.stats.total_active_cases > 0 || summaryData.stats.total_cases > 0);
+        summaryData.stats.total_cases > 0;
     
     if (hasUsefulData) {
+        console.log('✅ Using fast endpoint data');
         state.engineers = summaryData.engineers;
         state.managerStats = summaryData.stats || {};
     } else {
         // Fast endpoint returned incomplete data, use slow method to load all cases
-        console.log('Fast endpoint returned incomplete data, falling back to slow method');
+        console.log('⚠️ Fast endpoint returned incomplete data, falling back to slow method');
         const [engineersData, casesData] = await Promise.all([
             getEngineers(),
             getCases()
