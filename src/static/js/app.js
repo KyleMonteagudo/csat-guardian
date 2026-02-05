@@ -35,6 +35,19 @@ const state = {
 // =============================================================================
 
 /**
+ * Toggle collapsible section visibility
+ */
+function toggleSection(sectionId) {
+    const content = document.getElementById(`${sectionId}-content`);
+    const icon = document.getElementById(`${sectionId}-icon`);
+    
+    if (content && icon) {
+        content.classList.toggle('collapsed');
+        icon.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+    }
+}
+
+/**
  * Format severity from "sev_a", "sev_b" etc to just "A", "B", "C", "D"
  */
 function formatSeverity(severity) {
@@ -509,50 +522,64 @@ async function renderEngineerDashboard() {
         </div>
     `;
     
-    // Render cases in separate sections
+    // Render cases in separate COLLAPSIBLE sections
     document.getElementById('cases-container').innerHTML = `
-        <!-- Active Cases Section -->
-        <h3 class="mt-lg mb-md">📋 Active Cases (${activeCases.length})</h3>
-        ${activeCases.length > 0 ? `
-            <div class="table-container mb-lg">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Case ID</th>
-                            <th>Title</th>
-                            <th>Severity</th>
-                            <th>Customer</th>
-                            <th>CSAT Risk</th>
-                            <th>Sentiment</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${activeCases.map(c => renderCaseRow(c, false)).join('')}
-                    </tbody>
-                </table>
+        <!-- Active Cases Section (Collapsible) -->
+        <div class="collapsible-section" id="active-cases-section">
+            <h3 class="collapsible-header mt-lg mb-md" onclick="toggleSection('active-cases')">
+                <span class="collapse-icon" id="active-cases-icon">▼</span>
+                📋 Active Cases (${activeCases.length})
+            </h3>
+            <div class="collapsible-content" id="active-cases-content">
+                ${activeCases.length > 0 ? `
+                    <div class="table-container mb-lg">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Title</th>
+                                    <th>Severity</th>
+                                    <th>Customer</th>
+                                    <th>CSAT Risk</th>
+                                    <th>Sentiment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${activeCases.map(c => renderCaseRow(c, false)).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : '<p class="text-muted mb-lg">No active cases - great job!</p>'}
             </div>
-        ` : '<p class="text-muted mb-lg">No active cases - great job!</p>'}
+        </div>
         
-        <!-- Resolved Cases Section -->
-        <h3 class="mt-lg mb-md">✅ Resolved Cases (${resolvedCases.length})</h3>
-        ${resolvedCases.length > 0 ? `
-            <div class="table-container">
-                <table class="resolved-table">
-                    <thead>
-                        <tr>
-                            <th>Case ID</th>
-                            <th>Title</th>
-                            <th>Severity</th>
-                            <th>Customer</th>
-                            <th>Final Sentiment</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${resolvedCases.map(c => renderCaseRow(c, true)).join('')}
-                    </tbody>
-                </table>
+        <!-- Resolved Cases Section (Collapsible, collapsed by default) -->
+        <div class="collapsible-section" id="resolved-cases-section">
+            <h3 class="collapsible-header mt-lg mb-md" onclick="toggleSection('resolved-cases')">
+                <span class="collapse-icon" id="resolved-cases-icon">▶</span>
+                ✅ Resolved Cases (${resolvedCases.length})
+            </h3>
+            <div class="collapsible-content collapsed" id="resolved-cases-content">
+                ${resolvedCases.length > 0 ? `
+                    <div class="table-container">
+                        <table class="resolved-table">
+                            <thead>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Title</th>
+                                    <th>Severity</th>
+                                    <th>Customer</th>
+                                    <th>Final Sentiment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${resolvedCases.map(c => renderCaseRow(c, true)).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : '<p class="text-muted">No resolved cases yet this quarter.</p>'}
             </div>
-        ` : '<p class="text-muted">No resolved cases yet this quarter.</p>'}
+        </div>
     `;
 }
 
@@ -889,10 +916,11 @@ function renderAnalysis(analysis, caseData) {
     const timeline = caseData?.timeline || [];
     const customerMessages = timeline.filter(e => e.is_customer_communication || e.created_by === 'Customer');
     
-    // Build sentiment evidence from actual communications
+    // Build sentiment evidence from ALL customer communications (not just last 3)
     let evidenceHtml = '';
     if (customerMessages.length > 0) {
-        const recentCustomerMsgs = customerMessages.slice(-3); // Last 3 customer messages
+        // Show all customer messages, but limit to last 10 for UI
+        const recentCustomerMsgs = customerMessages.slice(-10);
         evidenceHtml = `
             <div class="mt-lg">
                 <h4>📧 Sentiment Evidence from Communications</h4>
@@ -1452,19 +1480,36 @@ async function viewEngineerDetail(engineerId) {
     const dateRange = state.selectedDateRange || '30d';
     const rangeLabel = dateRange === '7d' ? 'Past 7 Days' : dateRange === '30d' ? 'Past 30 Days' : 'Past Quarter';
     
-    // Calculate metrics from ACTIVE cases only
-    // Map risk_level to sentiment scores for display
-    const avgSentiment = activeCases.length > 0
-        ? activeCases.reduce((sum, c) => {
-            const riskScore = c.risk_level === 'breach' ? 0.25 : c.risk_level === 'at_risk' ? 0.5 : 0.8;
-            return sum + riskScore;
-        }, 0) / activeCases.length
-        : 0.5;
+    // Use the pre-calculated avg_sentiment from API (consistent with manager view)
+    // Fall back to calculating from cases if not available
+    let avgSentiment = summary.avg_sentiment;
+    if (avgSentiment === null || avgSentiment === undefined) {
+        avgSentiment = activeCases.length > 0
+            ? activeCases.reduce((sum, c) => {
+                if (c.sentiment_score !== undefined && c.sentiment_score !== null) {
+                    return sum + c.sentiment_score;
+                }
+                return sum + 0.5;
+            }, 0) / activeCases.length
+            : null;
+    }
     
     // Count ACTIVE cases by risk level for distribution
     const excellentCases = activeCases.filter(c => c.risk_level === 'healthy');
     const goodCases = activeCases.filter(c => c.risk_level === 'at_risk');
     const opportunityCases = activeCases.filter(c => c.risk_level === 'breach');
+    
+    // Determine engineer status (matching manager view logic)
+    let engineerStatus = '✓ On Track';
+    if (activeCases.length === 0) {
+        engineerStatus = '📋 No Active Cases';
+    } else if (avgSentiment >= 0.55) {
+        engineerStatus = '⭐ Top Performer';
+    } else if (avgSentiment >= 0.35) {
+        engineerStatus = '⚠️ Needs Attention';
+    } else {
+        engineerStatus = '🚨 Coaching Opportunity';
+    }
     
     // Generate personalized coaching based on actual case data
     const personalizedCoaching = generatePersonalizedCoachingFromSummary(engCases, engineer.name.split(' ')[0]);
@@ -1472,8 +1517,10 @@ async function viewEngineerDetail(engineerId) {
     // Generate trend data (simulated for demo - would come from API in production)
     const trendData = generateTrendData(engCases, dateRange);
     
-    const sentimentClass = getSentimentClass(avgSentiment);
+    const sentimentClass = getSentimentClass(avgSentiment || 0.5);
     const firstName = engineer.name.split(' ')[0];
+    const sentimentPct = avgSentiment !== null ? Math.round(avgSentiment * 100) : 'N/A';
+    const sentimentWidth = avgSentiment !== null ? Math.round(avgSentiment * 100) : 0;
     
     showLoading(false);
     
@@ -1489,7 +1536,7 @@ async function viewEngineerDetail(engineerId) {
                         <span class="period-badge">${rangeLabel}</span>
                         <span class="case-count-badge">${activeCases.length} active</span>
                         <span class="case-count-badge resolved">${resolvedCases.length} resolved</span>
-                        ${avgSentiment >= 0.7 ? '<span class="achievement-badge">⭐ Top Performer</span>' : ''}
+                        <span class="achievement-badge">${engineerStatus}</span>
                     </div>
                 </div>
                 <div class="profile-score">
@@ -1497,10 +1544,10 @@ async function viewEngineerDetail(engineerId) {
                         <svg viewBox="0 0 100 100">
                             <circle cx="50" cy="50" r="45" fill="none" stroke="#3a3a3a" stroke-width="8"/>
                             <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="8"
-                                stroke-dasharray="${avgSentiment * 283} 283" 
+                                stroke-dasharray="${sentimentWidth * 2.83} 283" 
                                 stroke-linecap="round" transform="rotate(-90 50 50)"/>
                         </svg>
-                        <span class="score-text">${Math.round(avgSentiment * 100)}%</span>
+                        <span class="score-text">${sentimentPct}${avgSentiment !== null ? '%' : ''}</span>
                     </div>
                     <span class="score-label">Active Case Sentiment</span>
                 </div>

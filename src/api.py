@@ -380,7 +380,7 @@ async def get_manager_summary():
                 "active_cases": row.active_cases or 0,
                 "resolved_cases": row.resolved_cases or 0,
                 "total_cases": row.total_cases or 0,
-                "risk_level": "healthy"  # Will be calculated by frontend from case data
+                "risk_level": "healthy"  # Will be recalculated below
             })
         
         # Get overall stats
@@ -393,24 +393,65 @@ async def get_manager_summary():
         """)
         stats_row = cursor.fetchone()
         
-        # Get avg sentiment per engineer from timeline analysis (simplified)
-        # This gets the latest customer message sentiment indicator per active case
+        # Get sentiment per engineer using weighted keyword matching (matching _calculate_csat_risk logic)
+        # More keywords = stronger signal, weighted towards recent messages
         cursor.execute("""
+            WITH customer_messages AS (
+                SELECT 
+                    c.owner_id,
+                    c.id as case_id,
+                    te.content,
+                    te.created_on,
+                    ROW_NUMBER() OVER (PARTITION BY c.id ORDER BY te.created_on) as msg_num,
+                    -- Count frustration indicators
+                    (CASE WHEN te.content LIKE '%frustrated%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%disappointed%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%unacceptable%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%urgent%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%escalate%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%waiting%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%still no%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%furious%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%nightmare%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%terrible%' THEN 1 ELSE 0 END) as frustration_count,
+                    -- Count positive indicators
+                    (CASE WHEN te.content LIKE '%thank%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%great%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%appreciate%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%helpful%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%excellent%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%perfect%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%amazing%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%wonderful%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%awesome%' THEN 1 ELSE 0 END) as positive_count
+                FROM cases c
+                JOIN timeline_entries te ON te.case_id = c.id 
+                WHERE c.status = 'active' 
+                  AND c.owner_id LIKE 'eng-%'
+                  AND te.is_customer_communication = 1
+            ),
+            case_sentiment AS (
+                SELECT 
+                    owner_id,
+                    case_id,
+                    -- Weighted average: later messages get more weight
+                    SUM(
+                        CASE 
+                            WHEN frustration_count > positive_count THEN 
+                                (0.5 - (frustration_count * 0.1)) * (1.0 + msg_num * 0.5)
+                            WHEN positive_count > 0 THEN 
+                                (0.7 + (positive_count * 0.05)) * (1.0 + msg_num * 0.5)
+                            ELSE 0.5 * (1.0 + msg_num * 0.5)
+                        END
+                    ) / NULLIF(SUM(1.0 + msg_num * 0.5), 0) as case_sentiment
+                FROM customer_messages
+                GROUP BY owner_id, case_id
+            )
             SELECT 
-                c.owner_id,
-                AVG(
-                    CASE 
-                        WHEN te.content LIKE '%thank%' OR te.content LIKE '%great%' OR te.content LIKE '%appreciate%' 
-                             OR te.content LIKE '%excellent%' OR te.content LIKE '%helpful%' THEN 0.8
-                        WHEN te.content LIKE '%frustrated%' OR te.content LIKE '%disappointed%' OR te.content LIKE '%unacceptable%'
-                             OR te.content LIKE '%urgent%' OR te.content LIKE '%escalate%' OR te.content LIKE '%waiting%' THEN 0.3
-                        ELSE 0.5
-                    END
-                ) as avg_sentiment
-            FROM cases c
-            LEFT JOIN timeline_entries te ON te.case_id = c.id AND te.is_customer_communication = 1
-            WHERE c.status = 'active' AND c.owner_id LIKE 'eng-%'
-            GROUP BY c.owner_id
+                owner_id,
+                AVG(case_sentiment) as avg_sentiment
+            FROM case_sentiment
+            GROUP BY owner_id
         """)
         
         sentiment_map = {}
@@ -422,9 +463,11 @@ async def get_manager_summary():
         # Add sentiment and risk level to engineers
         for eng in engineers:
             avg_sent = sentiment_map.get(eng['id'], 0.5)
+            # Clamp between 0.1 and 0.95 (matching _calculate_csat_risk bounds)
+            avg_sent = max(0.1, min(0.95, avg_sent))
             eng['avg_sentiment'] = round(avg_sent, 2)
             
-            # Determine risk level
+            # Determine risk level using same thresholds as frontend
             if eng['active_cases'] == 0:
                 eng['risk_level'] = 'no_cases'
             elif avg_sent < 0.35:
@@ -576,18 +619,77 @@ async def get_engineer_summary(engineer_id: str):
                 c.created_on DESC
         """, (engineer_id,))
         
+        case_rows = cursor.fetchall()
+        
+        # Get sentiment scores for all cases (using same logic as _calculate_csat_risk)
+        cursor.execute("""
+            WITH customer_messages AS (
+                SELECT 
+                    c.id as case_id,
+                    te.content,
+                    ROW_NUMBER() OVER (PARTITION BY c.id ORDER BY te.created_on) as msg_num,
+                    (CASE WHEN te.content LIKE '%frustrated%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%disappointed%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%unacceptable%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%urgent%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%escalate%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%waiting%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%still no%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%furious%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%nightmare%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%terrible%' THEN 1 ELSE 0 END) as frustration_count,
+                    (CASE WHEN te.content LIKE '%thank%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%great%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%appreciate%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%helpful%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%excellent%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%perfect%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%amazing%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%wonderful%' THEN 1 ELSE 0 END +
+                     CASE WHEN te.content LIKE '%awesome%' THEN 1 ELSE 0 END) as positive_count
+                FROM cases c
+                JOIN timeline_entries te ON te.case_id = c.id 
+                WHERE c.owner_id = ?
+                  AND te.is_customer_communication = 1
+            )
+            SELECT 
+                case_id,
+                SUM(
+                    CASE 
+                        WHEN frustration_count > positive_count THEN 
+                            (0.5 - (frustration_count * 0.1)) * (1.0 + msg_num * 0.5)
+                        WHEN positive_count > 0 THEN 
+                            (0.7 + (positive_count * 0.05)) * (1.0 + msg_num * 0.5)
+                        ELSE 0.5 * (1.0 + msg_num * 0.5)
+                    END
+                ) / NULLIF(SUM(1.0 + msg_num * 0.5), 0) as sentiment_score
+            FROM customer_messages
+            GROUP BY case_id
+        """, (engineer_id,))
+        
+        sentiment_map = {}
+        for row in cursor.fetchall():
+            score = row.sentiment_score or 0.5
+            sentiment_map[row.case_id] = max(0.1, min(0.95, score))
+        
         cases = []
         active_count = 0
         at_risk_count = 0
         breach_count = 0
+        total_sentiment = 0
+        active_sentiment_count = 0
         
-        for row in cursor.fetchall():
+        for row in case_rows:
             days_comm = row.days_since_comm if row.days_since_comm is not None else 999
             days_note = row.days_since_note if row.days_since_note is not None else 999
+            sentiment_score = sentiment_map.get(row.id, 0.6)
             
             # Determine risk level
             if row.status == 'active':
                 active_count += 1
+                total_sentiment += sentiment_score
+                active_sentiment_count += 1
+                
                 if days_comm >= 7 or days_note >= 7:
                     risk_level = "breach"
                     breach_count += 1
@@ -610,8 +712,11 @@ async def get_engineer_summary(engineer_id: str):
                 "days_since_comm": days_comm if days_comm < 999 else None,
                 "days_since_note": days_note if days_note < 999 else None,
                 "timeline_count": row.timeline_count or 0,
-                "risk_level": risk_level
+                "risk_level": risk_level,
+                "sentiment_score": round(sentiment_score, 2)
             })
+        
+        avg_sentiment = total_sentiment / active_sentiment_count if active_sentiment_count > 0 else None
         
         conn.close()
         
@@ -626,7 +731,8 @@ async def get_engineer_summary(engineer_id: str):
                 "total_cases": len(cases),
                 "active_cases": active_count,
                 "at_risk_count": at_risk_count,
-                "breach_count": breach_count
+                "breach_count": breach_count,
+                "avg_sentiment": round(avg_sentiment, 2) if avg_sentiment else None
             },
             "cases": cases
         }
