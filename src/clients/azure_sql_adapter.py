@@ -46,15 +46,9 @@ class AzureSQLDfMAdapter:
         return await loop.run_in_executor(None, partial(func, *args))
     
     async def get_case(self, case_id: str) -> Optional[Case]:
-        """Get a single case by ID."""
+        """Get a single case by ID (includes resolved cases)."""
         db = self._ensure_db()
-        # get_cases_for_engineer returns all cases, we need to filter
-        # For now, return None - proper implementation would need a get_case method
-        cases = await self._run_sync(db.get_all_active_cases)
-        for case in cases:
-            if case.id == case_id:
-                return case
-        return None
+        return await self._run_sync(db.get_case_by_id, case_id)
     
     async def get_active_cases(self) -> List[Case]:
         """Get all active cases."""

@@ -321,6 +321,52 @@ class SyncDatabaseManager:
         }
         return severity_map.get(severity_str, CaseSeverity.SEV_C)
     
+    def get_case_by_id(self, case_id: str) -> Optional[Case]:
+        """Get a single case by ID (includes resolved cases)."""
+        conn = self.connect()
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT c.id, c.title, c.description, c.status, c.priority,
+                       c.created_on, c.modified_on, c.owner_id, c.customer_id
+                FROM cases c
+                WHERE c.id = ?
+            """, (case_id,))
+            
+            row = cursor.fetchone()
+        finally:
+            conn.close()
+        
+        if not row:
+            return None
+        
+        # Get engineer (uses its own connection)
+        engineer = self.get_engineer(row.owner_id)
+        if not engineer:
+            engineer = Engineer(id=row.owner_id, name="Unknown", email="unknown@contoso.com")
+        
+        # Get customer (uses its own connection)
+        customer = self.get_customer(row.customer_id)
+        if not customer:
+            customer = Customer(id=row.customer_id, company="Unknown")
+        
+        # Get timeline entries (uses its own connection)
+        timeline = self.get_timeline_entries(row.id)
+        
+        return Case(
+            id=row.id,
+            title=row.title,
+            description=row.description or "",
+            status=self._map_status(row.status),
+            severity=self._map_severity(row.priority or "medium"),
+            created_on=row.created_on,
+            modified_on=row.modified_on or row.created_on,
+            owner=engineer,
+            customer=customer,
+            timeline=timeline
+        )
+    
     def get_cases_for_engineer(self, engineer_id: str) -> List[Case]:
         """Get all cases assigned to an engineer."""
         # Get the engineer first (uses its own connection)
