@@ -1264,15 +1264,23 @@ async def feedback_page():
 
 
 # =============================================================================
-# Admin Endpoint - Seed Database
+# Admin Endpoint - Seed Database (Comprehensive Quarter Data)
 # =============================================================================
 
 @app.post("/api/admin/seed")
 async def seed_database(secret: str = Query(..., description="Admin secret key")):
     """
-    Seed the database with test data.
-    Requires secret key for basic protection.
-    Uses actual database schema (lowercase columns).
+    Seed the database with comprehensive test data for a full quarter.
+    
+    Creates:
+    - 13 engineers (10 support + 3 managers)
+    - 25 customers across tiers
+    - 60 cases spanning 90 days with varied staleness patterns
+    - 100+ timeline entries with realistic sentiment patterns
+    - Feedback table and sample feedback
+    
+    IMPORTANT: Staleness (days_since_last_comm, days_since_last_note) is based on
+    fixed dates relative to current time to ensure varied compliance patterns.
     """
     # Simple secret check - in production use proper auth
     expected_secret = os.environ.get("ADMIN_SECRET", "csat-seed-2026")
@@ -1286,103 +1294,375 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
         conn = app_state.dfm_client.db.connect()
         cursor = conn.cursor()
         
+        # =====================================================================
+        # Create feedback table if it doesn't exist
+        # =====================================================================
+        try:
+            cursor.execute("""
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'feedback')
+                CREATE TABLE feedback (
+                    id NVARCHAR(50) PRIMARY KEY,
+                    rating NVARCHAR(20) NOT NULL,
+                    comment NVARCHAR(MAX),
+                    category NVARCHAR(50) DEFAULT 'general',
+                    page NVARCHAR(100),
+                    engineer_id NVARCHAR(50),
+                    user_agent NVARCHAR(500),
+                    created_at DATETIME2 DEFAULT GETUTCDATE()
+                )
+            """)
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Feedback table creation: {e}")
+        
+        # =====================================================================
         # Clear existing data (order matters for foreign keys)
-        cursor.execute("DELETE FROM TimelineEntries")
-        cursor.execute("DELETE FROM Cases")
-        cursor.execute("DELETE FROM Customers")
-        cursor.execute("DELETE FROM Engineers")
+        # =====================================================================
+        for table in ['case_analyses', 'communication_metrics', 'rule_violations', 
+                      'notifications', 'engineer_metrics', 'conversation_messages',
+                      'conversations', 'manager_alert_queue', 'timeline_entries', 
+                      'cases', 'customers', 'engineers', 'feedback']:
+            try:
+                cursor.execute(f"DELETE FROM {table}")
+            except Exception:
+                pass  # Table may not exist
         conn.commit()
         
-        # Insert Engineers (actual schema: id, name, email, team)
+        # =====================================================================
+        # ENGINEERS (13 total: 10 support + 3 managers)
+        # =====================================================================
         engineers = [
-            ("eng-001", "John Smith", "john.smith@microsoft.com", "Support"),
-            ("eng-002", "Sarah Johnson", "sarah.johnson@microsoft.com", "Support"),
-            ("eng-003", "Mike Chen", "mike.chen@microsoft.com", "Support"),
+            # Azure Platform Team
+            ("eng-001", "Sarah Chen", "sarchen@microsoft.com", "Azure Platform", "mgr-001"),
+            ("eng-002", "Marcus Johnson", "marjohn@microsoft.com", "Azure Platform", "mgr-001"),
+            ("eng-003", "Emily Rodriguez", "emrod@microsoft.com", "Azure Platform", "mgr-001"),
+            ("eng-004", "James Kim", "jamkim@microsoft.com", "Azure Platform", "mgr-001"),
+            # Azure Data Team
+            ("eng-005", "Priya Patel", "prpatel@microsoft.com", "Azure Data", "mgr-002"),
+            ("eng-006", "David Wang", "dawang@microsoft.com", "Azure Data", "mgr-002"),
+            ("eng-007", "Lisa Thompson", "lithomp@microsoft.com", "Azure Data", "mgr-002"),
+            # M365 Support Team
+            ("eng-008", "Alex Martinez", "almart@microsoft.com", "M365 Support", "mgr-003"),
+            ("eng-009", "Jennifer Lee", "jenlee@microsoft.com", "M365 Support", "mgr-003"),
+            ("eng-010", "Robert Brown", "robbro@microsoft.com", "M365 Support", "mgr-003"),
+            # Managers
+            ("mgr-001", "Michael Scott", "micscott@microsoft.com", "Management", None),
+            ("mgr-002", "Angela Martin", "angmart@microsoft.com", "Management", None),
+            ("mgr-003", "Jim Halpert", "jimhal@microsoft.com", "Management", None),
         ]
         for e in engineers:
-            cursor.execute("INSERT INTO Engineers (id, name, email, team) VALUES (?, ?, ?, ?)", e)
+            cursor.execute("""
+                INSERT INTO engineers (id, name, email, team, manager_id) 
+                VALUES (?, ?, ?, ?, ?)
+            """, e)
         
-        # Insert Customers (actual schema: id, name, company, tier)
+        # =====================================================================
+        # CUSTOMERS (25 companies across tiers)
+        # =====================================================================
         customers = [
-            ("cust-001", "Contoso Contact", "Contoso Ltd", "enterprise"),
-            ("cust-002", "Fabrikam Contact", "Fabrikam Manufacturing", "enterprise"),
-            ("cust-003", "Adventure Contact", "Adventure Works Retail", "standard"),
-            ("cust-004", "Northwind Contact", "Northwind Financial", "premium"),
-            ("cust-005", "Tailspin Contact", "Tailspin Aerospace", "enterprise"),
-            ("cust-006", "Wide World Contact", "Wide World Importers", "standard"),
+            # Premier Tier
+            ("cust-001", "Contoso Financial Services", "Premier"),
+            ("cust-002", "Fabrikam Industries", "Premier"),
+            ("cust-003", "Northwind Traders", "Premier"),
+            ("cust-004", "Adventure Works Cycles", "Premier"),
+            ("cust-005", "Wide World Importers", "Premier"),
+            ("cust-006", "Trey Research", "Premier"),
+            ("cust-007", "The Phone Company", "Premier"),
+            ("cust-008", "Coho Vineyard", "Premier"),
+            # Unified Tier
+            ("cust-009", "Tailspin Toys", "Unified"),
+            ("cust-010", "Wingtip Toys", "Unified"),
+            ("cust-011", "Fourth Coffee", "Unified"),
+            ("cust-012", "Graphic Design Institute", "Unified"),
+            ("cust-013", "Litware Inc", "Unified"),
+            ("cust-014", "Proseware Inc", "Unified"),
+            ("cust-015", "Lucerne Publishing", "Unified"),
+            ("cust-016", "Margie Travel", "Unified"),
+            ("cust-017", "Consolidated Messenger", "Unified"),
+            ("cust-018", "Blue Yonder Airlines", "Unified"),
+            # Professional Tier
+            ("cust-019", "A Datum Corporation", "Professional"),
+            ("cust-020", "Bellows College", "Professional"),
+            ("cust-021", "Best For You Organics", "Professional"),
+            ("cust-022", "City Power & Light", "Professional"),
+            ("cust-023", "Humongous Insurance", "Professional"),
+            ("cust-024", "VanArsdel Ltd", "Professional"),
+            ("cust-025", "Woodgrove Bank", "Professional"),
         ]
         for c in customers:
-            cursor.execute("INSERT INTO Customers (id, name, company, tier) VALUES (?, ?, ?, ?)", c)
+            cursor.execute("""
+                INSERT INTO customers (id, company, tier) 
+                VALUES (?, ?, ?)
+            """, c)
         
-        # Insert Cases (actual schema: id, title, customer_id, engineer_id, status, severity, created_at)
-        # Case IDs use realistic 16-digit MS Support format: YYMMDDHHMM + sequence
-        # Severity: 1=Sev C (low), 2=Sev B (medium), 3=Sev A (high/critical)
-        cases = [
-            ("2501140050001234", "Azure AD B2C configuration for patient portal", "cust-001", "eng-001", 1, 1, -5),
-            ("2501130050005678", "Production SQL Server down after patching - CRITICAL", "cust-002", "eng-001", 1, 3, -4),
-            ("2501100050009012", "Azure DevOps pipeline optimization inquiry", "cust-003", "eng-001", 1, 1, -12),
-            ("2501080050003456", "Azure Kubernetes Service intermittent pod failures", "cust-004", "eng-002", 1, 2, -7),
-            ("2501090050007890", "Azure Synapse Analytics cost optimization", "cust-005", "eng-001", 1, 1, -6),
-            ("2501050050002345", "Azure Functions cold start improvements", "cust-006", "eng-002", 0, 1, -10),
-            ("2501120050006789", "Azure Logic Apps workflow debugging", "cust-003", "eng-001", 1, 1, -3),
-            ("2501100050004567", "Azure API Management gateway timeout issues", "cust-004", "eng-002", 1, 2, -8),
+        # =====================================================================
+        # CASES (60 cases with varied staleness patterns)
+        # Format: (id, title, status, priority, owner_id, customer_id, 
+        #          days_since_created, days_since_last_comm, days_since_last_note)
+        # 
+        # STALENESS PATTERNS:
+        # - Fresh (0-1 days): Good communication
+        # - Approaching (3-5 days): Needs attention soon
+        # - Breach (7+ days): SLA violation
+        # =====================================================================
+        cases_data = [
+            # ==== Sarah Chen (eng-001) - Mix of patterns ====
+            # Fresh cases
+            ("case-001", "Azure SQL Database connection timeout issues", "active", "sev_b", "eng-001", "cust-001", 15, 0, 0),
+            ("case-002", "AKS cluster autoscaling not responding", "active", "sev_a", "eng-001", "cust-006", 8, 1, 0),
+            ("case-003", "Azure Front Door routing misconfiguration", "active", "sev_b", "eng-001", "cust-012", 22, 0, 1),
+            # Approaching SLA
+            ("case-004", "API Management gateway timeout - CRITICAL", "active", "sev_a", "eng-001", "cust-018", 13, 4, 3),
+            ("case-005", "Azure Cache for Redis evictions", "active", "sev_b", "eng-001", "cust-001", 5, 3, 4),
+            # In breach - stale notes
+            ("case-006", "Azure DevOps pipeline optimization inquiry", "active", "sev_c", "eng-001", "cust-003", 45, 2, 12),
+            ("case-007", "Azure Functions cold start latency", "active", "sev_c", "eng-001", "cust-019", 30, 1, 8),
+            
+            # ==== Marcus Johnson (eng-002) - Generally good ====
+            ("case-008", "Private Endpoint DNS resolution issues", "active", "sev_b", "eng-002", "cust-021", 6, 0, 0),
+            ("case-009", "Azure Arc onboarding failures", "active", "sev_c", "eng-002", "cust-002", 12, 1, 1),
+            ("case-010", "Application Insights sampling issues", "active", "sev_c", "eng-002", "cust-006", 4, 0, 2),
+            ("case-011", "Static Web Apps deployment failures", "resolved", "sev_c", "eng-002", "cust-011", 20, 5, 5),
+            # One breach case
+            ("case-012", "Service Bus queue deadlettering", "active", "sev_b", "eng-002", "cust-019", 35, 8, 9),
+            
+            # ==== Emily Rodriguez (eng-003) - Some issues ====
+            ("case-013", "Azure Firewall rule processing errors", "active", "sev_a", "eng-003", "cust-022", 4, 0, 0),
+            ("case-014", "Sentinel alert rules not matching", "active", "sev_b", "eng-003", "cust-013", 14, 2, 2),
+            # Stale communications
+            ("case-015", "Defender for Cloud false positives", "active", "sev_c", "eng-003", "cust-005", 28, 6, 4),
+            ("case-016", "Key Vault access policy conflicts", "active", "sev_c", "eng-003", "cust-020", 40, 5, 7),
+            # Major breach
+            ("case-017", "Logic Apps connector auth failures", "active", "sev_b", "eng-003", "cust-011", 55, 10, 14),
+            
+            # ==== James Kim (eng-004) - Top performer ====
+            ("case-018", "Azure AD B2C custom policy error", "active", "sev_b", "eng-004", "cust-015", 12, 0, 0),
+            ("case-019", "Virtual WAN hub routing issues", "active", "sev_a", "eng-004", "cust-002", 3, 0, 0),
+            ("case-020", "Azure SignalR connection drops", "active", "sev_b", "eng-004", "cust-024", 7, 1, 1),
+            ("case-021", "Load Balancer health probe issues", "active", "sev_a", "eng-004", "cust-016", 9, 0, 1),
+            ("case-022", "Azure AD conditional access blocking", "resolved", "sev_a", "eng-004", "cust-006", 25, 2, 2),
+            ("case-023", "Container Apps scaling failure", "active", "sev_b", "eng-004", "cust-007", 18, 1, 0),
+            
+            # ==== Priya Patel (eng-005) - Needs coaching ====
+            ("case-024", "Databricks cluster start failures", "active", "sev_b", "eng-005", "cust-019", 8, 3, 5),
+            ("case-025", "Power BI refresh gateway timeout", "active", "sev_b", "eng-005", "cust-005", 15, 4, 6),
+            ("case-026", "Azure SQL elastic pool DTU exhausted", "active", "sev_a", "eng-005", "cust-005", 2, 0, 3),
+            ("case-027", "Stream Analytics job lag exceeding 5min", "active", "sev_b", "eng-005", "cust-024", 32, 6, 8),
+            # Breach cases
+            ("case-028", "Data Factory pipeline scheduling issues", "active", "sev_c", "eng-005", "cust-016", 50, 9, 11),
+            ("case-029", "Synapse Analytics workspace access", "active", "sev_b", "eng-005", "cust-012", 38, 7, 10),
+            
+            # ==== David Wang (eng-006) - Average ====
+            ("case-030", "Cognitive Services rate limiting", "active", "sev_b", "eng-006", "cust-001", 28, 3, 3),
+            ("case-031", "Azure IoT Hub device provisioning", "active", "sev_c", "eng-006", "cust-010", 15, 4, 4),
+            ("case-032", "Azure Files SMB latency exceeding 100ms", "active", "sev_b", "eng-006", "cust-020", 7, 1, 2),
+            ("case-033", "Azure Bastion connection timeout", "active", "sev_c", "eng-006", "cust-009", 5, 0, 0),
+            ("case-034", "Event Hub throughput exceeded", "resolved", "sev_b", "eng-006", "cust-017", 45, 2, 2),
+            ("case-035", "Cosmos DB high RU consumption", "active", "sev_b", "eng-006", "cust-007", 20, 5, 6),
+            
+            # ==== Lisa Thompson (eng-007) - Struggling ====
+            ("case-036", "SQL Managed Instance performance degraded", "active", "sev_b", "eng-007", "cust-004", 24, 5, 8),
+            ("case-037", "Power BI embedded capacity issues", "active", "sev_b", "eng-007", "cust-025", 10, 4, 5),
+            ("case-038", "Azure Monitor alert not firing", "active", "sev_a", "eng-007", "cust-021", 18, 6, 9),
+            # Major breaches
+            ("case-039", "Purview data scanning errors", "active", "sev_c", "eng-007", "cust-008", 35, 11, 15),
+            ("case-040", "Azure Migrate assessment errors", "active", "sev_c", "eng-007", "cust-003", 42, 8, 12),
+            
+            # ==== Alex Martinez (eng-008) - M365 team ====
+            ("case-041", "Teams meeting recording unavailable", "active", "sev_c", "eng-008", "cust-004", 10, 1, 1),
+            ("case-042", "Dynamics 365 integration broken", "active", "sev_b", "eng-008", "cust-014", 14, 3, 4),
+            ("case-043", "Intune device enrollment failures", "active", "sev_b", "eng-008", "cust-013", 20, 2, 3),
+            ("case-044", "Defender for Endpoint onboarding", "active", "sev_b", "eng-008", "cust-008", 6, 0, 0),
+            ("case-045", "Azure Migrate assessment stuck", "active", "sev_c", "eng-008", "cust-003", 30, 6, 8),
+            
+            # ==== Jennifer Lee (eng-009) - Excellent ====
+            ("case-046", "SharePoint site collection recovery", "resolved", "sev_c", "eng-009", "cust-008", 18, 1, 1),
+            ("case-047", "OneDrive sync client conflicts", "active", "sev_c", "eng-009", "cust-018", 12, 0, 0),
+            ("case-048", "Power Automate approval workflow", "active", "sev_c", "eng-009", "cust-003", 8, 1, 2),
+            ("case-049", "Teams app permission consent", "active", "sev_c", "eng-009", "cust-017", 6, 0, 0),
+            ("case-050", "M365 license assignment failures", "active", "sev_c", "eng-009", "cust-004", 4, 0, 1),
+            
+            # ==== Robert Brown (eng-010) - Mixed ====
+            ("case-051", "Graph API permission issues", "active", "sev_b", "eng-010", "cust-009", 16, 1, 2),
+            ("case-052", "Exchange Online mail flow delays", "active", "sev_b", "eng-010", "cust-009", 22, 4, 5),
+            ("case-053", "Outlook calendar sync to mobile", "active", "sev_c", "eng-010", "cust-023", 5, 0, 0),
+            # Breach
+            ("case-054", "Teams voice quality issues", "active", "sev_b", "eng-010", "cust-025", 30, 7, 9),
+            
+            # ==== Additional cases for variety ====
+            ("case-055", "Azure Spring Apps deployment stuck", "active", "sev_b", "eng-003", "cust-007", 3, 0, 0),
+            ("case-056", "Azure Kubernetes ingress 503 errors", "active", "sev_a", "eng-001", "cust-018", 6, 2, 1),
+            ("case-057", "VNet peering connectivity issues", "resolved", "sev_b", "eng-002", "cust-022", 35, 3, 3),
+            ("case-058", "Azure Backup restore failure", "active", "sev_a", "eng-004", "cust-023", 8, 0, 0),
+            ("case-059", "VM scale set deployment failures", "active", "sev_b", "eng-001", "cust-002", 12, 2, 3),
+            ("case-060", "Storage account SAS token errors", "active", "sev_c", "eng-002", "cust-003", 25, 1, 2),
         ]
-        for c in cases:
-            cursor.execute(f"""
-                INSERT INTO Cases (id, title, customer_id, engineer_id, status, severity, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, DATEADD(day, {c[6]}, GETUTCDATE()))
-            """, (c[0], c[1], c[2], c[3], c[4], c[5]))
         
-        # Insert Timeline Entries (actual schema: id, case_id, entry_type, content, sentiment_score, created_at)
-        timeline = [
-            # Case 1 - Happy customer (healthy)
-            ("tl-001-01", "2501140050001234", "email", "We are implementing Azure AD B2C for our patient portal. Need guidance on HIPAA compliance.", 0.6, -5),
-            ("tl-001-02", "2501140050001234", "note", "Customer implementing B2C for healthcare portal. Key requirements: HIPAA compliance, Feb 15 go-live.", 0.5, -5),
-            ("tl-001-03", "2501140050001234", "email", "Thank you for the quick response! The documentation was very helpful.", 0.9, -2),
-            ("tl-001-04", "2501140050001234", "note", "Sent custom policy documentation. Customer on track for Feb 15 go-live.", 0.5, 0),
-            # Case 2 - Frustrated customer (critical CSAT risk)
-            ("tl-002-01", "2501130050005678", "email", "Our production SQL Server crashed after patching. We CANNOT process orders. $50K/hour lost!", -0.8, -4),
-            ("tl-002-02", "2501130050005678", "note", "SEV1 - Production SQL down. Customer losing $50K/hr. Escalating to SQL PG.", 0.5, -4),
-            ("tl-002-03", "2501130050005678", "email", "DAY 2 - Still no resolution! Our VP is now involved. The lack of communication is unacceptable.", -0.9, -3),
-            ("tl-002-04", "2501130050005678", "email", "I am FURIOUS. $3.6 MILLION lost. Filing complaint with legal. ESCALATE NOW!", -1.0, -2),
-            ("tl-002-05", "2501130050005678", "note", "CRITICAL: Customer threatening legal. SQL PG provided recovery steps. Management aware.", 0.5, 0),
-            # Case 3 - 7-day rule breach (no recent notes)
-            ("tl-003-01", "2501100050009012", "email", "Our pipelines take 45 minutes. Want to get under 15 minutes.", 0.3, -12),
-            ("tl-003-02", "2501100050009012", "note", "Customer wants pipeline optimization. Requested YAML and build type info.", 0.5, -11),
-            ("tl-003-03", "2501100050009012", "email", "Here is our pipeline YAML as requested.", 0.4, -10),
-            ("tl-003-04", "2501100050009012", "note", "Received YAML. Identified optimization opportunities. Will document recommendations.", 0.5, -8),
-            # Case 4 - Declining sentiment
-            ("tl-004-01", "2501080050003456", "email", "Seeing intermittent pod restarts 2-3 times daily affecting our trading platform.", 0.3, -7),
-            ("tl-004-02", "2501080050003456", "note", "AKS pod restart issues. Checking for OOMKilled events and resource limits.", 0.5, -6),
-            ("tl-004-03", "2501080050003456", "email", "Tried your suggestion but restarts happening MORE frequently now!", -0.5, -4),
-            ("tl-004-04", "2501080050003456", "email", "It has been a WEEK! Traders losing confidence. Need resolution TODAY or escalating.", -0.8, -1),
-        ]
-        for t in timeline:
+        for case in cases_data:
+            case_id, title, status, priority, owner_id, customer_id, days_created, days_comm, days_note = case
             cursor.execute(f"""
-                INSERT INTO TimelineEntries (id, case_id, entry_type, content, sentiment_score, created_at) 
-                VALUES (?, ?, ?, ?, ?, DATEADD(day, {t[5]}, GETUTCDATE()))
-            """, (t[0], t[1], t[2], t[3], t[4]))
+                INSERT INTO cases (id, title, status, priority, owner_id, customer_id, created_on, modified_on)
+                VALUES (?, ?, ?, ?, ?, ?, 
+                        DATEADD(day, -{days_created}, GETUTCDATE()),
+                        DATEADD(day, -{min(days_comm, days_note)}, GETUTCDATE()))
+            """, (case_id, title, status, priority, owner_id, customer_id))
         
         conn.commit()
         
-        # Get counts
-        cursor.execute("SELECT COUNT(*) FROM Engineers")
-        eng_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM Customers")
-        cust_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM Cases")
-        case_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM TimelineEntries")
-        timeline_count = cursor.fetchone()[0]
+        # =====================================================================
+        # TIMELINE ENTRIES with fixed staleness
+        # The last entry for each case determines "days since last" metrics
+        # We create entries going back in time, with the LAST one at the 
+        # specified staleness level
+        # =====================================================================
+        
+        def add_timeline(case_id, days_comm, days_note, sentiment_pattern, customer_id):
+            """Add timeline entries for a case with specified staleness."""
+            entries = []
+            entry_num = 1
+            
+            # Determine sentiment based on pattern
+            if sentiment_pattern == "happy":
+                sentiments = [0.7, 0.75, 0.8, 0.85]
+                contents = [
+                    ("email_received", "Hi, we have a question about our Azure configuration.", 0.6),
+                    ("email_sent", "Thank you for reaching out! I'd be happy to help.", 0.7),
+                    ("email_received", "That solution worked perfectly! Thank you so much!", 0.9),
+                    ("note", "Customer confirmed resolution. Great feedback received.", 0.8),
+                ]
+            elif sentiment_pattern == "frustrated":
+                sentiments = [0.5, 0.3, 0.2, 0.1]
+                contents = [
+                    ("email_received", "We're experiencing critical issues with our production environment.", 0.4),
+                    ("email_sent", "I understand the urgency. Let me investigate immediately.", 0.6),
+                    ("email_received", "It's been days with no resolution! This is unacceptable.", 0.2),
+                    ("note", "Customer escalated. Need to prioritize this case.", 0.4),
+                ]
+            elif sentiment_pattern == "declining":
+                sentiments = [0.6, 0.5, 0.35, 0.25]
+                contents = [
+                    ("email_received", "We need help troubleshooting intermittent issues.", 0.5),
+                    ("email_sent", "I'll look into this. Can you provide more details?", 0.6),
+                    ("email_received", "Still waiting for a proper solution. Getting frustrated.", 0.3),
+                    ("note", "Customer sentiment declining. Need faster resolution.", 0.4),
+                ]
+            else:  # neutral
+                sentiments = [0.5, 0.55, 0.5, 0.55]
+                contents = [
+                    ("email_received", "We have a question about best practices.", 0.5),
+                    ("email_sent", "Here's some documentation that should help.", 0.6),
+                    ("email_received", "Thanks, we'll review and get back to you.", 0.5),
+                    ("note", "Sent documentation. Awaiting customer feedback.", 0.5),
+                ]
+            
+            # Add entries working backwards from staleness dates
+            base_days = max(days_comm, days_note) + 5  # Start earlier than staleness
+            
+            for i, (entry_type, content, sentiment) in enumerate(contents):
+                entry_id = f"tl-{case_id[-3:]}-{entry_num:02d}"
+                
+                # Calculate days ago for this entry
+                if entry_type in ["email_sent", "email_received"]:
+                    if i == len(contents) - 2:  # Second to last is last comm
+                        days_ago = days_comm
+                    else:
+                        days_ago = base_days - i
+                else:  # note
+                    if i == len(contents) - 1:  # Last is the most recent note
+                        days_ago = days_note
+                    else:
+                        days_ago = base_days - i
+                
+                direction = "inbound" if entry_type == "email_received" else ("outbound" if entry_type == "email_sent" else None)
+                
+                entries.append((entry_id, case_id, entry_type, content, sentiment, days_ago, direction))
+                entry_num += 1
+            
+            return entries
+        
+        # Generate timeline for each case based on their staleness pattern
+        all_timeline = []
+        
+        # Assign sentiment patterns based on case characteristics
+        case_patterns = {
+            # Happy customers (fresh cases, resolved, good sentiment)
+            "case-001": "happy", "case-003": "happy", "case-008": "happy", 
+            "case-018": "happy", "case-019": "happy", "case-020": "happy",
+            "case-021": "happy", "case-046": "happy", "case-047": "happy",
+            "case-048": "happy", "case-049": "happy", "case-050": "happy",
+            "case-053": "happy", "case-058": "happy",
+            
+            # Frustrated customers (long cases, breaches, critical)
+            "case-004": "frustrated", "case-012": "frustrated", "case-017": "frustrated",
+            "case-028": "frustrated", "case-029": "frustrated", "case-038": "frustrated",
+            "case-039": "frustrated", "case-040": "frustrated", "case-054": "frustrated",
+            "case-056": "frustrated",
+            
+            # Declining sentiment
+            "case-005": "declining", "case-006": "declining", "case-015": "declining",
+            "case-024": "declining", "case-025": "declining", "case-027": "declining",
+            "case-036": "declining", "case-037": "declining", "case-052": "declining",
+        }
+        
+        for case in cases_data:
+            case_id = case[0]
+            customer_id = case[5]
+            days_comm = case[7]
+            days_note = case[8]
+            pattern = case_patterns.get(case_id, "neutral")
+            
+            entries = add_timeline(case_id, days_comm, days_note, pattern, customer_id)
+            all_timeline.extend(entries)
+        
+        # Insert all timeline entries
+        for entry in all_timeline:
+            entry_id, case_id, entry_type, content, sentiment, days_ago, direction = entry
+            cursor.execute(f"""
+                INSERT INTO timeline_entries (id, case_id, entry_type, content, created_by, direction, created_on)
+                VALUES (?, ?, ?, ?, 'system', ?, DATEADD(day, -{days_ago}, GETUTCDATE()))
+            """, (entry_id, case_id, entry_type, content, direction))
+        
+        conn.commit()
+        
+        # =====================================================================
+        # SAMPLE FEEDBACK
+        # =====================================================================
+        feedback_data = [
+            ("fb-001", "positive", "The coaching insights are incredibly helpful for my 1:1s!", "coaching", "manager", "mgr-001", 5),
+            ("fb-002", "positive", "Love the real-time sentiment analysis. Game changer!", "general", "engineer", "eng-001", 4),
+            ("fb-003", "negative", "Trend chart could show more granular data", "ui", "engineer-detail", "mgr-002", 3),
+            ("fb-004", "positive", "Finally a tool that helps prevent CSAT issues!", "general", "landing", None, 2),
+            ("fb-005", "positive", "Personalized coaching tips are spot-on", "coaching", "engineer-detail", "mgr-001", 1),
+        ]
+        
+        for fb in feedback_data:
+            cursor.execute(f"""
+                INSERT INTO feedback (id, rating, comment, category, page, engineer_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, DATEADD(day, -{fb[6]}, GETUTCDATE()))
+            """, (fb[0], fb[1], fb[2], fb[3], fb[4], fb[5]))
+        
+        conn.commit()
+        
+        # =====================================================================
+        # Get counts for response
+        # =====================================================================
+        counts = {}
+        for table in ['engineers', 'customers', 'cases', 'timeline_entries', 'feedback']:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                counts[table] = cursor.fetchone()[0]
+            except:
+                counts[table] = 0
         
         return {
             "status": "success",
-            "message": "Database seeded successfully",
-            "counts": {
-                "engineers": eng_count,
-                "customers": cust_count,
-                "cases": case_count,
-                "timeline_entries": timeline_count
+            "message": "Database seeded with comprehensive quarter data",
+            "counts": counts,
+            "staleness_patterns": {
+                "fresh_cases": "0-2 days since last comm/note",
+                "approaching_sla": "3-5 days since last comm/note", 
+                "in_breach": "7+ days since last comm/note",
+                "engineers_with_breaches": ["eng-003", "eng-005", "eng-007", "eng-010"]
             }
         }
     except Exception as e:
