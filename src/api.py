@@ -1596,7 +1596,9 @@ async def seed_database(secret: str = Query(..., description="Admin secret key")
                 # Determine staleness based on skill and status
                 if status == "resolved":
                     # Resolved cases: last comm/note at resolution time
-                    days_comm = days_created - random.randint(1, min(10, days_created))
+                    # Ensure valid range for randint (at least 1)
+                    max_offset = max(1, min(10, days_created))
+                    days_comm = max(0, days_created - random.randint(1, max_offset))
                     days_note = days_comm
                 else:
                     # Active cases: staleness based on engineer skill
