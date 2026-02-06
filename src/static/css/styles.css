@@ -2662,8 +2662,13 @@ textarea.form-input {
 
 .two-column {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 350px 1fr;
     gap: var(--spacing-xl);
+}
+
+/* Manager dashboard engineer detail - coaching takes majority of space */
+.two-column.manager-engineer-detail {
+    grid-template-columns: 1fr 320px;
 }
 
 .main-column {

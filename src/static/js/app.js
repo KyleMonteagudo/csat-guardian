@@ -3388,7 +3388,7 @@ async function viewEngineerDetail(engineerId) {
             </div>
         </div>
         
-        <div class="two-column">
+        <div class="two-column manager-engineer-detail">
             <div class="main-column">
                 <!-- Personalized Coaching Section -->
                 <div class="card coaching-card-main mb-lg">
