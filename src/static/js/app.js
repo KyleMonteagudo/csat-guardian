@@ -279,7 +279,7 @@ function calculateCSATPrediction(caseData) {
     const factors = [];
     
     // Response time factor (20% weight)
-    const daysComm = caseData.days_since_last_outbound || 0;
+    const daysComm = Math.round(caseData.days_since_last_outbound || 0);
     if (daysComm <= 1) {
         score += 0.4;
         factors.push({ text: 'Fast response time', positive: true });
@@ -327,7 +327,7 @@ function calculateCSATPrediction(caseData) {
     }
     
     return {
-        score: Math.round(score * 10) / 10,
+        score: Math.round(score),
         factors: factors.slice(0, 4),
         confidence,
         trend: caseData.sentiment_trend || 'stable'
@@ -2600,8 +2600,8 @@ function renderTeamDashboardContent() {
         // Use pre-computed risk_level from fast endpoint
         const riskLevel = eng.risk_level || 'no_cases';
         const activeCases = eng.active_cases || 0;
-        const maxDaysComm = eng.max_days_since_comm || 0;
-        const avgDaysComm = eng.avg_days_since_comm || 0;
+        const maxDaysComm = Math.round(eng.max_days_since_comm || 0);
+        const avgDaysComm = Math.round(eng.avg_days_since_comm || 0);
         
         // Use actual sentiment if available, otherwise estimate from risk level
         // null sentiment means no active cases
@@ -2858,8 +2858,8 @@ function renderCategoryCaseCard(caseData, category) {
     const sentimentScore = caseData.sentiment_score || 0.5;
     const sentimentPct = Math.round(sentimentScore * 100);
     const sentimentClass = getSentimentClass(sentimentScore);
-    const daysSinceComm = caseData.days_since_last_outbound || 0;
-    const daysSinceNote = caseData.days_since_last_note || 0;
+    const daysSinceComm = Math.round(caseData.days_since_last_outbound || 0);
+    const daysSinceNote = Math.round(caseData.days_since_last_note || 0);
     
     // Risk indicators
     const indicators = [];
@@ -3115,10 +3115,11 @@ function generateConversationStarters(caseData, analysis) {
     }
     
     // Based on days since communication
-    if (caseData.days_since_last_outbound > 3) {
+    const daysSinceOutbound = Math.round(caseData.days_since_last_outbound || 0);
+    if (daysSinceOutbound > 3) {
         starters.push({
             icon: '📞',
-            text: `I noticed it's been ${caseData.days_since_last_outbound} days since the last customer contact on ${caseData.id}. Even a brief status update can go a long way. What would help you reach out today?`
+            text: `I noticed it's been ${daysSinceOutbound} days since the last customer contact on ${caseData.id}. Even a brief status update can go a long way. What would help you reach out today?`
         });
     }
     
@@ -3511,11 +3512,12 @@ function generatePersonalizedCoachingFromSummary(cases, firstName) {
     // Generate specific insights
     if (slowResponseCases.length > 0) {
         const worstCase = slowResponseCases.sort((a, b) => (b.days_since_comm || 0) - (a.days_since_comm || 0))[0];
+        const daysSinceComm = Math.round(worstCase.days_since_comm || 0);
         insights.push({
             icon: '⏰',
             category: 'Response Timeliness',
             caseId: worstCase.id,
-            observation: `${slowResponseCases.length} case${slowResponseCases.length > 1 ? 's have' : ' has'} gone ${worstCase.days_since_comm}+ days without customer communication. ${worstCase.customer_name || 'The customer'} on case ${worstCase.id} may be wondering about status.`,
+            observation: `${slowResponseCases.length} case${slowResponseCases.length > 1 ? 's have' : ' has'} gone ${daysSinceComm}+ days without customer communication. ${worstCase.customer_name || 'The customer'} on case ${worstCase.id} may be wondering about status.`,
             suggestion: `Discuss with ${firstName} about setting daily check-in reminders. Even a brief "still investigating" update maintains customer confidence.`,
             example: `I noticed case ${worstCase.id} hasn't had a customer touchpoint recently. What's blocking progress there? How can I help?`
         });
@@ -3523,11 +3525,12 @@ function generatePersonalizedCoachingFromSummary(cases, firstName) {
     
     if (breachCases.length > 0) {
         const worstCase = breachCases[0];
+        const breachDays = Math.round(worstCase.days_since_comm || worstCase.days_since_note || 7);
         insights.push({
             icon: '🚨',
             category: 'Critical Attention Needed',
             caseId: worstCase.id,
-            observation: `Case ${worstCase.id} (${worstCase.customer_name || 'customer'}) is in breach state - ${worstCase.days_since_comm || worstCase.days_since_note || 7}+ days without activity. This needs immediate attention.`,
+            observation: `Case ${worstCase.id} (${worstCase.customer_name || 'customer'}) is in breach state - ${breachDays}+ days without activity. This needs immediate attention.`,
             suggestion: `Prioritize reaching out to this customer today. Even a brief status update can prevent escalation.`,
             example: `I see ${worstCase.id} needs urgent attention. What do you need from me to unblock this?`
         });
@@ -3535,11 +3538,12 @@ function generatePersonalizedCoachingFromSummary(cases, firstName) {
     
     if (staleNotesCases.length > 0) {
         const stalestCase = staleNotesCases.sort((a, b) => (b.days_since_note || 0) - (a.days_since_note || 0))[0];
+        const daysSinceNote = Math.round(stalestCase.days_since_note || 0);
         insights.push({
             icon: '📝',
             category: 'Documentation',
             caseId: stalestCase.id,
-            observation: `${staleNotesCases.length} case${staleNotesCases.length > 1 ? 's' : ''} with notes older than 5 days. Case ${stalestCase.id} hasn't been updated in ${stalestCase.days_since_note} days.`,
+            observation: `${staleNotesCases.length} case${staleNotesCases.length > 1 ? 's' : ''} with notes older than 5 days. Case ${stalestCase.id} hasn't been updated in ${daysSinceNote} days.`,
             suggestion: `Current notes help with handoffs and compliance. Consider end-of-day note updates as a habit.`,
             example: `How's your case documentation going? I want to make sure you're set up for success if you need to hand anything off.`
         });
@@ -3744,7 +3748,7 @@ function calculateAvgResponseTime(cases) {
     if (cases.length === 0) return 'N/A';
     const avgDays = cases.reduce((sum, c) => sum + (c.days_since_last_outbound || 0), 0) / cases.length;
     if (avgDays < 1) return '< 1 day';
-    return `${avgDays.toFixed(1)} days`;
+    return `${Math.round(avgDays)} days`;
 }
 
 /**
