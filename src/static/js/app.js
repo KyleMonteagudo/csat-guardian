@@ -2965,10 +2965,14 @@ async function showCaseCoachingModal(caseId) {
  */
 function renderCaseCoachingContent(container, caseData, analysis) {
     const sentiment = analysis.sentiment || {};
-    const sentimentScore = sentiment.score || 0.5;
-    const sentimentPct = Math.round(sentimentScore * 100);
-    const sentimentClass = getSentimentClass(sentimentScore);
+    const aiSentimentScore = sentiment.score || 0.5;
+    const aiSentimentPct = Math.round(aiSentimentScore * 100);
+    const sentimentClass = getSentimentClass(aiSentimentScore);
     const sentimentLabel = sentiment.label || 'neutral';
+    
+    // Get the original quick-calc score from case data for comparison
+    const originalScore = caseData.sentiment_score || 0.5;
+    const originalPct = Math.round(originalScore * 100);
     
     // Extract key coaching points from the analysis
     const recommendations = analysis.recommendations || [];
@@ -2976,6 +2980,10 @@ function renderCaseCoachingContent(container, caseData, analysis) {
     const keyPhrases = sentiment.key_phrases || [];
     const verboseAnalysis = analysis.verbose_analysis || '';
     const timelineInsights = analysis.timeline_insights || [];
+    
+    // Determine if scores are significantly different
+    const scoreDiff = Math.abs(aiSentimentPct - originalPct);
+    const showScoreComparison = scoreDiff >= 5;
     
     container.innerHTML = `
         <div class="coaching-header">
@@ -2985,19 +2993,29 @@ function renderCaseCoachingContent(container, caseData, analysis) {
                 <div class="coaching-meta">
                     <span>👤 ${caseData.owner?.name || 'Unassigned'}</span>
                     <span>🏢 ${caseData.customer?.company || 'Unknown'}</span>
-                    <span>📅 Open ${caseData.days_open || 0} days</span>
+                    <span>📅 Open ${Math.round(caseData.days_open || 0)} days</span>
                 </div>
             </div>
-            <div class="coaching-sentiment-ring ${sentimentClass}">
-                <svg viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#3a3a3a" stroke-width="8"/>
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="8"
-                        stroke-dasharray="${sentimentPct * 2.83} 283" 
-                        stroke-linecap="round" transform="rotate(-90 50 50)"/>
-                </svg>
-                <div class="sentiment-center">
-                    <span class="sentiment-score">${sentimentPct}%</span>
-                    <span class="sentiment-label">${sentimentLabel}</span>
+            <div class="coaching-sentiment-display">
+                <div class="coaching-sentiment-ring ${sentimentClass}">
+                    <svg viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#3a3a3a" stroke-width="8"/>
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="8"
+                            stroke-dasharray="${aiSentimentPct * 2.83} 283" 
+                            stroke-linecap="round" transform="rotate(-90 50 50)"/>
+                    </svg>
+                    <div class="sentiment-center">
+                        <span class="sentiment-score">${aiSentimentPct}%</span>
+                        <span class="sentiment-label">${sentimentLabel}</span>
+                    </div>
+                </div>
+                <div class="sentiment-source">
+                    <span class="ai-badge">🤖 AI Analysis</span>
+                    ${showScoreComparison ? `
+                        <span class="score-comparison">
+                            Quick scan: ${originalPct}%
+                        </span>
+                    ` : ''}
                 </div>
             </div>
         </div>

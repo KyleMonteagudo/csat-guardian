@@ -2347,6 +2347,13 @@ textarea.form-input {
     color: var(--text-secondary);
 }
 
+.coaching-sentiment-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
 .coaching-sentiment-ring {
     width: 100px;
     height: 100px;
@@ -2362,6 +2369,27 @@ textarea.form-input {
 .coaching-sentiment-ring.positive { color: var(--success); }
 .coaching-sentiment-ring.neutral { color: var(--warning); }
 .coaching-sentiment-ring.negative { color: var(--danger); }
+
+.sentiment-source {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.ai-badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.15), rgba(138, 43, 226, 0.15));
+    border-radius: var(--radius-sm);
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.score-comparison {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+}
 
 .sentiment-center {
     position: absolute;
