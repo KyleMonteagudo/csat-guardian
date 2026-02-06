@@ -2,24 +2,46 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1b1b1b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>CSAT Guardian</title>
     
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
     
     <!-- Custom Styles -->
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-    <!-- Theme Toggle Button -->
-    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">🌙</button>
+    <!-- Particle Canvas for WOW effects -->
+    <canvas id="particle-canvas" class="particle-canvas"></canvas>
+    
+    <!-- Aurora Background Effect -->
+    <div class="aurora-bg">
+        <div class="aurora aurora-1"></div>
+        <div class="aurora aurora-2"></div>
+        <div class="aurora aurora-3"></div>
+    </div>
+    
+    <!-- Mobile Navigation Overlay -->
+    <div id="mobile-nav-overlay" class="mobile-nav-overlay hidden"></div>
     
     <!-- Top Navigation Bar -->
     <nav class="top-nav">
+        <!-- Mobile Menu Toggle -->
+        <button id="mobile-menu-btn" class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu">
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+        </button>
+        
         <div class="nav-brand">
-            <span style="font-size: 1.5rem;">🛡️</span>
-            <span class="nav-product-name" style="font-weight: 600; font-size: 1.1rem;">CSAT Guardian</span>
+            <span class="nav-logo-icon">🛡️</span>
+            <span class="nav-product-name">CSAT Guardian</span>
+            <span class="nav-badge-beta">AI</span>
         </div>
         
         <div class="nav-actions">
@@ -28,15 +50,60 @@
                 <span class="status-text">Checking...</span>
             </div>
             
+            <!-- Home Button (Desktop) -->
+            <button class="nav-btn nav-btn-home desktop-only" onclick="navigateTo('landing')" title="Home">
+                <span>🏠</span>
+                <span class="nav-btn-label">Home</span>
+            </button>
+            
             <!-- Feedback Button -->
             <div class="feedback-trigger">
                 <button id="feedback-btn" class="feedback-btn" title="Share Feedback">
                     <span class="feedback-icon">💬</span>
-                    <span class="feedback-label">Feedback</span>
+                    <span class="feedback-label desktop-only">Feedback</span>
                 </button>
             </div>
+            
+            <!-- Theme Toggle Button (Now in nav bar) -->
+            <button id="theme-toggle" class="theme-toggle-nav" onclick="toggleTheme()" title="Toggle Theme">
+                <span class="theme-icon">🌙</span>
+            </button>
         </div>
     </nav>
+    
+    <!-- Mobile Slide-Out Menu -->
+    <aside id="mobile-menu" class="mobile-menu">
+        <div class="mobile-menu-header">
+            <span class="mobile-menu-logo">🛡️</span>
+            <span class="mobile-menu-title">CSAT Guardian</span>
+        </div>
+        <nav class="mobile-menu-nav">
+            <a href="#" class="mobile-menu-item" onclick="navigateTo('landing'); toggleMobileMenu(); return false;">
+                <span class="mobile-menu-icon">🏠</span>
+                <span>Home</span>
+            </a>
+            <a href="#" class="mobile-menu-item" onclick="navigateTo('engineer'); toggleMobileMenu(); return false;">
+                <span class="mobile-menu-icon">👨‍💻</span>
+                <span>Engineer Mode</span>
+            </a>
+            <a href="#" class="mobile-menu-item" onclick="navigateTo('manager'); toggleMobileMenu(); return false;">
+                <span class="mobile-menu-icon">👥</span>
+                <span>Manager Mode</span>
+            </a>
+            <div class="mobile-menu-divider"></div>
+            <a href="#" class="mobile-menu-item" onclick="openFeedbackModal(); toggleMobileMenu(); return false;">
+                <span class="mobile-menu-icon">💬</span>
+                <span>Feedback</span>
+            </a>
+            <a href="#" class="mobile-menu-item" onclick="toggleTheme(); return false;">
+                <span class="mobile-menu-icon" id="mobile-theme-icon">🌙</span>
+                <span id="mobile-theme-label">Dark Mode</span>
+            </a>
+        </nav>
+        <div class="mobile-menu-footer">
+            <p>Powered by Azure AI</p>
+        </div>
+    </aside>
     
     <!-- Feedback Modal -->
     <div id="feedback-modal" class="modal-overlay hidden">
@@ -108,12 +175,69 @@
     </main>
     
     <!-- Footer -->
-    <footer style="text-align: center; padding: var(--spacing-xl); color: var(--text-tertiary); font-size: 0.75rem; border-top: 1px solid var(--border-subtle); margin-top: var(--spacing-2xl);">
-        <p>CSAT Guardian &copy; 2026 EngOps / GSX • AI-Powered Customer Satisfaction Monitoring</p>
-        <p style="margin-top: var(--spacing-sm);">
-            Built with Azure OpenAI • Semantic Kernel • FastAPI
-        </p>
+    <footer class="app-footer">
+        <div class="footer-content">
+            <p class="footer-brand">CSAT Guardian &copy; 2026 EngOps / GSX</p>
+            <p class="footer-tagline">AI-Powered Customer Satisfaction Monitoring</p>
+            <div class="footer-tech">
+                <span class="tech-badge">Azure OpenAI</span>
+                <span class="tech-badge">Semantic Kernel</span>
+                <span class="tech-badge">FastAPI</span>
+            </div>
+        </div>
     </footer>
+    
+    <!-- Export Modal -->
+    <div id="export-modal" class="modal-overlay hidden">
+        <div class="modal-content export-modal">
+            <div class="modal-header">
+                <h3>📊 Export Reports</h3>
+                <button class="modal-close" onclick="closeExportModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-md">Generate and download reports for your cases</p>
+                
+                <div class="export-options">
+                    <div class="export-option" onclick="exportToCSV()">
+                        <div class="export-icon">📄</div>
+                        <div class="export-info">
+                            <h4>CSV Export</h4>
+                            <p>Download case data as CSV for Excel/Sheets</p>
+                        </div>
+                        <span class="export-arrow">→</span>
+                    </div>
+                    
+                    <div class="export-option" onclick="exportToPDF()">
+                        <div class="export-icon">📑</div>
+                        <div class="export-info">
+                            <h4>PDF Report</h4>
+                            <p>Generate a formatted executive summary</p>
+                        </div>
+                        <span class="export-arrow">→</span>
+                    </div>
+                    
+                    <div class="export-option" onclick="exportToJSON()">
+                        <div class="export-icon">{ }</div>
+                        <div class="export-info">
+                            <h4>JSON Export</h4>
+                            <p>Raw data for integration/analysis</p>
+                        </div>
+                        <span class="export-arrow">→</span>
+                    </div>
+                </div>
+                
+                <div class="export-range mt-lg">
+                    <label>Date Range:</label>
+                    <select id="export-date-range">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="all">All time</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Application Script -->
     <script src="/static/js/app.js"></script>

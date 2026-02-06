@@ -1,6 +1,7 @@
 /**
  * CSAT Guardian - Frontend Application
  * Microsoft Learn-inspired UI for CSAT case management
+ * ULTRA PREMIUM EDITION - Mobile, Filtering, Export, WOW Effects
  */
 
 // =============================================================================
@@ -24,11 +25,22 @@ const state = {
     currentCase: null,
     selectedEngineer: null,  // For manager viewing an engineer's details
     cases: [],
+    filteredCases: [],  // For filtered view
     engineers: [],
     isLoading: false,
     backendStatus: 'checking',  // checking, online, offline
     chatHistory: [],
     theme: localStorage.getItem('csat-theme') || 'dark',
+    mobileMenuOpen: false,
+    // Filter state
+    filters: {
+        search: '',
+        severity: 'all',
+        sentiment: 'all',
+        daysInactive: 'all',
+        status: 'all'
+    },
+    particles: [],
 };
 
 // =============================================================================
@@ -51,6 +63,9 @@ function toggleTheme() {
     document.documentElement.setAttribute('data-theme', state.theme);
     localStorage.setItem('csat-theme', state.theme);
     updateThemeToggle();
+    
+    // Add a little celebration effect
+    createRippleEffect(document.querySelector('.theme-toggle-nav'));
 }
 
 /**
@@ -58,10 +73,193 @@ function toggleTheme() {
  */
 function updateThemeToggle() {
     const toggle = document.getElementById('theme-toggle');
+    const mobileIcon = document.getElementById('mobile-theme-icon');
+    const mobileLabel = document.getElementById('mobile-theme-label');
+    
     if (toggle) {
-        toggle.innerHTML = state.theme === 'dark' ? '☀️' : '🌙';
+        toggle.innerHTML = `<span class="theme-icon">${state.theme === 'dark' ? '☀️' : '🌙'}</span>`;
         toggle.title = state.theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
     }
+    
+    if (mobileIcon) {
+        mobileIcon.textContent = state.theme === 'dark' ? '☀️' : '🌙';
+    }
+    
+    if (mobileLabel) {
+        mobileLabel.textContent = state.theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+    }
+}
+
+// =============================================================================
+// Mobile Menu Management
+// =============================================================================
+
+/**
+ * Toggle mobile menu
+ */
+function toggleMobileMenu() {
+    state.mobileMenuOpen = !state.mobileMenuOpen;
+    
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    const menu = document.getElementById('mobile-menu');
+    const overlay = document.getElementById('mobile-nav-overlay');
+    
+    if (menuBtn) menuBtn.classList.toggle('active', state.mobileMenuOpen);
+    if (menu) menu.classList.toggle('active', state.mobileMenuOpen);
+    if (overlay) overlay.classList.toggle('active', state.mobileMenuOpen);
+    
+    // Prevent body scroll when menu is open
+    document.body.style.overflow = state.mobileMenuOpen ? 'hidden' : '';
+}
+
+/**
+ * Close mobile menu
+ */
+function closeMobileMenu() {
+    if (state.mobileMenuOpen) {
+        toggleMobileMenu();
+    }
+}
+
+// =============================================================================
+// Particle System - WOW Effect
+// =============================================================================
+
+/**
+ * Initialize particle canvas
+ */
+function initParticles() {
+    const canvas = document.getElementById('particle-canvas');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    let animationId;
+    
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    
+    function createParticle() {
+        return {
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2 + 0.5,
+            speedX: (Math.random() - 0.5) * 0.5,
+            speedY: (Math.random() - 0.5) * 0.5,
+            opacity: Math.random() * 0.5 + 0.2,
+            hue: Math.random() * 60 + 180 // Blue to cyan range
+        };
+    }
+    
+    // Create initial particles
+    for (let i = 0; i < 50; i++) {
+        state.particles.push(createParticle());
+    }
+    
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        state.particles.forEach((particle, index) => {
+            // Update position
+            particle.x += particle.speedX;
+            particle.y += particle.speedY;
+            
+            // Wrap around edges
+            if (particle.x < 0) particle.x = canvas.width;
+            if (particle.x > canvas.width) particle.x = 0;
+            if (particle.y < 0) particle.y = canvas.height;
+            if (particle.y > canvas.height) particle.y = 0;
+            
+            // Draw particle
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${particle.hue}, 70%, 60%, ${particle.opacity})`;
+            ctx.fill();
+            
+            // Draw connections to nearby particles
+            state.particles.forEach((other, otherIndex) => {
+                if (index === otherIndex) return;
+                const dx = particle.x - other.x;
+                const dy = particle.y - other.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 150) {
+                    ctx.beginPath();
+                    ctx.moveTo(particle.x, particle.y);
+                    ctx.lineTo(other.x, other.y);
+                    ctx.strokeStyle = `hsla(${particle.hue}, 70%, 60%, ${0.1 * (1 - distance / 150)})`;
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+            });
+        });
+        
+        animationId = requestAnimationFrame(animate);
+    }
+    
+    resize();
+    window.addEventListener('resize', resize);
+    animate();
+    
+    // Cleanup function
+    return () => {
+        cancelAnimationFrame(animationId);
+        window.removeEventListener('resize', resize);
+    };
+}
+
+/**
+ * Create ripple effect on element
+ */
+function createRippleEffect(element) {
+    if (!element) return;
+    
+    const ripple = document.createElement('span');
+    ripple.style.cssText = `
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        pointer-events: none;
+        animation: ripple 0.6s linear;
+    `;
+    
+    const rect = element.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = '50%';
+    ripple.style.top = '50%';
+    ripple.style.transform = 'translate(-50%, -50%) scale(0)';
+    
+    element.style.position = 'relative';
+    element.style.overflow = 'hidden';
+    element.appendChild(ripple);
+    
+    setTimeout(() => ripple.remove(), 600);
+}
+
+/**
+ * Create celebration confetti
+ */
+function celebrateSuccess() {
+    const colors = ['#0078d4', '#50e6ff', '#00d26a', '#a855f7', '#ffb900'];
+    const container = document.createElement('div');
+    container.className = 'success-celebration';
+    document.body.appendChild(container);
+    
+    for (let i = 0; i < 50; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti-piece';
+        confetti.style.cssText = `
+            left: ${Math.random() * 100}%;
+            background: ${colors[Math.floor(Math.random() * colors.length)]};
+            animation-delay: ${Math.random() * 0.5}s;
+            animation-duration: ${2 + Math.random() * 2}s;
+        `;
+        container.appendChild(confetti);
+    }
+    
+    setTimeout(() => container.remove(), 4000);
 }
 
 // =============================================================================
@@ -280,6 +478,551 @@ function getLivePulseClass(caseData) {
     }
     
     return '';
+}
+
+// =============================================================================
+// Filter & Search System
+// =============================================================================
+
+/**
+ * Render the filter bar for case list
+ */
+function renderFilterBar(cases) {
+    const activeCases = cases.filter(c => c.status === 'active');
+    const criticalCount = activeCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
+    const atRiskCount = activeCases.filter(c => {
+        const s = c.sentiment_score || 0.5;
+        return s >= 0.35 && s < 0.55;
+    }).length;
+    const healthyCount = activeCases.length - criticalCount - atRiskCount;
+    
+    return `
+        <div class="filter-bar">
+            <div class="filter-group search-group">
+                <label class="filter-label">Search Cases</label>
+                <div class="search-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" 
+                           class="filter-input" 
+                           id="filter-search" 
+                           placeholder="Search by case ID, title, or customer..."
+                           value="${state.filters.search}"
+                           onkeyup="applyFilters()">
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Severity</label>
+                <select class="filter-select" id="filter-severity" onchange="applyFilters()">
+                    <option value="all" ${state.filters.severity === 'all' ? 'selected' : ''}>All Severities</option>
+                    <option value="A" ${state.filters.severity === 'A' ? 'selected' : ''}>Sev A (Critical)</option>
+                    <option value="B" ${state.filters.severity === 'B' ? 'selected' : ''}>Sev B (High)</option>
+                    <option value="C" ${state.filters.severity === 'C' ? 'selected' : ''}>Sev C (Medium)</option>
+                    <option value="D" ${state.filters.severity === 'D' ? 'selected' : ''}>Sev D (Low)</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Sentiment Status</label>
+                <select class="filter-select" id="filter-sentiment" onchange="applyFilters()">
+                    <option value="all" ${state.filters.sentiment === 'all' ? 'selected' : ''}>All Statuses</option>
+                    <option value="critical" ${state.filters.sentiment === 'critical' ? 'selected' : ''}>🚨 Critical (&lt;35%)</option>
+                    <option value="at-risk" ${state.filters.sentiment === 'at-risk' ? 'selected' : ''}>⚠️ At Risk (35-55%)</option>
+                    <option value="healthy" ${state.filters.sentiment === 'healthy' ? 'selected' : ''}>✅ Healthy (&gt;55%)</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Days Inactive</label>
+                <select class="filter-select" id="filter-days" onchange="applyFilters()">
+                    <option value="all" ${state.filters.daysInactive === 'all' ? 'selected' : ''}>All</option>
+                    <option value="3" ${state.filters.daysInactive === '3' ? 'selected' : ''}>&gt;3 days</option>
+                    <option value="5" ${state.filters.daysInactive === '5' ? 'selected' : ''}>&gt;5 days</option>
+                    <option value="7" ${state.filters.daysInactive === '7' ? 'selected' : ''}>&gt;7 days</option>
+                </select>
+            </div>
+            
+            <div class="filter-actions">
+                <button class="filter-btn" onclick="clearFilters()" title="Clear all filters">
+                    ✕ Clear
+                </button>
+                <button class="filter-btn btn-glow" onclick="openExportModal()" title="Export cases">
+                    📊 Export
+                </button>
+            </div>
+        </div>
+        
+        <div class="quick-filters">
+            <button class="quick-filter-pill ${state.filters.sentiment === 'all' ? 'active' : ''}" onclick="quickFilter('all')">
+                All <span class="count">${activeCases.length}</span>
+            </button>
+            <button class="quick-filter-pill ${state.filters.sentiment === 'critical' ? 'active' : ''}" onclick="quickFilter('critical')">
+                🚨 Critical <span class="count">${criticalCount}</span>
+            </button>
+            <button class="quick-filter-pill ${state.filters.sentiment === 'at-risk' ? 'active' : ''}" onclick="quickFilter('at-risk')">
+                ⚠️ At Risk <span class="count">${atRiskCount}</span>
+            </button>
+            <button class="quick-filter-pill ${state.filters.sentiment === 'healthy' ? 'active' : ''}" onclick="quickFilter('healthy')">
+                ✅ Healthy <span class="count">${healthyCount}</span>
+            </button>
+        </div>
+    `;
+}
+
+/**
+ * Apply filters to the case list
+ */
+function applyFilters() {
+    // Get filter values
+    state.filters.search = (document.getElementById('filter-search')?.value || '').toLowerCase();
+    state.filters.severity = document.getElementById('filter-severity')?.value || 'all';
+    state.filters.sentiment = document.getElementById('filter-sentiment')?.value || 'all';
+    state.filters.daysInactive = document.getElementById('filter-days')?.value || 'all';
+    
+    // Filter cases
+    const activeCases = state.cases.filter(c => c.status === 'active');
+    
+    state.filteredCases = activeCases.filter(caseData => {
+        // Search filter
+        if (state.filters.search) {
+            const searchStr = state.filters.search;
+            const matchesSearch = 
+                (caseData.id?.toLowerCase().includes(searchStr)) ||
+                (caseData.title?.toLowerCase().includes(searchStr)) ||
+                (caseData.customer?.company?.toLowerCase().includes(searchStr));
+            if (!matchesSearch) return false;
+        }
+        
+        // Severity filter
+        if (state.filters.severity !== 'all') {
+            if (formatSeverity(caseData.severity) !== state.filters.severity) return false;
+        }
+        
+        // Sentiment filter
+        const sentiment = caseData.sentiment_score || 0.5;
+        if (state.filters.sentiment !== 'all') {
+            if (state.filters.sentiment === 'critical' && sentiment >= 0.35) return false;
+            if (state.filters.sentiment === 'at-risk' && (sentiment < 0.35 || sentiment >= 0.55)) return false;
+            if (state.filters.sentiment === 'healthy' && sentiment < 0.55) return false;
+        }
+        
+        // Days inactive filter
+        if (state.filters.daysInactive !== 'all') {
+            const daysComm = caseData.days_since_last_outbound || 0;
+            const threshold = parseInt(state.filters.daysInactive);
+            if (daysComm <= threshold) return false;
+        }
+        
+        return true;
+    });
+    
+    // Re-render the cases table
+    renderFilteredCasesTable();
+}
+
+/**
+ * Quick filter shortcut
+ */
+function quickFilter(sentiment) {
+    state.filters.sentiment = sentiment;
+    
+    // Update the dropdown to match
+    const sentimentSelect = document.getElementById('filter-sentiment');
+    if (sentimentSelect) {
+        sentimentSelect.value = sentiment;
+    }
+    
+    applyFilters();
+    
+    // Update quick filter buttons
+    document.querySelectorAll('.quick-filter-pill').forEach(pill => {
+        pill.classList.remove('active');
+    });
+    event.target.closest('.quick-filter-pill')?.classList.add('active');
+}
+
+/**
+ * Clear all filters
+ */
+function clearFilters() {
+    state.filters = {
+        search: '',
+        severity: 'all',
+        sentiment: 'all',
+        daysInactive: 'all',
+        status: 'all'
+    };
+    
+    // Reset form elements
+    const searchInput = document.getElementById('filter-search');
+    const severitySelect = document.getElementById('filter-severity');
+    const sentimentSelect = document.getElementById('filter-sentiment');
+    const daysSelect = document.getElementById('filter-days');
+    
+    if (searchInput) searchInput.value = '';
+    if (severitySelect) severitySelect.value = 'all';
+    if (sentimentSelect) sentimentSelect.value = 'all';
+    if (daysSelect) daysSelect.value = 'all';
+    
+    applyFilters();
+    
+    // Reset quick filter buttons
+    document.querySelectorAll('.quick-filter-pill').forEach((pill, index) => {
+        pill.classList.toggle('active', index === 0);
+    });
+}
+
+/**
+ * Render filtered cases table
+ */
+function renderFilteredCasesTable() {
+    const container = document.getElementById('filtered-cases-table');
+    if (!container) return;
+    
+    const cases = state.filteredCases;
+    
+    if (cases.length === 0) {
+        container.innerHTML = `
+            <div class="card text-center" style="padding: var(--spacing-2xl);">
+                <div style="font-size: 3rem; margin-bottom: var(--spacing-md);">🔍</div>
+                <h3>No cases match your filters</h3>
+                <p class="text-muted">Try adjusting your search criteria or <a href="#" onclick="clearFilters(); return false;">clear all filters</a></p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Case ID</th>
+                        <th>Title</th>
+                        <th>Severity</th>
+                        <th>Customer</th>
+                        <th>CSAT Risk</th>
+                        <th>Sentiment</th>
+                        <th>Last Comm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cases.map(c => renderEnhancedCaseRow(c)).join('')}
+                </tbody>
+            </table>
+        </div>
+        <div class="text-muted text-small mt-md" style="text-align: center;">
+            Showing ${cases.length} of ${state.cases.filter(c => c.status === 'active').length} active cases
+        </div>
+    `;
+}
+
+/**
+ * Render enhanced case row with more details
+ */
+function renderEnhancedCaseRow(caseData) {
+    const sentiment = caseData.sentiment_score || 0.5;
+    const csatRisk = caseData.csat_risk || 'healthy';
+    const daysComm = Math.round(caseData.days_since_last_outbound || 0);
+    
+    let riskBadge = 'badge-success';
+    let riskIcon = '✅';
+    let riskLabel = 'Healthy';
+    if (csatRisk === 'critical' || sentiment < 0.35) {
+        riskBadge = 'badge-danger';
+        riskIcon = '🚨';
+        riskLabel = 'Critical';
+    } else if (csatRisk === 'at_risk' || sentiment < 0.55) {
+        riskBadge = 'badge-warning';
+        riskIcon = '⚠️';
+        riskLabel = 'At Risk';
+    }
+    
+    const sentimentClass = getSentimentClass(sentiment);
+    const sevLetter = formatSeverity(caseData.severity);
+    const sevClass = getSeverityBadgeClass(caseData.severity);
+    const pulseClass = getLivePulseClass(caseData);
+    
+    const daysCommClass = daysComm > 5 ? 'danger' : daysComm > 3 ? 'warning' : '';
+    
+    return `
+        <tr class="clickable ${pulseClass}" onclick="viewCase('${caseData.id}')">
+            <td><strong>${caseData.id}</strong></td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${caseData.title || 'Untitled'}</td>
+            <td><span class="badge ${sevClass}">Sev ${sevLetter}</span></td>
+            <td>${caseData.customer?.company || 'Unknown'}</td>
+            <td>${riskIcon} <span class="badge ${riskBadge}">${riskLabel}</span></td>
+            <td>
+                <div class="sentiment-indicator">
+                    <span class="sentiment-dot sentiment-${sentimentClass}"></span>
+                    ${Math.round(sentiment * 100)}%
+                </div>
+            </td>
+            <td class="${daysCommClass}">${daysComm}d</td>
+        </tr>
+    `;
+}
+
+// =============================================================================
+// Export System
+// =============================================================================
+
+/**
+ * Open export modal
+ */
+function openExportModal() {
+    const modal = document.getElementById('export-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+/**
+ * Close export modal
+ */
+function closeExportModal() {
+    const modal = document.getElementById('export-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+}
+
+/**
+ * Export to CSV
+ */
+function exportToCSV() {
+    const dateRange = document.getElementById('export-date-range')?.value || '30';
+    const cases = getCasesForExport(dateRange);
+    
+    if (cases.length === 0) {
+        showToast('No cases to export for the selected date range.', 'error');
+        return;
+    }
+    
+    // Build CSV
+    const headers = ['Case ID', 'Title', 'Status', 'Severity', 'Customer', 'Sentiment Score', 'CSAT Risk', 'Days Since Comm', 'Days Open', 'Owner', 'Created Date'];
+    const rows = cases.map(c => [
+        c.id,
+        `"${(c.title || '').replace(/"/g, '""')}"`,
+        c.status,
+        formatSeverity(c.severity),
+        `"${(c.customer?.company || 'Unknown').replace(/"/g, '""')}"`,
+        Math.round((c.sentiment_score || 0.5) * 100) + '%',
+        c.csat_risk || 'N/A',
+        c.days_since_last_outbound || 0,
+        c.days_open || c.days_since_creation || 0,
+        `"${(c.owner?.name || 'Unassigned').replace(/"/g, '""')}"`,
+        c.created_on ? new Date(c.created_on).toLocaleDateString() : 'N/A'
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    
+    downloadFile(csvContent, `csat-guardian-export-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    
+    closeExportModal();
+    showToast(`Successfully exported ${cases.length} cases to CSV!`, 'success');
+    celebrateSuccess();
+}
+
+/**
+ * Export to PDF (generates HTML for print)
+ */
+function exportToPDF() {
+    const dateRange = document.getElementById('export-date-range')?.value || '30';
+    const cases = getCasesForExport(dateRange);
+    
+    if (cases.length === 0) {
+        showToast('No cases to export for the selected date range.', 'error');
+        return;
+    }
+    
+    // Calculate summary stats
+    const activeCases = cases.filter(c => c.status === 'active');
+    const criticalCount = activeCases.filter(c => (c.sentiment_score || 0.5) < 0.35).length;
+    const atRiskCount = activeCases.filter(c => {
+        const s = c.sentiment_score || 0.5;
+        return s >= 0.35 && s < 0.55;
+    }).length;
+    const avgSentiment = cases.length > 0 
+        ? Math.round(cases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / cases.length * 100) 
+        : 0;
+    
+    // Generate printable HTML
+    const printContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSAT Guardian Report</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 40px; color: #333; }
+        h1 { color: #0078d4; border-bottom: 3px solid #0078d4; padding-bottom: 10px; }
+        h2 { color: #0078d4; margin-top: 30px; }
+        .summary { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
+        .stat { background: #f5f5f5; padding: 20px; border-radius: 8px; text-align: center; min-width: 120px; }
+        .stat-value { font-size: 2rem; font-weight: bold; color: #0078d4; }
+        .stat-label { font-size: 0.8rem; color: #666; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #0078d4; color: white; padding: 12px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #ddd; }
+        tr:hover { background: #f9f9f9; }
+        .critical { color: #d13438; font-weight: bold; }
+        .at-risk { color: #ffb900; font-weight: bold; }
+        .healthy { color: #107c10; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 0.8rem; }
+        @media print { body { margin: 20px; } }
+    </style>
+</head>
+<body>
+    <h1>🛡️ CSAT Guardian Report</h1>
+    <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+    <p>Date Range: Last ${dateRange === 'all' ? 'All Time' : dateRange + ' Days'}</p>
+    
+    <h2>Executive Summary</h2>
+    <div class="summary">
+        <div class="stat">
+            <div class="stat-value">${cases.length}</div>
+            <div class="stat-label">Total Cases</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">${activeCases.length}</div>
+            <div class="stat-label">Active Cases</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" style="color: #d13438;">${criticalCount}</div>
+            <div class="stat-label">Critical Risk</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" style="color: #ffb900;">${atRiskCount}</div>
+            <div class="stat-label">At Risk</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">${avgSentiment}%</div>
+            <div class="stat-label">Avg Sentiment</div>
+        </div>
+    </div>
+    
+    <h2>Case Details</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Case ID</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Sev</th>
+                <th>Customer</th>
+                <th>Sentiment</th>
+                <th>Risk</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${cases.map(c => {
+                const sentiment = c.sentiment_score || 0.5;
+                const sentimentClass = sentiment < 0.35 ? 'critical' : sentiment < 0.55 ? 'at-risk' : 'healthy';
+                return `
+                    <tr>
+                        <td>${c.id}</td>
+                        <td>${c.title || 'Untitled'}</td>
+                        <td>${c.status}</td>
+                        <td>${formatSeverity(c.severity)}</td>
+                        <td>${c.customer?.company || 'Unknown'}</td>
+                        <td class="${sentimentClass}">${Math.round(sentiment * 100)}%</td>
+                        <td>${c.csat_risk || 'N/A'}</td>
+                    </tr>
+                `;
+            }).join('')}
+        </tbody>
+    </table>
+    
+    <div class="footer">
+        <p>CSAT Guardian &copy; 2026 EngOps / GSX • AI-Powered Customer Satisfaction Monitoring</p>
+        <p>Powered by Azure OpenAI, Semantic Kernel, FastAPI</p>
+    </div>
+</body>
+</html>
+    `;
+    
+    // Open in new window for printing
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
+    
+    closeExportModal();
+    showToast('PDF report generated! Print dialog opened.', 'success');
+}
+
+/**
+ * Export to JSON
+ */
+function exportToJSON() {
+    const dateRange = document.getElementById('export-date-range')?.value || '30';
+    const cases = getCasesForExport(dateRange);
+    
+    if (cases.length === 0) {
+        showToast('No cases to export for the selected date range.', 'error');
+        return;
+    }
+    
+    const exportData = {
+        exportDate: new Date().toISOString(),
+        dateRange: dateRange,
+        totalCases: cases.length,
+        cases: cases.map(c => ({
+            id: c.id,
+            title: c.title,
+            status: c.status,
+            severity: formatSeverity(c.severity),
+            customer: c.customer?.company,
+            sentimentScore: c.sentiment_score,
+            csatRisk: c.csat_risk,
+            daysSinceComm: c.days_since_last_outbound,
+            daysOpen: c.days_open || c.days_since_creation,
+            owner: c.owner?.name,
+            createdOn: c.created_on
+        }))
+    };
+    
+    const jsonContent = JSON.stringify(exportData, null, 2);
+    downloadFile(jsonContent, `csat-guardian-export-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+    
+    closeExportModal();
+    showToast(`Successfully exported ${cases.length} cases to JSON!`, 'success');
+    celebrateSuccess();
+}
+
+/**
+ * Get cases for export based on date range
+ */
+function getCasesForExport(dateRange) {
+    if (dateRange === 'all') {
+        return state.cases;
+    }
+    
+    const days = parseInt(dateRange);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return state.cases.filter(c => {
+        if (!c.created_on) return true;
+        return new Date(c.created_on) >= cutoffDate;
+    });
+}
+
+/**
+ * Download file helper
+ */
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // =============================================================================
@@ -782,27 +1525,60 @@ function renderLandingPage() {
     const main = document.getElementById('main-content');
     main.innerHTML = `
         <div class="hero">
-            <h1>🛡️ CSAT Guardian</h1>
-            <p class="subtitle">AI-Powered Customer Satisfaction Monitoring & Proactive Coaching for Support Engineers</p>
+            <div class="hero-badge shimmer-overlay">
+                <span>✨ AI-Powered</span>
+            </div>
+            <h1 class="hero-title">
+                <span class="hero-icon float-animation">🛡️</span>
+                <span class="gradient-text-animated">CSAT Guardian</span>
+            </h1>
+            <p class="subtitle hero-subtitle">AI-Powered Customer Satisfaction Monitoring & Proactive Coaching for Support Engineers</p>
             
-            <div class="hero-buttons">
-                <div class="card mode-card card-clickable" onclick="navigateTo('engineer')">
+            <div class="hero-buttons" data-stagger>
+                <div class="card mode-card card-clickable hover-lift neon-border" onclick="navigateTo('engineer')">
                     <div class="mode-icon">👨‍💻</div>
                     <div class="mode-title">Engineer Mode</div>
                     <p class="mode-description">View your cases, get AI analysis and coaching recommendations</p>
+                    <div class="mode-arrow">→</div>
                 </div>
                 
-                <div class="card mode-card card-clickable" onclick="navigateTo('manager')">
+                <div class="card mode-card card-clickable hover-lift neon-border" onclick="navigateTo('manager')">
                     <div class="mode-icon">👥</div>
                     <div class="mode-title">Manager Mode</div>
                     <p class="mode-description">Team overview, CSAT health metrics, and intervention alerts</p>
+                    <div class="mode-arrow">→</div>
+                </div>
+            </div>
+            
+            <div class="hero-features">
+                <div class="hero-feature">
+                    <span class="feature-icon">🔍</span>
+                    <span>Smart Search & Filters</span>
+                </div>
+                <div class="hero-feature">
+                    <span class="feature-icon">📊</span>
+                    <span>Export Reports</span>
+                </div>
+                <div class="hero-feature">
+                    <span class="feature-icon">📱</span>
+                    <span>Mobile Friendly</span>
+                </div>
+                <div class="hero-feature">
+                    <span class="feature-icon">🤖</span>
+                    <span>AI Coaching</span>
                 </div>
             </div>
         </div>
         
-        <div class="text-center mt-lg" style="animation: fadeInUp 0.6s ease-out 0.5s both;">
-            <h3 style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Powered by Azure AI</h3>
-            <p class="text-muted">Azure OpenAI • Azure SQL • Semantic Kernel • FastAPI</p>
+        <div class="tech-stack-section">
+            <h3 class="tech-stack-title">Powered by Azure AI</h3>
+            <div class="tech-stack-badges">
+                <span class="tech-stack-badge pulse-ring">Azure OpenAI GPT-4o</span>
+                <span class="tech-stack-badge">Semantic Kernel</span>
+                <span class="tech-stack-badge">Azure SQL</span>
+                <span class="tech-stack-badge">FastAPI</span>
+            </div>
+            <p class="tech-stack-subtitle">Built with ❤️ using Claude Opus 4.5</p>
         </div>
     `;
     updateBreadcrumb([]);
@@ -897,62 +1673,66 @@ async function renderEngineerDashboard() {
     
     // Render metrics - CSAT focused on ACTIVE cases
     document.getElementById('metrics-container').innerHTML = `
-        <div class="metric-card">
+        <div class="metric-card hover-lift">
             <div class="metric-value">${activeCases.length}</div>
             <div class="metric-label">Active Cases</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card hover-lift">
             <div class="metric-value danger">${critical}</div>
             <div class="metric-label">Critical CSAT</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card hover-lift">
             <div class="metric-value warning">${atRisk}</div>
             <div class="metric-label">At Risk</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card hover-lift">
             <div class="metric-value success">${healthy}</div>
             <div class="metric-label">Healthy</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card hover-lift">
             <div class="metric-value">${resolvedCases.length}</div>
             <div class="metric-label">Resolved</div>
         </div>
     `;
     
-    // Render cases in separate COLLAPSIBLE sections
+    // Initialize filtered cases
+    state.filteredCases = [...activeCases];
+    
+    // Render cases with filter bar
     document.getElementById('cases-container').innerHTML = `
-        <!-- Active Cases Section (Collapsible) -->
-        <div class="collapsible-section" id="active-cases-section">
-            <h3 class="collapsible-header mt-lg mb-md" onclick="toggleSection('active-cases')">
-                <span class="collapse-icon" id="active-cases-icon">▼</span>
-                📋 Active Cases (${activeCases.length})
-            </h3>
-            <div class="collapsible-content" id="active-cases-content">
-                ${activeCases.length > 0 ? `
-                    <div class="table-container mb-lg">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Case ID</th>
-                                    <th>Title</th>
-                                    <th>Severity</th>
-                                    <th>Customer</th>
-                                    <th>CSAT Risk</th>
-                                    <th>Sentiment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${activeCases.map(c => renderCaseRow(c, false)).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                ` : '<p class="text-muted mb-lg">No active cases - great job!</p>'}
-            </div>
+        <!-- Filter Bar -->
+        ${renderFilterBar(allCases)}
+        
+        <!-- Filtered Active Cases Table -->
+        <div id="filtered-cases-table">
+            ${activeCases.length > 0 ? `
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Title</th>
+                                <th>Severity</th>
+                                <th>Customer</th>
+                                <th>CSAT Risk</th>
+                                <th>Sentiment</th>
+                                <th>Last Comm</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${activeCases.map(c => renderEnhancedCaseRow(c)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-muted text-small mt-md" style="text-align: center;">
+                    Showing ${activeCases.length} of ${activeCases.length} active cases
+                </div>
+            ` : '<p class="text-muted mb-lg">No active cases - great job!</p>'}
         </div>
         
         <!-- Resolved Cases Section (Collapsible, collapsed by default) -->
-        <div class="collapsible-section" id="resolved-cases-section">
-            <h3 class="collapsible-header mt-lg mb-md" onclick="toggleSection('resolved-cases')">
+        <div class="collapsible-section mt-xl" id="resolved-cases-section">
+            <h3 class="collapsible-header mb-md" onclick="toggleSection('resolved-cases')">
                 <span class="collapse-icon" id="resolved-cases-icon">▶</span>
                 ✅ Resolved Cases (${resolvedCases.length})
             </h3>
@@ -2697,24 +3477,36 @@ function updateBreadcrumb(items) {
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('CSAT Guardian initializing...');
+    console.log('🛡️ CSAT Guardian ULTRA PREMIUM initializing...');
     
     try {
         // Initialize theme first (before any rendering)
         initializeTheme();
         
+        // Initialize particle system for WOW effect
+        initParticles();
+        console.log('✨ Particle system initialized');
+        
+        // Initialize mobile menu handlers
+        initMobileMenuHandlers();
+        
         // Render landing page immediately (don't wait for health check)
         renderLandingPage();
-        console.log('Landing page rendered');
+        console.log('🏠 Landing page rendered');
         
         // Initialize feedback button listener
         initFeedbackSystem();
+        
+        // Initialize export modal handlers
+        initExportModalHandlers();
         
         // Check backend health in background
         checkHealth().catch(e => console.warn('Health check failed:', e));
         
         // Periodic health check
         setInterval(() => checkHealth().catch(() => {}), 30000);
+        
+        console.log('🚀 CSAT Guardian ready!');
     } catch (e) {
         console.error('Initialization error:', e);
         document.getElementById('main-content').innerHTML = `
@@ -2725,6 +3517,62 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
     }
 });
+
+/**
+ * Initialize mobile menu event handlers
+ */
+function initMobileMenuHandlers() {
+    // Close menu when clicking overlay
+    const overlay = document.getElementById('mobile-nav-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', closeMobileMenu);
+    }
+    
+    // Handle resize - close menu if screen becomes large
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768 && state.mobileMenuOpen) {
+            closeMobileMenu();
+        }
+    });
+    
+    // Handle swipe to close (touch devices)
+    let touchStartX = 0;
+    const menu = document.getElementById('mobile-menu');
+    if (menu) {
+        menu.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        }, { passive: true });
+        
+        menu.addEventListener('touchmove', (e) => {
+            const touchX = e.touches[0].clientX;
+            const diff = touchStartX - touchX;
+            if (diff > 50) {
+                closeMobileMenu();
+            }
+        }, { passive: true });
+    }
+}
+
+/**
+ * Initialize export modal event handlers
+ */
+function initExportModalHandlers() {
+    const modal = document.getElementById('export-modal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeExportModal();
+            }
+        });
+    }
+    
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeExportModal();
+        }
+    });
+}
 
 // =============================================================================
 // Feedback System
