@@ -3050,8 +3050,14 @@ function renderCaseCoachingContent(container, caseData, analysis) {
                     ${timelineInsights.slice(0, 5).map(t => `
                         <div class="timeline-insight">
                             <span class="timeline-date">${formatDateShort(t.date)}</span>
-                            <span class="timeline-type badge badge-${t.sentiment === 'positive' ? 'success' : t.sentiment === 'negative' ? 'danger' : 'secondary'}">${t.type}</span>
-                            <p class="timeline-insight-text">${t.insight}</p>
+                            <span class="timeline-type badge badge-${t.is_customer ? 'info' : 'secondary'}">${t.type || 'Note'}</span>
+                            <span class="timeline-sentiment">${t.sentiment_indicator || ''}</span>
+                            <p class="timeline-insight-text">${t.content_preview || ''}</p>
+                            ${t.detected_phrases && t.detected_phrases.length > 0 ? `
+                                <div class="detected-phrases">
+                                    ${t.detected_phrases.map(p => `<span class="phrase-chip">"${p}"</span>`).join('')}
+                                </div>
+                            ` : ''}
                         </div>
                     `).join('')}
                 </div>

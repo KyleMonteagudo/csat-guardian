@@ -2465,24 +2465,50 @@ textarea.form-input {
     gap: var(--spacing-sm);
 }
 
-.timeline-insight {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    background: var(--bg-secondary);
-    border-radius: var(--radius-sm);
-}
-
 .timeline-date {
     font-size: 0.75rem;
     color: var(--text-tertiary);
     min-width: 60px;
 }
 
+.timeline-sentiment {
+    font-size: 0.8rem;
+    margin-left: auto;
+}
+
 .timeline-insight-text {
-    margin: 0;
-    font-size: 0.9rem;
+    margin: var(--spacing-xs) 0 0 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    width: 100%;
+}
+
+.timeline-insight {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
+
+.detected-phrases {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-xs);
+}
+
+.phrase-chip {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--warning);
+    border-radius: var(--radius-sm);
+    font-style: italic;
 }
 
 .starters-list {
