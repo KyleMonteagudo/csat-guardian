@@ -581,10 +581,16 @@ async def _get_manager_summary_slow(days: int = None):
 
 
 @app.get("/api/engineer/{engineer_id}/summary")
-async def get_engineer_summary(engineer_id: str):
+async def get_engineer_summary(
+    engineer_id: str,
+    days: int = Query(None, description="Filter to cases created within last N days")
+):
     """
     Fast engineer detail endpoint using SQL aggregation.
     Returns case list with staleness metrics without loading all timeline entries.
+    
+    Query params:
+    - days: Filter to cases created within last N days (7, 30, 90) - matches manager view filter
     """
     # Try to use direct SQL for performance
     db_manager = None
@@ -611,8 +617,13 @@ async def get_engineer_summary(engineer_id: str):
         if not eng_row:
             raise HTTPException(status_code=404, detail="Engineer not found")
         
+        # Build date filter clause for consistency with manager view
+        date_filter = ""
+        if days:
+            date_filter = f"AND c.created_on >= DATEADD(day, -{days}, GETUTCDATE())"
+        
         # Get cases with computed staleness (single query with subqueries)
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT 
                 c.id,
                 c.title,
@@ -632,7 +643,7 @@ async def get_engineer_summary(engineer_id: str):
                 (SELECT COUNT(*) FROM timeline_entries te WHERE te.case_id = c.id) as timeline_count
             FROM cases c
             LEFT JOIN customers cu ON cu.id = c.customer_id
-            WHERE c.owner_id = ?
+            WHERE c.owner_id = ? {date_filter}
             ORDER BY 
                 CASE WHEN c.status = 'active' THEN 0 ELSE 1 END,
                 c.created_on DESC
@@ -640,8 +651,8 @@ async def get_engineer_summary(engineer_id: str):
         
         case_rows = cursor.fetchall()
         
-        # Get sentiment scores for all cases (using same logic as _calculate_csat_risk)
-        cursor.execute("""
+        # Get sentiment scores for cases within date filter (using same logic as _calculate_csat_risk)
+        cursor.execute(f"""
             WITH customer_messages AS (
                 SELECT 
                     c.id as case_id,
@@ -670,6 +681,7 @@ async def get_engineer_summary(engineer_id: str):
                 JOIN timeline_entries te ON te.case_id = c.id 
                 WHERE c.owner_id = ?
                   AND te.is_customer_communication = 1
+                  {date_filter}
             )
             SELECT 
                 case_id,

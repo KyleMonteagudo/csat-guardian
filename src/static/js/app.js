@@ -1445,9 +1445,14 @@ async function getManagerSummary() {
 
 /**
  * Fast engineer summary - uses SQL aggregation for performance
+ * Passes the selected date range to maintain consistency with manager view
  */
 async function getEngineerSummary(engineerId) {
-    return await apiGet(`/api/engineer/${engineerId}/summary`);
+    let url = `/api/engineer/${engineerId}/summary`;
+    if (state.selectedDateRange) {
+        url += `?days=${state.selectedDateRange}`;
+    }
+    return await apiGet(url);
 }
 
 async function analyzeCase(caseId) {
@@ -2601,13 +2606,13 @@ function renderTeamDashboardContent() {
             statusClass = 'badge-excellent';
         } else if (riskLevel === 'at_risk') {
             statusBadge = '⚠️ Needs Attention';
-            statusClass = 'badge-good';
+            statusClass = 'badge-warning';
         } else if (riskLevel === 'critical') {
             statusBadge = '🚨 Coaching Opportunity';
-            statusClass = 'badge-opportunity';
+            statusClass = 'badge-danger';
         } else {
             statusBadge = '✓ On Track';
-            statusClass = 'badge-good';
+            statusClass = 'badge-excellent';
         }
         
         // Show communication staleness indicator (only if they have active cases)
