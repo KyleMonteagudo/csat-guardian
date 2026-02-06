@@ -2662,8 +2662,12 @@ textarea.form-input {
 
 .two-column {
     display: grid;
-    grid-template-columns: 350px 1fr;
+    grid-template-columns: 1fr 320px;
     gap: var(--spacing-xl);
+}
+
+.main-column {
+    min-width: 0; /* Prevent overflow */
 }
 
 .sidebar {
