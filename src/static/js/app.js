@@ -517,8 +517,7 @@ function renderFilterBar(cases) {
                     <option value="all" ${state.filters.severity === 'all' ? 'selected' : ''}>All Severities</option>
                     <option value="A" ${state.filters.severity === 'A' ? 'selected' : ''}>Sev A (Critical)</option>
                     <option value="B" ${state.filters.severity === 'B' ? 'selected' : ''}>Sev B (High)</option>
-                    <option value="C" ${state.filters.severity === 'C' ? 'selected' : ''}>Sev C (Medium)</option>
-                    <option value="D" ${state.filters.severity === 'D' ? 'selected' : ''}>Sev D (Low)</option>
+                    <option value="C" ${state.filters.severity === 'C' ? 'selected' : ''}>Sev C (Standard)</option>
                 </select>
             </div>
             
