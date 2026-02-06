@@ -3467,6 +3467,26 @@ textarea.form-input {
     font-weight: 600;
 }
 
+.achievement-badge.success {
+    background: rgba(16, 124, 16, 0.2);
+    color: #2ecc71;
+}
+
+.achievement-badge.warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+}
+
+.achievement-badge.danger {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
+.achievement-badge.neutral {
+    background: rgba(127, 140, 141, 0.2);
+    color: #95a5a6;
+}
+
 /* Profile Score Ring */
 .profile-score {
     display: flex;

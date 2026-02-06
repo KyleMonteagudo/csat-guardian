@@ -3289,14 +3289,19 @@ async function viewEngineerDetail(engineerId) {
     
     // Determine engineer status (matching manager view logic)
     let engineerStatus = '✓ On Track';
+    let statusClass = 'success';
     if (activeCases.length === 0) {
         engineerStatus = '📋 No Active Cases';
+        statusClass = 'neutral';
     } else if (avgSentiment >= 0.55) {
         engineerStatus = '⭐ Top Performer';
+        statusClass = 'success';
     } else if (avgSentiment >= 0.35) {
         engineerStatus = '⚠️ Needs Attention';
+        statusClass = 'warning';
     } else {
         engineerStatus = '🚨 Coaching Opportunity';
+        statusClass = 'danger';
     }
     
     // Generate personalized coaching based on actual case data
@@ -3324,7 +3329,7 @@ async function viewEngineerDetail(engineerId) {
                         <span class="period-badge">${rangeLabel}</span>
                         <span class="case-count-badge">${activeCases.length} active</span>
                         <span class="case-count-badge resolved">${resolvedCases.length} resolved</span>
-                        <span class="achievement-badge">${engineerStatus}</span>
+                        <span class="achievement-badge ${statusClass}">${engineerStatus}</span>
                     </div>
                 </div>
                 <div class="profile-score">
