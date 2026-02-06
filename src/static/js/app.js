@@ -3083,9 +3083,14 @@ function renderCaseCoachingContent(container, caseData, analysis) {
         
         <div class="coaching-actions">
             <button class="btn btn-secondary" onclick="closeCaseCoachingModal()">Close</button>
-            <button class="btn btn-primary" onclick="window.print()">Print Coaching Guide</button>
+            <button class="btn btn-primary" onclick="copyCoachingEmail('${caseData.id}', '${caseData.owner?.name || 'Team Member'}')">
+                📋 Copy Email to Clipboard
+            </button>
         </div>
     `;
+    
+    // Store data for email generation
+    window._currentCoachingData = { caseData, analysis };
 }
 
 /**
@@ -3151,6 +3156,75 @@ function closeCaseCoachingModal() {
     if (modal) {
         modal.classList.add('hidden');
         document.body.style.overflow = '';
+    }
+    window._currentCoachingData = null;
+}
+
+/**
+ * Generate and copy coaching email to clipboard
+ */
+async function copyCoachingEmail(caseId, engineerName) {
+    const data = window._currentCoachingData;
+    if (!data) {
+        showToast('Unable to generate email. Please try again.', 'error');
+        return;
+    }
+    
+    const { caseData, analysis } = data;
+    const sentiment = analysis.sentiment || {};
+    const sentimentPct = Math.round((sentiment.score || 0.5) * 100);
+    const recommendations = analysis.recommendations || [];
+    const concerns = sentiment.concerns || [];
+    const keyPhrases = sentiment.key_phrases || [];
+    const firstName = engineerName.split(' ')[0];
+    
+    // Generate email content
+    let email = `Hi ${firstName},
+
+I wanted to touch base with you about Case ${caseId}. I've been reviewing the customer communications and wanted to share some observations that might be helpful.
+
+📊 Current Sentiment: ${sentimentPct}% (${sentiment.label || 'neutral'})
+`;
+
+    if (concerns.length > 0) {
+        email += `
+🚨 Customer Concerns Noted:
+${concerns.map(c => `• "${c}"`).join('\n')}
+`;
+    }
+
+    if (keyPhrases.length > 0) {
+        email += `
+💬 Key Phrases from Customer:
+${keyPhrases.slice(0, 5).map(p => `• "${p}"`).join('\n')}
+`;
+    }
+
+    if (recommendations.length > 0) {
+        email += `
+🎯 Suggestions:
+${recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+`;
+    }
+
+    email += `
+Let me know if you'd like to discuss this case in our next 1:1, or if there's anything I can do to help you move it forward.
+
+Thanks,
+[Your Name]`;
+
+    try {
+        await navigator.clipboard.writeText(email);
+        showToast('✅ Coaching email copied to clipboard!', 'success');
+    } catch (err) {
+        // Fallback for browsers that don't support clipboard API
+        const textarea = document.createElement('textarea');
+        textarea.value = email;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('✅ Coaching email copied to clipboard!', 'success');
     }
 }
 
