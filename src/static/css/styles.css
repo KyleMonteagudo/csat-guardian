@@ -2154,6 +2154,381 @@ textarea.form-input {
 }
 
 /* =============================================================================
+   Category Detail View
+   ============================================================================= */
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+}
+
+.category-icon {
+    font-size: 3rem;
+}
+
+.category-stats-bar {
+    display: flex;
+    gap: var(--spacing-xl);
+    padding: var(--spacing-lg);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.category-stats-bar .stat-item {
+    text-align: center;
+}
+
+.category-stats-bar .stat-number {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.category-stats-bar .stat-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.category-cases-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.category-case-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.category-case-card:hover {
+    border-color: var(--primary);
+}
+
+.case-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--spacing-sm);
+}
+
+.case-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.case-id {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.case-title {
+    font-size: 1rem;
+    margin: var(--spacing-sm) 0;
+    line-height: 1.4;
+}
+
+.case-meta {
+    display: flex;
+    gap: var(--spacing-md);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.case-indicators {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+}
+
+.indicator-tag {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--warning);
+    border-radius: var(--radius-sm);
+}
+
+.case-card-footer {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--border-color);
+}
+
+.view-analysis {
+    font-size: 0.85rem;
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.sentiment-indicator {
+    padding: 4px 12px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+}
+
+.sentiment-indicator.positive {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--success);
+}
+
+.sentiment-indicator.neutral {
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--warning);
+}
+
+.sentiment-indicator.negative {
+    background: rgba(244, 67, 54, 0.15);
+    color: var(--danger);
+}
+
+/* Legend clickable styles */
+.legend-clickable {
+    cursor: pointer;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+
+.legend-clickable:hover {
+    background: var(--bg-tertiary);
+}
+
+.legend-arrow {
+    opacity: 0;
+    margin-left: auto;
+    transition: opacity 0.2s ease;
+    color: var(--primary);
+}
+
+.legend-clickable:hover .legend-arrow {
+    opacity: 1;
+}
+
+/* =============================================================================
+   Coaching Modal
+   ============================================================================= */
+
+.coaching-modal {
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.coaching-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: var(--spacing-lg);
+}
+
+.coaching-case-info h2 {
+    margin: 0 0 var(--spacing-xs) 0;
+    color: var(--primary);
+}
+
+.case-title-large {
+    font-size: 1.1rem;
+    margin: var(--spacing-sm) 0;
+    color: var(--text-primary);
+}
+
+.coaching-meta {
+    display: flex;
+    gap: var(--spacing-md);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.coaching-sentiment-ring {
+    width: 100px;
+    height: 100px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.coaching-sentiment-ring svg {
+    width: 100%;
+    height: 100%;
+}
+
+.coaching-sentiment-ring.positive { color: var(--success); }
+.coaching-sentiment-ring.neutral { color: var(--warning); }
+.coaching-sentiment-ring.negative { color: var(--danger); }
+
+.sentiment-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.sentiment-center .sentiment-score {
+    display: block;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.sentiment-center .sentiment-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.coaching-section {
+    margin-bottom: var(--spacing-lg);
+}
+
+.coaching-section h3 {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+}
+
+.concerns-section {
+    background: rgba(244, 67, 54, 0.05);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--danger);
+}
+
+.concern-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.concern-text {
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.phrases-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.phrase-tag {
+    padding: 4px 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+.recommendations-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.recommendation-card {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.rec-number {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    font-weight: 600;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.rec-content p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.timeline-insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.timeline-insight {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
+
+.timeline-date {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    min-width: 60px;
+}
+
+.timeline-insight-text {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.starters-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.starter-card {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.05), rgba(0, 120, 212, 0.1));
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--primary);
+}
+
+.starter-icon {
+    font-size: 1.25rem;
+}
+
+.starter-text {
+    margin: 0;
+    font-style: italic;
+    line-height: 1.5;
+}
+
+.coaching-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: flex-end;
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border-color);
+}
+
+.error-state {
+    text-align: center;
+    padding: var(--spacing-xl);
+}
+
+.error-icon {
+    font-size: 3rem;
+}
+
+/* =============================================================================
    Status Indicator (Health Check)
    ============================================================================= */
 

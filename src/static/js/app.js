@@ -2532,20 +2532,23 @@ function renderTeamDashboardContent() {
                         ${createSentimentRing(teamAvgSentiment)}
                     </div>
                     <div class="chart-legend">
-                        <div class="legend-item">
+                        <div class="legend-item legend-clickable" onclick="viewCasesByCategory('excellent')" title="Click to view excellent cases">
                             <span class="legend-dot excellent"></span>
                             <span class="legend-label">Excellent (70%+)</span>
                             <span class="legend-value" data-animate-count="${excellentCount}">${excellentCount}</span>
+                            <span class="legend-arrow">→</span>
                         </div>
-                        <div class="legend-item">
+                        <div class="legend-item legend-clickable" onclick="viewCasesByCategory('good')" title="Click to view good cases">
                             <span class="legend-dot good"></span>
                             <span class="legend-label">Good (55-70%)</span>
                             <span class="legend-value" data-animate-count="${goodCount}">${goodCount}</span>
+                            <span class="legend-arrow">→</span>
                         </div>
-                        <div class="legend-item">
+                        <div class="legend-item legend-clickable" onclick="viewCasesByCategory('opportunity')" title="Click to view growth opportunity cases">
                             <span class="legend-dot opportunity"></span>
                             <span class="legend-label">Growth Opportunity</span>
                             <span class="legend-value" data-animate-count="${opportunityCount}">${opportunityCount}</span>
+                            <span class="legend-arrow">→</span>
                         </div>
                     </div>
                 </div>
@@ -2714,6 +2717,429 @@ function renderDonutChart(excellent, good, opportunity, total) {
     }
     
     return segments.join('');
+}
+
+// =============================================================================
+// Category Detail View (Excellent/Good/Growth Opportunity)
+// =============================================================================
+
+/**
+ * Navigate to category detail view
+ */
+function viewCasesByCategory(category) {
+    navigateTo('category', { category });
+}
+
+/**
+ * Render the category detail view showing all cases in a specific sentiment category
+ */
+async function renderCategoryDetailView(category) {
+    state.currentView = 'category-detail';
+    state.selectedCategory = category;
+    showLoading(true);
+    
+    const main = document.getElementById('main-content');
+    
+    // Category display info
+    const categoryInfo = {
+        excellent: { label: 'Excellent', description: 'Cases with 70%+ sentiment - customers are happy!', icon: '🌟', colorClass: 'excellent' },
+        good: { label: 'Good', description: 'Cases with 55-70% sentiment - on track but monitor closely', icon: '👍', colorClass: 'good' },
+        opportunity: { label: 'Growth Opportunity', description: 'Cases below 55% sentiment - coaching recommended', icon: '📈', colorClass: 'opportunity' }
+    };
+    
+    const info = categoryInfo[category] || categoryInfo.opportunity;
+    
+    // Show skeleton loading
+    main.innerHTML = `
+        <div class="content-header page-enter">
+            <button class="btn btn-ghost mb-sm" onclick="navigateTo('manager')">← Back to Team Performance</button>
+            <div class="category-header">
+                <span class="category-icon">${info.icon}</span>
+                <div>
+                    <h1>${info.label} Cases</h1>
+                    <p class="subtitle">${info.description}</p>
+                </div>
+            </div>
+        </div>
+        <div id="category-cases-container">
+            ${createTableSkeleton(6)}
+        </div>
+    `;
+    
+    updateBreadcrumb([
+        { text: 'Team Performance', action: "navigateTo('manager')" },
+        { text: `${info.label} Cases` }
+    ]);
+    
+    // Fetch all cases
+    const casesData = await getCases();
+    showLoading(false);
+    
+    if (!casesData) {
+        document.getElementById('category-cases-container').innerHTML = `
+            <div class="card">
+                <p class="text-muted text-center">Unable to load cases. Please check your connection.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const allCases = casesData.cases || casesData || [];
+    const activeCases = allCases.filter(c => c.status === 'active');
+    
+    // Filter cases by sentiment category
+    let filteredCases;
+    switch (category) {
+        case 'excellent':
+            filteredCases = activeCases.filter(c => (c.sentiment_score || 0.5) >= 0.7);
+            break;
+        case 'good':
+            filteredCases = activeCases.filter(c => {
+                const score = c.sentiment_score || 0.5;
+                return score >= 0.55 && score < 0.7;
+            });
+            break;
+        case 'opportunity':
+        default:
+            filteredCases = activeCases.filter(c => (c.sentiment_score || 0.5) < 0.55);
+            break;
+    }
+    
+    // Sort by sentiment (worst first for opportunity, best first for excellent)
+    if (category === 'opportunity') {
+        filteredCases.sort((a, b) => (a.sentiment_score || 0.5) - (b.sentiment_score || 0.5));
+    } else {
+        filteredCases.sort((a, b) => (b.sentiment_score || 0.5) - (a.sentiment_score || 0.5));
+    }
+    
+    // Render the cases
+    const container = document.getElementById('category-cases-container');
+    
+    if (filteredCases.length === 0) {
+        container.innerHTML = `
+            <div class="card text-center">
+                <span style="font-size: 3rem;">${info.icon}</span>
+                <h3 class="mt-md">No ${info.label} Cases</h3>
+                <p class="text-muted">There are currently no active cases in this category.</p>
+                <button class="btn btn-primary mt-md" onclick="navigateTo('manager')">Back to Team Performance</button>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="category-stats-bar">
+            <div class="stat-item">
+                <span class="stat-number">${filteredCases.length}</span>
+                <span class="stat-label">Cases</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">${new Set(filteredCases.map(c => c.owner?.id)).size}</span>
+                <span class="stat-label">Engineers</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">${Math.round((filteredCases.reduce((sum, c) => sum + (c.sentiment_score || 0.5), 0) / filteredCases.length) * 100)}%</span>
+                <span class="stat-label">Avg Sentiment</span>
+            </div>
+        </div>
+        
+        <div class="category-cases-list">
+            ${filteredCases.map(c => renderCategoryCaseCard(c, category)).join('')}
+        </div>
+    `;
+    
+    animatePageTransition(main);
+}
+
+/**
+ * Render a case card for the category view
+ */
+function renderCategoryCaseCard(caseData, category) {
+    const sentimentScore = caseData.sentiment_score || 0.5;
+    const sentimentPct = Math.round(sentimentScore * 100);
+    const sentimentClass = getSentimentClass(sentimentScore);
+    const daysSinceComm = caseData.days_since_last_outbound || 0;
+    const daysSinceNote = caseData.days_since_last_note || 0;
+    
+    // Risk indicators
+    const indicators = [];
+    if (daysSinceComm > 3) indicators.push(`⚠️ ${daysSinceComm}d no customer contact`);
+    if (daysSinceNote > 5) indicators.push(`📝 ${daysSinceNote}d since last note`);
+    if (sentimentScore < 0.35) indicators.push('🚨 Critical sentiment');
+    
+    return `
+        <div class="category-case-card card hover-lift" onclick="showCaseCoachingModal('${caseData.id}')">
+            <div class="case-card-header">
+                <div class="case-info">
+                    <span class="case-id">${caseData.id}</span>
+                    <span class="case-severity badge badge-${caseData.severity === 'sev_a' ? 'danger' : caseData.severity === 'sev_b' ? 'warning' : 'secondary'}">
+                        Sev ${formatSeverity(caseData.severity)}
+                    </span>
+                </div>
+                <div class="sentiment-indicator ${sentimentClass}">
+                    <span class="sentiment-value">${sentimentPct}%</span>
+                </div>
+            </div>
+            
+            <h4 class="case-title">${caseData.title || 'Untitled Case'}</h4>
+            
+            <div class="case-meta">
+                <span class="meta-item">👤 ${caseData.owner?.name || 'Unassigned'}</span>
+                <span class="meta-item">🏢 ${caseData.customer?.company || 'Unknown'}</span>
+            </div>
+            
+            ${indicators.length > 0 ? `
+                <div class="case-indicators">
+                    ${indicators.map(i => `<span class="indicator-tag">${i}</span>`).join('')}
+                </div>
+            ` : ''}
+            
+            <div class="case-card-footer">
+                <span class="view-analysis">View Analysis & Coaching →</span>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Show case coaching modal with AI analysis
+ */
+async function showCaseCoachingModal(caseId) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('case-coaching-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'case-coaching-modal';
+        modal.className = 'modal-overlay hidden';
+        modal.innerHTML = `
+            <div class="modal-content coaching-modal">
+                <button class="modal-close" onclick="closeCaseCoachingModal()">&times;</button>
+                <div id="coaching-modal-body">
+                    <div class="loading"><div class="spinner"></div><p>Analyzing case...</p></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeCaseCoachingModal();
+        });
+    }
+    
+    // Show modal with loading state
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    
+    const modalBody = document.getElementById('coaching-modal-body');
+    modalBody.innerHTML = `<div class="loading"><div class="spinner"></div><p>Analyzing case with AI...</p></div>`;
+    
+    try {
+        // Fetch case details and AI analysis in parallel
+        const [caseDetails, analysis] = await Promise.all([
+            apiGet(`/api/cases/${caseId}`),
+            analyzeCase(caseId)
+        ]);
+        
+        if (!caseDetails || !analysis) {
+            throw new Error('Failed to load case data');
+        }
+        
+        renderCaseCoachingContent(modalBody, caseDetails, analysis);
+        
+    } catch (error) {
+        console.error('Error loading case coaching:', error);
+        modalBody.innerHTML = `
+            <div class="error-state">
+                <span class="error-icon">❌</span>
+                <h3>Unable to Load Analysis</h3>
+                <p>${error.message || 'Please try again later.'}</p>
+                <button class="btn btn-secondary" onclick="closeCaseCoachingModal()">Close</button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Render the case coaching modal content
+ */
+function renderCaseCoachingContent(container, caseData, analysis) {
+    const sentiment = analysis.sentiment || {};
+    const sentimentScore = sentiment.score || 0.5;
+    const sentimentPct = Math.round(sentimentScore * 100);
+    const sentimentClass = getSentimentClass(sentimentScore);
+    const sentimentLabel = sentiment.label || 'neutral';
+    
+    // Extract key coaching points from the analysis
+    const recommendations = analysis.recommendations || [];
+    const concerns = sentiment.concerns || [];
+    const keyPhrases = sentiment.key_phrases || [];
+    const verboseAnalysis = analysis.verbose_analysis || '';
+    const timelineInsights = analysis.timeline_insights || [];
+    
+    container.innerHTML = `
+        <div class="coaching-header">
+            <div class="coaching-case-info">
+                <h2>Case ${caseData.id}</h2>
+                <p class="case-title-large">${caseData.title || 'Untitled Case'}</p>
+                <div class="coaching-meta">
+                    <span>👤 ${caseData.owner?.name || 'Unassigned'}</span>
+                    <span>🏢 ${caseData.customer?.company || 'Unknown'}</span>
+                    <span>📅 Open ${caseData.days_open || 0} days</span>
+                </div>
+            </div>
+            <div class="coaching-sentiment-ring ${sentimentClass}">
+                <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#3a3a3a" stroke-width="8"/>
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="8"
+                        stroke-dasharray="${sentimentPct * 2.83} 283" 
+                        stroke-linecap="round" transform="rotate(-90 50 50)"/>
+                </svg>
+                <div class="sentiment-center">
+                    <span class="sentiment-score">${sentimentPct}%</span>
+                    <span class="sentiment-label">${sentimentLabel}</span>
+                </div>
+            </div>
+        </div>
+        
+        ${concerns.length > 0 ? `
+            <div class="coaching-section concerns-section">
+                <h3>🚨 Customer Concerns Detected</h3>
+                <div class="concerns-list">
+                    ${concerns.map(c => `
+                        <div class="concern-item">
+                            <span class="concern-icon">⚠️</span>
+                            <span class="concern-text">"${c}"</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${keyPhrases.length > 0 ? `
+            <div class="coaching-section phrases-section">
+                <h3>💬 Key Phrases from Customer</h3>
+                <div class="phrases-list">
+                    ${keyPhrases.map(p => `<span class="phrase-tag">"${p}"</span>`).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div class="coaching-section recommendations-section">
+            <h3>🎯 Specific Coaching Recommendations</h3>
+            ${recommendations.length > 0 ? `
+                <div class="recommendations-list">
+                    ${recommendations.map((r, i) => `
+                        <div class="recommendation-card">
+                            <span class="rec-number">${i + 1}</span>
+                            <div class="rec-content">
+                                <p>${r}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : `
+                <p class="text-muted">No specific recommendations at this time. The case appears to be on track.</p>
+            `}
+        </div>
+        
+        ${timelineInsights.length > 0 ? `
+            <div class="coaching-section timeline-section">
+                <h3>📋 Communication Timeline Insights</h3>
+                <div class="timeline-insights-list">
+                    ${timelineInsights.slice(0, 5).map(t => `
+                        <div class="timeline-insight">
+                            <span class="timeline-date">${formatDateShort(t.date)}</span>
+                            <span class="timeline-type badge badge-${t.sentiment === 'positive' ? 'success' : t.sentiment === 'negative' ? 'danger' : 'secondary'}">${t.type}</span>
+                            <p class="timeline-insight-text">${t.insight}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div class="coaching-section conversation-starters">
+            <h3>💡 1:1 Conversation Starters</h3>
+            <div class="starters-list">
+                ${generateConversationStarters(caseData, analysis).map(s => `
+                    <div class="starter-card">
+                        <span class="starter-icon">${s.icon}</span>
+                        <p class="starter-text">"${s.text}"</p>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+        
+        <div class="coaching-actions">
+            <button class="btn btn-secondary" onclick="closeCaseCoachingModal()">Close</button>
+            <button class="btn btn-primary" onclick="window.print()">Print Coaching Guide</button>
+        </div>
+    `;
+}
+
+/**
+ * Generate conversation starters based on case data and analysis
+ */
+function generateConversationStarters(caseData, analysis) {
+    const starters = [];
+    const sentiment = analysis.sentiment || {};
+    const concerns = sentiment.concerns || [];
+    const engineerName = caseData.owner?.name?.split(' ')[0] || 'the engineer';
+    
+    // Based on sentiment
+    if (sentiment.score < 0.35) {
+        starters.push({
+            icon: '🤝',
+            text: `${engineerName}, I noticed case ${caseData.id} has a customer who seems frustrated. What's your take on what's happening here? How can I help you turn this around?`
+        });
+    } else if (sentiment.score < 0.55) {
+        starters.push({
+            icon: '💭',
+            text: `${engineerName}, let's talk about case ${caseData.id}. The customer seems a bit concerned. What do you think would help improve their experience?`
+        });
+    }
+    
+    // Based on specific concerns
+    if (concerns.some(c => c.toLowerCase().includes('wait') || c.toLowerCase().includes('response'))) {
+        starters.push({
+            icon: '⏰',
+            text: `I see the customer mentioned waiting for updates. What's blocking us from more frequent check-ins on this case?`
+        });
+    }
+    
+    if (concerns.some(c => c.toLowerCase().includes('explain') || c.toLowerCase().includes('again'))) {
+        starters.push({
+            icon: '📖',
+            text: `It looks like there might be some back-and-forth with the customer. Have you had a chance to review the full case history? Sometimes a quick sync call can help align everyone.`
+        });
+    }
+    
+    // Based on days since communication
+    if (caseData.days_since_last_outbound > 3) {
+        starters.push({
+            icon: '📞',
+            text: `I noticed it's been ${caseData.days_since_last_outbound} days since the last customer contact on ${caseData.id}. Even a brief status update can go a long way. What would help you reach out today?`
+        });
+    }
+    
+    // Always add a supportive closer
+    starters.push({
+        icon: '🌟',
+        text: `What resources or support do you need from me to help move this case forward?`
+    });
+    
+    return starters.slice(0, 4); // Max 4 starters
+}
+
+/**
+ * Close the case coaching modal
+ */
+function closeCaseCoachingModal() {
+    const modal = document.getElementById('case-coaching-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
 }
 
 /**
@@ -3448,7 +3874,7 @@ function escapeHtml(text) {
 // Navigation
 // =============================================================================
 
-function navigateTo(view) {
+function navigateTo(view, params = {}) {
     switch (view) {
         case 'landing':
             renderLandingPage();
@@ -3458,6 +3884,9 @@ function navigateTo(view) {
             break;
         case 'manager':
             renderManagerDashboard();
+            break;
+        case 'category':
+            renderCategoryDetailView(params.category);
             break;
         default:
             renderLandingPage();
