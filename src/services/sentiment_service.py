@@ -508,7 +508,14 @@ class SentimentAnalysisService:
             logger.info(f"[Case {case.id}] ⚠️ Sentiment is declining!")
         
         # -------------------------------------------------------------------------
-        # Step 7: Generate case summary
+        # Step 7: Generate case-specific recommendations using full context
+        # -------------------------------------------------------------------------
+        case_recommendations = await self._generate_recommendations(
+            case, overall_sentiment, sentiment_trend, compliance_status
+        )
+        
+        # -------------------------------------------------------------------------
+        # Step 8: Generate case summary
         # -------------------------------------------------------------------------
         summary = await self._generate_summary(case, overall_sentiment)
         
@@ -523,7 +530,7 @@ class SentimentAnalysisService:
             days_since_last_note=days_since_note,
             alerts_triggered=alerts_triggered,
             summary=summary,
-            recommendations=overall_sentiment.recommendations,
+            recommendations=case_recommendations,  # Use the new case-specific recommendations
         )
         
         duration_ms = (time.time() - start_time) * 1000
@@ -538,6 +545,172 @@ class SentimentAnalysisService:
         
         return analysis
     
+    async def _generate_recommendations(
+        self, 
+        case: Case, 
+        sentiment: SentimentResult,
+        sentiment_trend: str,
+        compliance_status: str
+    ) -> List[str]:
+        """
+        Generate case-specific coaching recommendations using Azure OpenAI.
+        
+        This uses the full case context (timeline, customer communications, rule violations)
+        to generate highly specific, actionable recommendations.
+        
+        Args:
+            case: The case to analyze
+            sentiment: The overall sentiment result
+            sentiment_trend: "improving", "declining", or "stable"
+            compliance_status: "healthy", "warning", or "breach"
+            
+        Returns:
+            List[str]: 3-5 specific recommendations referencing the case context
+        """
+        # If Azure OpenAI is not configured, return generic recommendations
+        if self.client is None:
+            return self._get_fallback_recommendations(sentiment, compliance_status)
+        
+        try:
+            # Build recent communications text with timestamps (last 7 entries for context)
+            recent_timeline = sorted(case.timeline, key=lambda e: e.created_on)[-7:] if case.timeline else []
+            timeline_text = "\n".join(
+                f"[{entry.created_on.strftime('%Y-%m-%d %H:%M')}] [{entry.entry_type.value}] "
+                f"{'CUSTOMER' if entry.is_customer_communication else entry.created_by}: {entry.content[:400]}"
+                for entry in recent_timeline
+            )
+            
+            # Calculate key metrics
+            days_open = case.days_since_creation
+            days_since_notes = case.days_since_last_note
+            
+            # Calculate days since last customer communication
+            customer_comms = [e for e in case.timeline if e.is_customer_communication]
+            if customer_comms:
+                last_customer_comm = max(customer_comms, key=lambda e: e.created_on)
+                days_since_customer_contact = (datetime.now() - last_customer_comm.created_on).days
+            else:
+                days_since_customer_contact = days_open
+            
+            # Identify rule violations
+            rule_violations = []
+            if days_since_customer_contact >= 2:
+                rule_violations.append(f"2-DAY RULE: {days_since_customer_contact} days since last customer communication")
+            if days_since_notes >= 7:
+                rule_violations.append(f"7-DAY RULE BREACH: {days_since_notes} days since last case notes update")
+            elif days_since_notes >= 5:
+                rule_violations.append(f"7-DAY RULE WARNING: {days_since_notes} days since last case notes update")
+            if sentiment_trend == "declining":
+                rule_violations.append("DECLINING SENTIMENT: Customer satisfaction is trending downward")
+            
+            # Scrub PII from case data before sending to LLM
+            privacy = get_privacy_service()
+            scrubbed_title, scrubbed_description, scrubbed_timeline = privacy.scrub_case_for_llm(
+                case.title,
+                case.description[:300] if case.description else "No description",
+                timeline_text
+            )
+            
+            # Format concerns list
+            concerns_text = "\n".join(f"- {c}" for c in sentiment.concerns) if sentiment.concerns else "No specific concerns identified"
+            violations_text = "\n".join(f"- {v}" for v in rule_violations) if rule_violations else "None"
+            
+            prompt = RECOMMENDATION_PROMPT.format(
+                csat_rules=CSAT_BUSINESS_RULES,
+                title=scrubbed_title,
+                days_since_creation=days_open,
+                days_since_update=days_since_notes,
+                days_since_customer_contact=days_since_customer_contact,
+                sentiment_label=sentiment.label.value,
+                sentiment_score=f"{sentiment.score:.2f}",
+                sentiment_trend=sentiment_trend,
+                recent_communications=scrubbed_timeline or "No timeline entries yet.",
+                concerns=concerns_text,
+                rule_violations=violations_text,
+            )
+            
+            logger.debug(f"[Case {case.id}] Generating case-specific recommendations...")
+            
+            response = await self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {"role": "system", "content": "You are a CSAT coach for Microsoft CSS. Generate specific, actionable recommendations that reference actual events from the timeline. Be the coach that notices what the engineer might have missed."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,  # Slightly higher for more varied recommendations
+                max_tokens=600,  # More tokens for detailed recommendations
+            )
+            
+            response_text = response.choices[0].message.content.strip()
+            logger.debug(f"[Case {case.id}] Recommendations response: {response_text[:300]}...")
+            
+            # Parse numbered recommendations from the response
+            recommendations = self._parse_recommendations(response_text)
+            
+            if recommendations:
+                logger.info(f"[Case {case.id}] Generated {len(recommendations)} case-specific recommendations")
+                return recommendations
+            else:
+                logger.warning(f"[Case {case.id}] Could not parse recommendations, using fallback")
+                return self._get_fallback_recommendations(sentiment, compliance_status)
+            
+        except Exception as e:
+            logger.error(f"Failed to generate recommendations for case {case.id}: {e}")
+            return self._get_fallback_recommendations(sentiment, compliance_status)
+    
+    def _parse_recommendations(self, response_text: str) -> List[str]:
+        """Parse numbered recommendations from LLM response."""
+        import re
+        
+        recommendations = []
+        
+        # Try to find numbered items (1. xxx, 2. xxx, etc.)
+        pattern = r'^\d+[\.\)]\s*(.+?)(?=\n\d+[\.\)]|\Z)'
+        matches = re.findall(pattern, response_text, re.MULTILINE | re.DOTALL)
+        
+        for match in matches:
+            # Clean up the recommendation text
+            rec = match.strip()
+            # Remove any markdown formatting
+            rec = re.sub(r'\*\*(.+?)\*\*', r'\1', rec)
+            rec = re.sub(r'\*(.+?)\*', r'\1', rec)
+            # Clean up extra whitespace
+            rec = ' '.join(rec.split())
+            if len(rec) > 20:  # Only include substantial recommendations
+                recommendations.append(rec)
+        
+        return recommendations[:5]  # Limit to 5 recommendations
+    
+    def _get_fallback_recommendations(self, sentiment: SentimentResult, compliance_status: str) -> List[str]:
+        """Get fallback recommendations when Azure OpenAI is unavailable."""
+        recommendations = []
+        
+        if sentiment.label == SentimentLabel.NEGATIVE:
+            recommendations.append(
+                "The customer sentiment is negative. Review recent communications to identify specific frustrations and address them directly in your next response."
+            )
+        
+        if compliance_status == "breach":
+            recommendations.append(
+                "This case has exceeded the 7-day update threshold. Add detailed case notes today documenting current status and next steps."
+            )
+        elif compliance_status == "warning":
+            recommendations.append(
+                "This case is approaching the 7-day update threshold. Schedule time to update case notes before the deadline."
+            )
+        
+        if sentiment.concerns:
+            recommendations.append(
+                f"Customer has expressed concerns about: {', '.join(sentiment.concerns[:2])}. Address these specifically in your next communication."
+            )
+        
+        if not recommendations:
+            recommendations.append(
+                "Continue monitoring this case and maintain regular communication with the customer."
+            )
+        
+        return recommendations
+
     async def _generate_summary(self, case: Case, sentiment: SentimentResult) -> str:
         """
         Generate a CSAT-focused case summary using Azure OpenAI.
