@@ -1395,8 +1395,7 @@ async def list_alerts(
 # Feedback Endpoints
 # =============================================================================
 
-# In-memory feedback store (for demo/mock mode)
-# In production, this would be stored in Azure SQL
+# In-memory feedback store (fallback for demo/mock mode)
 _feedback_store: List[dict] = []
 
 @app.post("/api/feedback", response_model=FeedbackResponse)
@@ -1421,32 +1420,28 @@ async def submit_feedback(feedback: FeedbackRequest):
         "created_at": datetime.utcnow().isoformat()
     }
     
-    # Try to store in database if available
-    if app_state.dfm_client and hasattr(app_state.dfm_client, 'db'):
+    # Try to store in database if available (Azure SQL adapter)
+    stored_in_db = False
+    if app_state.dfm_client and hasattr(app_state.dfm_client, 'save_feedback'):
         try:
-            db = app_state.dfm_client.db
-            db.execute("""
-                INSERT INTO feedback (id, rating, comment, category, page, engineer_id, user_agent, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                feedback_id,
-                feedback.rating,
-                feedback.comment,
-                feedback.category,
-                feedback.page,
-                feedback.engineer_id,
-                feedback.user_agent,
-                datetime.utcnow().isoformat()
-            ))
-            db.commit()
-            logger.info(f"Feedback {feedback_id} stored in database")
+            stored_in_db = await app_state.dfm_client.save_feedback(
+                feedback_id=feedback_id,
+                rating=feedback.rating,
+                comment=feedback.comment,
+                category=feedback.category,
+                page=feedback.page,
+                engineer_id=feedback.engineer_id,
+                user_agent=feedback.user_agent
+            )
+            if stored_in_db:
+                logger.info(f"Feedback {feedback_id} stored in Azure SQL")
         except Exception as e:
-            logger.warning(f"Database storage failed, using in-memory: {e}")
-            _feedback_store.append(feedback_entry)
-    else:
+            logger.warning(f"Database storage failed: {e}")
+    
+    if not stored_in_db:
         # Use in-memory store for demo mode
         _feedback_store.append(feedback_entry)
-        logger.info(f"Feedback {feedback_id} stored in memory")
+        logger.info(f"Feedback {feedback_id} stored in memory (fallback)")
     
     return FeedbackResponse(
         id=feedback_id,
@@ -1464,61 +1459,37 @@ async def list_feedback(
     """
     List all submitted feedback.
     
-    Returns feedback from database or in-memory store.
+    Returns feedback from Azure SQL database or in-memory store.
     """
     feedback_list = []
     
-    # Try to get from database first
-    if app_state.dfm_client and hasattr(app_state.dfm_client, 'db'):
+    # Try to get from Azure SQL database first
+    if app_state.dfm_client and hasattr(app_state.dfm_client, 'get_all_feedback'):
         try:
-            db = app_state.dfm_client.db
-            query = "SELECT * FROM feedback"
-            conditions = []
-            params = []
-            
-            if rating:
-                conditions.append("rating = ?")
-                params.append(rating)
-            if category:
-                conditions.append("category = ?")
-                params.append(category)
-            
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-            
-            query += " ORDER BY created_at DESC LIMIT ?"
-            params.append(limit)
-            
-            cursor = db.execute(query, params)
-            rows = cursor.fetchall()
-            
-            for row in rows:
-                feedback_list.append({
-                    "id": row[0],
-                    "rating": row[1],
-                    "comment": row[2],
-                    "category": row[3],
-                    "page": row[4],
-                    "engineer_id": row[5],
-                    "user_agent": row[6],
-                    "created_at": row[7]
-                })
+            feedback_list = await app_state.dfm_client.get_all_feedback(
+                limit=limit,
+                rating=rating,
+                category=category
+            )
+            logger.info(f"Retrieved {len(feedback_list)} feedback entries from Azure SQL")
         except Exception as e:
             logger.warning(f"Database query failed, using in-memory: {e}")
             feedback_list = _feedback_store.copy()
     else:
         # Use in-memory store
         feedback_list = _feedback_store.copy()
+        logger.info(f"Using in-memory feedback store ({len(feedback_list)} entries)")
     
-    # Apply filters to in-memory data if database failed
-    if rating:
-        feedback_list = [f for f in feedback_list if f.get("rating") == rating]
-    if category:
-        feedback_list = [f for f in feedback_list if f.get("category") == category]
-    
-    # Sort by created_at descending and limit
-    feedback_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-    feedback_list = feedback_list[:limit]
+    # Apply filters to in-memory data if not from database
+    if not (app_state.dfm_client and hasattr(app_state.dfm_client, 'get_all_feedback')):
+        if rating:
+            feedback_list = [f for f in feedback_list if f.get("rating") == rating]
+        if category:
+            feedback_list = [f for f in feedback_list if f.get("category") == category]
+        
+        # Sort by created_at descending and limit
+        feedback_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        feedback_list = feedback_list[:limit]
     
     return {
         "count": len(feedback_list),

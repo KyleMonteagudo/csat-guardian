@@ -70,6 +70,33 @@ class AzureSQLDfMAdapter:
         db = self._ensure_db()
         return await self._run_sync(db.get_engineers)
     
+    async def save_feedback(
+        self,
+        feedback_id: str,
+        rating: str,
+        comment: str = None,
+        category: str = "general",
+        page: str = None,
+        engineer_id: str = None,
+        user_agent: str = None,
+    ) -> bool:
+        """Save user feedback to the database."""
+        db = self._ensure_db()
+        return await self._run_sync(
+            db.save_feedback,
+            feedback_id, rating, comment, category, page, engineer_id, user_agent
+        )
+    
+    async def get_all_feedback(
+        self,
+        limit: int = 50,
+        rating: str = None,
+        category: str = None,
+    ) -> list:
+        """Get all feedback entries."""
+        db = self._ensure_db()
+        return await self._run_sync(db.get_all_feedback, limit, rating, category)
+    
     async def close(self):
         """Close database connection."""
         if self._db:

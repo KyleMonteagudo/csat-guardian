@@ -205,6 +205,29 @@ class DBMetric(Base):
     dimension_value = Column(String(200), nullable=True)
 
 
+class DBFeedback(Base):
+    """
+    Database model for user feedback submissions.
+    
+    Stores thumbs up/down feedback with optional comments.
+    """
+    __tablename__ = "feedback"
+    
+    # Primary key
+    id = Column(String(50), primary_key=True)
+    
+    # Feedback details
+    rating = Column(String(20), nullable=False)  # 'positive' or 'negative'
+    comment = Column(Text, nullable=True)
+    category = Column(String(50), nullable=True, default='general')
+    page = Column(String(100), nullable=True)
+    engineer_id = Column(String(50), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 # =============================================================================
 # Database Manager Class
 # =============================================================================
@@ -751,3 +774,81 @@ class DatabaseManager:
             )
             session.add(metric)
             await session.commit()
+
+    # =========================================================================
+    # Feedback Operations
+    # =========================================================================
+
+    async def save_feedback(
+        self,
+        feedback_id: str,
+        rating: str,
+        comment: Optional[str] = None,
+        category: str = "general",
+        page: Optional[str] = None,
+        engineer_id: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> DBFeedback:
+        """
+        Save user feedback to the database.
+        
+        Args:
+            feedback_id: Unique ID for the feedback
+            rating: 'positive' or 'negative'
+            comment: Optional comment text
+            category: Feedback category
+            page: Page where feedback was submitted
+            engineer_id: Optional engineer ID if feedback is about specific engineer
+            user_agent: Browser user agent string
+            
+        Returns:
+            The created feedback entry
+        """
+        logger.info(f"Saving feedback {feedback_id}: {rating}")
+        
+        async with self.async_session() as session:
+            feedback = DBFeedback(
+                id=feedback_id,
+                rating=rating,
+                comment=comment,
+                category=category,
+                page=page,
+                engineer_id=engineer_id,
+                user_agent=user_agent,
+            )
+            session.add(feedback)
+            await session.commit()
+            await session.refresh(feedback)
+            return feedback
+
+    async def get_all_feedback(
+        self,
+        limit: int = 50,
+        rating: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> list[DBFeedback]:
+        """
+        Get all feedback entries with optional filters.
+        
+        Args:
+            limit: Maximum entries to return
+            rating: Filter by rating ('positive' or 'negative')
+            category: Filter by category
+            
+        Returns:
+            List of feedback entries
+        """
+        logger.debug(f"Getting feedback (limit={limit}, rating={rating}, category={category})")
+        
+        async with self.async_session() as session:
+            query = select(DBFeedback)
+            
+            if rating:
+                query = query.where(DBFeedback.rating == rating)
+            if category:
+                query = query.where(DBFeedback.category == category)
+            
+            query = query.order_by(DBFeedback.created_at.desc()).limit(limit)
+            
+            result = await session.execute(query)
+            return list(result.scalars().all())

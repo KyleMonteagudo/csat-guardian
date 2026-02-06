@@ -465,6 +465,104 @@ class SyncDatabaseManager:
         
         return cases
     
+    def save_feedback(
+        self,
+        feedback_id: str,
+        rating: str,
+        comment: Optional[str] = None,
+        category: str = "general",
+        page: Optional[str] = None,
+        engineer_id: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> bool:
+        """
+        Save user feedback to the database.
+        
+        Returns True on success, False on failure.
+        """
+        conn = self.connect()
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO feedback (id, rating, comment, category, page, engineer_id, user_agent, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                feedback_id,
+                rating,
+                comment,
+                category,
+                page,
+                engineer_id,
+                user_agent,
+                datetime.utcnow().isoformat()
+            ))
+            
+            conn.commit()
+            print(f"[OK] Saved feedback {feedback_id}")
+            return True
+        except Exception as e:
+            print(f"[FAIL] Failed to save feedback: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def get_all_feedback(
+        self,
+        limit: int = 50,
+        rating: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> List[dict]:
+        """
+        Get all feedback entries with optional filters.
+        
+        Returns list of feedback dictionaries.
+        """
+        conn = self.connect()
+        try:
+            cursor = conn.cursor()
+            
+            query = "SELECT id, rating, comment, category, page, engineer_id, user_agent, created_at FROM feedback"
+            params = []
+            conditions = []
+            
+            if rating:
+                conditions.append("rating = ?")
+                params.append(rating)
+            if category:
+                conditions.append("category = ?")
+                params.append(category)
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            
+            query += " ORDER BY created_at DESC"
+            
+            # SQL Server uses TOP instead of LIMIT
+            query = query.replace("SELECT ", f"SELECT TOP {limit} ", 1)
+            
+            cursor.execute(query, params)
+            
+            feedback_list = []
+            for row in cursor.fetchall():
+                feedback_list.append({
+                    "id": row[0],
+                    "rating": row[1],
+                    "comment": row[2],
+                    "category": row[3],
+                    "page": row[4],
+                    "engineer_id": row[5],
+                    "user_agent": row[6],
+                    "created_at": row[7]
+                })
+            
+            return feedback_list
+        except Exception as e:
+            print(f"[FAIL] Failed to get feedback: {e}")
+            return []
+        finally:
+            conn.close()
+    
     def test_connection(self) -> bool:
         """Test if database connection works."""
         try:
