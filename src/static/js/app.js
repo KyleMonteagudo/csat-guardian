@@ -2969,7 +2969,6 @@ function renderCaseCoachingContent(container, caseData, analysis) {
     const sentimentPct = Math.round(sentimentScore * 100);
     const sentimentClass = getSentimentClass(sentimentScore);
     const sentimentLabel = sentiment.label || 'neutral';
-    const confidence = sentiment.confidence ? Math.round(sentiment.confidence * 100) : null;
     
     // Extract key coaching points from the analysis
     const recommendations = analysis.recommendations || [];
@@ -3004,7 +3003,6 @@ function renderCaseCoachingContent(container, caseData, analysis) {
                 </div>
                 <div class="sentiment-source">
                     <span class="ai-badge">🤖 AI Analyzed</span>
-                    ${confidence ? `<span class="confidence-label">${confidence}% confidence</span>` : ''}
                 </div>
             </div>
         </div>
