@@ -2358,7 +2358,7 @@ async function renderManagerDashboard() {
         <div class="content-header page-enter">
             <div class="flex justify-between items-center">
                 <div>
-                    <h1>Team Performance</h1>
+                    <h1>Team Sentiment</h1>
                     <p class="subtitle">Empowering your team through data-driven coaching insights</p>
                 </div>
                 <div class="date-range-selector">
@@ -2375,7 +2375,7 @@ async function renderManagerDashboard() {
             ${createTableSkeleton(6)}
         </div>
     `;
-    updateBreadcrumb([{ text: 'Team Performance' }]);
+    updateBreadcrumb([{ text: 'Team Sentiment' }]);
     
     // Use fast summary endpoint for performance (avoids N+1 queries)
     const summaryData = await getManagerSummary();
@@ -2752,7 +2752,7 @@ async function renderCategoryDetailView(category) {
     // Show skeleton loading
     main.innerHTML = `
         <div class="content-header page-enter">
-            <button class="btn btn-ghost mb-sm" onclick="navigateTo('manager')">← Back to Team Performance</button>
+            <button class="btn btn-ghost mb-sm" onclick="navigateTo('manager')">← Back to Team Sentiment</button>
             <div class="category-header">
                 <span class="category-icon">${info.icon}</span>
                 <div>
@@ -2767,7 +2767,7 @@ async function renderCategoryDetailView(category) {
     `;
     
     updateBreadcrumb([
-        { text: 'Team Performance', action: "navigateTo('manager')" },
+        { text: 'Team Sentiment', action: "navigateTo('manager')" },
         { text: `${info.label} Cases` }
     ]);
     
@@ -2821,7 +2821,7 @@ async function renderCategoryDetailView(category) {
                 <span style="font-size: 3rem;">${info.icon}</span>
                 <h3 class="mt-md">No ${info.label} Cases</h3>
                 <p class="text-muted">There are currently no active cases in this category.</p>
-                <button class="btn btn-primary mt-md" onclick="navigateTo('manager')">Back to Team Performance</button>
+                <button class="btn btn-primary mt-md" onclick="navigateTo('manager')">Back to Team Sentiment</button>
             </div>
         `;
         return;
@@ -3506,7 +3506,7 @@ async function viewEngineerDetail(engineerId) {
     `;
     
     updateBreadcrumb([
-        { text: 'Team Performance', action: "navigateTo('manager')" },
+        { text: 'Team Sentiment', action: "navigateTo('manager')" },
         { text: engineer.name }
     ]);
     
