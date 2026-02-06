@@ -97,6 +97,11 @@ class AzureSQLDfMAdapter:
         db = self._ensure_db()
         return await self._run_sync(db.get_all_feedback, limit, rating, category)
     
+    async def ensure_feedback_table(self) -> bool:
+        """Ensure the feedback table exists in the database."""
+        db = self._ensure_db()
+        return await self._run_sync(db.ensure_feedback_table)
+    
     async def close(self):
         """Close database connection."""
         if self._db:

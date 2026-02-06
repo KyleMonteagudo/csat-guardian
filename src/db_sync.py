@@ -161,6 +161,50 @@ class SyncDatabaseManager:
         # Connections are now closed after each query
         pass
     
+    def ensure_feedback_table(self) -> bool:
+        """
+        Create feedback table if it doesn't exist.
+        Called on app startup to ensure table exists.
+        
+        Returns True if table exists/created, False on error.
+        """
+        conn = self.connect()
+        try:
+            cursor = conn.cursor()
+            
+            # Check if table exists
+            cursor.execute("""
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES 
+                WHERE TABLE_NAME = 'feedback'
+            """)
+            exists = cursor.fetchone()[0] > 0
+            
+            if not exists:
+                print("[INFO] Creating feedback table...")
+                cursor.execute("""
+                    CREATE TABLE feedback (
+                        id NVARCHAR(50) PRIMARY KEY,
+                        rating NVARCHAR(20) NOT NULL,
+                        comment NVARCHAR(MAX),
+                        category NVARCHAR(50) DEFAULT 'general',
+                        page NVARCHAR(100),
+                        engineer_id NVARCHAR(50),
+                        user_agent NVARCHAR(500),
+                        created_at DATETIME2 DEFAULT GETUTCDATE()
+                    )
+                """)
+                conn.commit()
+                print("[OK] Feedback table created successfully")
+            else:
+                print("[OK] Feedback table already exists")
+            
+            return True
+        except Exception as e:
+            print(f"[WARN] Could not ensure feedback table: {e}")
+            return False
+        finally:
+            conn.close()
+    
     def get_engineers(self) -> List[Engineer]:
         """Get all engineers from the database."""
         conn = self.connect()

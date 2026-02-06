@@ -177,6 +177,14 @@ async def lifespan(app: FastAPI):
             from clients.azure_sql_adapter import get_azure_sql_adapter
             app_state.dfm_client = await get_azure_sql_adapter()
             logger.info("DfM client initialized (Azure SQL)")
+            
+            # Ensure feedback table exists
+            try:
+                table_created = await app_state.dfm_client.ensure_feedback_table()
+                if table_created:
+                    logger.info("Feedback table verified/created successfully")
+            except Exception as table_err:
+                logger.warning(f"Could not ensure feedback table: {table_err}")
         except Exception as e:
             logger.warning(f"Azure SQL adapter failed: {e}")
             use_mock_data = True  # Fall back to mock
