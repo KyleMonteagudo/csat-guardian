@@ -232,7 +232,7 @@ Startup Command: cd /home/site/wwwroot/src && pip install -r requirements.txt &&
 
 **Access Pattern:**
 ```
-App Service (Managed Identity: 7b0f0d42-0f23-48cd-b982-41abad5f1927)
+App Service (Managed Identity)
     │
     │ VNet Integration → Private Endpoint
     ▼
@@ -349,11 +349,11 @@ engineer_roles
 │                    AUTHENTICATION FLOW                          │
 └─────────────────────────────────────────────────────────────────┘
 
-App Service (MSI: 7b0f0d42-0f23-48cd-b982-41abad5f1927)
+App Service (Managed Identity)
     │
     │ DefaultAzureCredential / ManagedIdentityCredential
     ▼
-Entra ID (Tenant: 33e01921-4d64-4f8c-a055-5bdaffd5e33d)
+Entra ID (Microsoft Corporate Tenant)
     │
     │ OAuth2 Token (resource-specific)
     ▼
@@ -463,9 +463,9 @@ Deployment is manual via PowerShell script:
 ```powershell
 # Deploy everything
 .\infrastructure\deploy-all.ps1 `
-    -SubscriptionId "a20d761d-cb36-4f83-b827-58ccdb166f39" `
-    -ResourceGroup "KMonteagudo_CSAT_Guardian" `
-    -Location "eastus"
+    -SubscriptionId "<your-subscription-id>" `
+    -ResourceGroup "CSAT_Guardian_Dev" `
+    -Location "centralus"
 ```
 
 ---

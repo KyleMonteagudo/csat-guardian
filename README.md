@@ -1,254 +1,154 @@
 # CSAT Guardian
 
-> **Customer Satisfaction Guardian** - AI-Powered CSAT Risk Detection and Proactive Coaching for GSX (Government Support Engineers)
+> **Customer Satisfaction Guardian** - AI-Powered CSAT Risk Detection and Proactive Coaching for Support Engineers
+
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Try%20It%20Now-blue?style=for-the-badge)](https://app-csatguardian-dev.azurewebsites.net/ui)
+[![CXP ACES AI Bash](https://img.shields.io/badge/Hackathon-CXP%20ACES%20AI%20Bash-purple?style=for-the-badge)](https://innovationstudio.microsoft.com/hackathons/CXP-ACES-AI-Bash/project/115573)
 
 ---
 
-## � Documentation
+## 🎯 What is CSAT Guardian?
 
-| Document | Audience | Description |
-|----------|----------|-------------|
-| [**Getting Started**](docs/GETTING_STARTED.md) | **Everyone** | Start here! Overview and quick start guide |
-| [File Reference](docs/FILE_REFERENCE.md) | Everyone | Complete file-by-file explanation |
-| [Code Guide for Non-Developers](docs/CODE_GUIDE_FOR_NON_DEVELOPERS.md) | Non-programmers | How to read Python code |
-| [Architecture](docs/ARCHITECTURE.md) | Developers | Technical deep-dive |
-| [Quick Reference](docs/QUICK_REFERENCE.md) | Developers | API cheat sheet |
-| [Deployment Guide](infrastructure/DEPLOYMENT_GUIDE.md) | DevOps | How to deploy |
-| [Security Review](docs/APPLICATION_SECURITY_REVIEW.md) | Security | Security controls |
+CSAT Guardian is an AI-powered assistant that helps support engineers maintain high customer satisfaction (CSAT) scores by:
+
+- **🔍 Monitoring** open cases for early warning signs
+- **🎭 Detecting** customer sentiment using Azure OpenAI
+- **⚠️ Alerting** when cases approach risk thresholds (2-day, 7-day rules)
+- **💬 Coaching** with personalized, actionable recommendations
+
+### The Problem We're Solving
+
+Support engineers often don't know a customer is frustrated until they receive a poor CSAT score—**after** the survey is sent. By then, it's too late to course-correct.
+
+### Our Solution
+
+> **"Shift from reactive CSAT recovery to proactive customer experience management."**
+
+CSAT Guardian analyzes case timelines in real-time to detect declining sentiment and compliance risks **before** they become problems, empowering engineers to take action while they can still make a difference.
 
 ---
 
-## 📋 Project Status
+## ✨ Key Features
 
-### ✅ Completed (Dev Environment)
+| Feature | Description |
+|---------|-------------|
+| **📊 Engineer Dashboard** | See all your cases with AI-analyzed sentiment scores, risk indicators, and timeline insights |
+| **👥 Manager Dashboard** | Team overview with drill-down into individual engineer performance and coaching opportunities |
+| **🤖 AI Chat Assistant** | Ask case-specific questions and get personalized coaching recommendations |
+| **📈 Sentiment Analysis** | Azure OpenAI-powered analysis of case communications |
+| **📋 Case Timeline View** | Full history with detected phrases, sentiment trends, and risk factors |
+| **💡 Personalized Coaching** | Context-aware suggestions based on actual case patterns |
+| **📤 Export Capabilities** | CSV, PDF, and JSON export for reporting and integration |
+| **🔒 Feedback System** | Built-in feedback collection for continuous improvement |
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| **Frontend UI** | ✅ Running | **Glassmorphism design, animated sentiment rings, skeleton loading** |
-| Azure SQL Database | ✅ Deployed | 12 tables, 8 test cases with timelines |
-| App Service | ✅ Running | Python 3.11, VNet integrated, private endpoints |
-| Azure OpenAI | ✅ Connected | GPT-4o via Managed Identity |
-| Azure AI Content Safety | ✅ Connected | PII detection via Managed Identity |
-| Semantic Kernel Agent | ✅ Working | Function calling with CSAT rules plugin |
-| **Security Hardening** | ✅ Complete | **Local auth DISABLED on all services** |
-| **UI Animations** | ✅ Working | **Counters, rings, transitions, micro-interactions** |
-| `/ui` | ✅ Working | **Static frontend served by FastAPI** |
-| `/api/health` | ✅ Working | Health check endpoint |
-| `/api/cases` | ✅ Working | Lists cases from Azure SQL |
-| `/api/analyze/{id}` | ✅ Working | Sentiment analysis (AI-powered) |
-| `/api/chat` | ✅ Working | Conversational CSAT coaching |
+---
 
-### 🔒 Security Status
+## 🎨 User Interface
 
-> **All Azure services use Managed Identity authentication. Local auth (API keys) is DISABLED.**
-
-| Service | Local Auth | Auth Method |
-|---------|------------|-------------|
-| Azure SQL | ❌ Disabled | Managed Identity |
-| Azure OpenAI | ❌ Disabled | Managed Identity |
-| Azure AI Content Safety | ❌ Disabled | Managed Identity |
-| Key Vault | ❌ Disabled | Managed Identity (RBAC) |
-
-### 🔄 Pending (For Production)
-
-| Item | Priority | Status | Notes |
-|------|----------|--------|-------|
-| DfM/Kusto Integration | High | ⏳ Awaiting access | Data is in Azure Data Explorer (Kusto), not D365 OData |
-| Teams Bot Integration | High | ⏳ Awaiting security approval | Need approval for Azure Function gateway |
-| CI/CD Pipeline | Low | Blocked | Network restrictions prevent GitHub Actions |
+The app features a modern **glassmorphism design** with:
+- Mobile-responsive layout
+- Animated sentiment rings and counters
+- Category drill-down (Excellent/Good/Growth Opportunity)
+- Smooth page transitions and micro-interactions
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Azure Commercial (Central US)                         │
-│                        Subscription: a20d761d-cb36-4f83-b827-58ccdb166f39   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │              VNet: vnet-csatguardian-dev (10.100.0.0/16)            │   │
-│  │                                                                      │   │
-│  │   ┌──────────────────┐    ┌──────────────────┐                      │   │
-│  │   │ AzureBastionSubnet│    │  snet-devbox     │                      │   │
-│  │   │  10.100.4.0/26   │───▶│  10.100.3.0/24   │                      │   │
-│  │   │                  │    │                  │                      │   │
-│  │   │  Azure Bastion   │    │  vm-devbox       │                      │   │
-│  │   └──────────────────┘    │  (Windows 11)    │                      │   │
-│  │                           └────────┬─────────┘                      │   │
-│  │                                    │                                 │   │
-│  │   ┌────────────────────────────────▼─────────────────────────────┐  │   │
-│  │   │           snet-appservice (10.100.1.0/24)                    │  │   │
-│  │   │                                                               │  │   │
-│  │   │   ┌─────────────────────────────────────────────────────┐    │  │   │
-│  │   │   │         App Service: app-csatguardian-dev           │    │  │   │
-│  │   │   │         ─────────────────────────────────           │    │  │   │
-│  │   │   │    FastAPI + Uvicorn (Python 3.11)                  │    │  │   │
-│  │   │   │    Semantic Kernel Agent with CSAT Rules Plugin     │    │  │   │
-│  │   │   │    VNet Integration Enabled                         │    │  │   │
-│  │   │   └─────────────────────────────────────────────────────┘    │  │   │
-│  │   └───────────────────────────────────────────────────────────────┘  │   │
-│  │                                    │                                 │   │
-│  │   ┌────────────────────────────────▼─────────────────────────────┐  │   │
-│  │   │          snet-private-endpoints (10.100.2.0/24)              │  │   │
-│  │   │                                                               │  │   │
-│  │   │   ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │  │   │
-│  │   │   │ Azure SQL   │  │ Key Vault   │  │ Azure OpenAI        │  │  │   │
-│  │   │   │ (Private EP)│  │ (Private EP)│  │ (AI Services)       │  │  │   │
-│  │   │   │             │  │             │  │                     │  │  │   │
-│  │   │   │ sql-csat... │  │ kv-csatguard│  │ ais-csatguardian-dev│  │  │   │
-│  │   │   └─────────────┘  └─────────────┘  └─────────────────────┘  │  │   │
-│  │   └───────────────────────────────────────────────────────────────┘  │   │
-│  │                                                                      │   │
-│  │   Private DNS Zones:                                                 │   │
-│  │   • privatelink.database.windows.net                                 │   │
-│  │   • privatelink.vaultcore.azure.net                                  │   │
-│  │   • privatelink.cognitiveservices.azure.com                          │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     Azure Commercial Cloud                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │                  Virtual Network (VNet)                  │   │
+│   │                                                          │   │
+│   │   ┌──────────────────────────────────────────────────┐  │   │
+│   │   │              App Service (Python 3.11)            │  │   │
+│   │   │      FastAPI + Semantic Kernel + Static UI        │  │   │
+│   │   └─────────────────────┬────────────────────────────┘  │   │
+│   │                         │                                │   │
+│   │   ┌─────────┬──────────┴──────────┬─────────────────┐   │   │
+│   │   ▼         ▼                     ▼                 ▼   │   │
+│   │ Azure   Azure SQL           Azure OpenAI      AI Content│   │
+│   │ Key     Database            (GPT-4o)          Safety    │   │
+│   │ Vault   (Private EP)        (AI Services)    (PII Det.) │   │
+│   │                                                          │   │
+│   └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│   🔐 All services use Managed Identity (no API keys/passwords)  │
+│   🔒 Private Endpoints for all backend services                  │
+│   🛡️ Local authentication DISABLED on all Azure services        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+### Technology Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | HTML/CSS/JavaScript (no build step) |
+| **Backend** | FastAPI (Python 3.11) |
+| **AI** | Azure OpenAI GPT-4o, Semantic Kernel Agents |
+| **Database** | Azure SQL with Managed Identity |
+| **Security** | MSI Auth, Private Endpoints, No secrets in code |
+| **Hosting** | Azure App Service with VNet Integration |
 
 ---
 
-## 🖥️ Development Environment Setup
+## 📚 Documentation
 
-### Understanding the Three-Machine Architecture
-
-Due to enterprise security constraints, development spans three machines:
-
-| Machine | Purpose | Has Access To |
-|---------|---------|---------------|
-| **Local Machine** | VS Code + GitHub Copilot, code editing | GitHub repo (read/write) |
-| **SAW** | Azure Portal, Cloud Shell | Azure resources, GitHub repo (via Cloud Shell) |
-| **Devbox VM** | Testing private endpoints | App Service, Azure SQL (via VNet) |
-
-### Key Limitations
-
-- **Local Machine**: No Azure CLI, no direct Azure access
-- **SAW**: Azure access but no direct VNet connectivity
-- **Devbox VM**: VNet access but no code editing tools
-- **Cloud Shell**: Can run az commands but has MSI token scope limitations for some operations
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [**Getting Started**](docs/GETTING_STARTED.md) | Everyone | Quick start guide |
+| [Architecture](docs/ARCHITECTURE.md) | Developers | Technical deep-dive |
+| [File Reference](docs/FILE_REFERENCE.md) | Developers | Complete code walkthrough |
+| [Code Guide for Non-Developers](docs/CODE_GUIDE_FOR_NON_DEVELOPERS.md) | Non-programmers | How to read the code |
+| [Quick Reference](docs/QUICK_REFERENCE.md) | Developers | API cheat sheet |
+| [Deployment Guide](infrastructure/DEPLOYMENT_GUIDE.md) | DevOps | How to deploy |
+| [Security Review](docs/APPLICATION_SECURITY_REVIEW.md) | Security | Security controls |
+| [CSAT Requirements](docs/CSAT_REQUIREMENTS.md) | Product | Business rules |
 
 ---
 
-## 🚀 Complete Deployment Guide
+## 🚀 Try It Now
 
-### Prerequisites
+**Live Demo:** [https://app-csatguardian-dev.azurewebsites.net/ui](https://app-csatguardian-dev.azurewebsites.net/ui)
 
-1. **Azure Subscription** with permissions to create:
-   - Resource Groups, Virtual Networks, Azure SQL
-   - Azure OpenAI (AI Services), Key Vault, App Service
+### Quick Tour:
+1. **Engineer Mode** - View case dashboard, analyze sentiment, chat with AI
+2. **Manager Mode** - See team overview, drill into engineer performance
+3. **Feedback Button** - Share your thoughts (top right corner)
 
-2. **GitHub Repository** with code pushed
+---
 
-3. **Access to Cloud Shell** in Azure Portal
+## 📁 Project Structure
 
-### Phase 1: Infrastructure (Already Done for Dev)
-
-The following resources exist in `CSAT_Guardian_Dev`:
-
-| Resource | Name | Purpose |
-|----------|------|---------|
-| Resource Group | `CSAT_Guardian_Dev` | Container for all resources |
-| Virtual Network | `vnet-csatguardian-dev` | Private networking |
-| App Service Plan | `asp-csatguardian-dev` | Linux P1v3 hosting |
-| App Service | `app-csatguardian-dev` | Python 3.11 web app |
-| SQL Server | `sql-csatguardian-dev` | Database server |
-| SQL Database | `sqldb-csatguardian-dev` | Application data |
-| AI Services | `ais-csatguardian-dev` | GPT-4o model |
-| Key Vault | `kv-csatguard-dev` | Secrets storage |
-| Bastion | `bas-csatguardian-dev` | Secure VM access |
-| Dev VM | `vm-devbox-csatguardian` | Testing from VNet |
-
-### Phase 2: Database Schema Deployment
-
-**From Cloud Shell:**
-
-```bash
-# Set subscription
-az account set --subscription a20d761d-cb36-4f83-b827-58ccdb166f39
-
-# Navigate to repo (clone first if needed)
-cd ~/csat-guardian
-git pull origin develop
-
-# Deploy schema (get password from Key Vault)
-sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
-  -U sqladmin -P '<password-from-keyvault>' \
-  -i infrastructure/sql/001-schema-complete.sql
-
-# Deploy seed data
-sqlcmd -S sql-csatguardian-dev.database.windows.net -d sqldb-csatguardian-dev \
-  -U sqladmin -P '<password-from-keyvault>' \
-  -i infrastructure/sql/002-seed-data.sql
 ```
-
-### Phase 3: App Service Configuration
-
-**Required App Settings** (set in Portal → App Service → Configuration):
-
-| Setting | Value |
-|---------|-------|
-| `AZURE_OPENAI_ENDPOINT` | `https://ais-csatguardian-dev.cognitiveservices.azure.com/` |
-| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` |
-| `DATABASE_CONNECTION_STRING` | `Server=tcp:sql-csatguardian-dev.database.windows.net,1433;...` |
-| `USE_SQL_MANAGED_IDENTITY` | `true` |
-| `USE_OPENAI_MANAGED_IDENTITY` | `true` |
-| `WEBSITE_VNET_ROUTE_ALL` | `1` |
-| `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true` |
-| `WEBSITES_PORT` | `8000` |
-
-**Enable SCM Basic Auth** (required for deployments):
-- Portal → App Service → Configuration → General settings → SCM Basic Auth → **On**
-
-### Phase 4: Code Deployment (The Working Method)
-
-⚠️ **Important**: Standard `az webapp up` and `az webapp deployment source sync` do NOT work reliably. Use the Kudu file upload method:
-
-**Step 1: Create deployment ZIP (Cloud Shell)**
-```bash
-cd ~/csat-guardian
-git pull origin develop
-rm -f deploy.zip
-zip -r deploy.zip src requirements.txt
-download deploy.zip
-```
-
-**Step 2: Upload via Kudu (SAW Browser)**
-1. Go to: `https://app-csatguardian-dev.scm.azurewebsites.net/DebugConsole`
-2. Navigate to `/home`
-3. Drag and drop `deploy.zip` into the file area
-
-**Step 3: Move files to wwwroot (Kudu SSH)**
-```bash
-cd /home/site/wwwroot
-rm -rf src requirements.txt
-mv /home/src .
-mv /home/requirements.txt .
-```
-
-**Step 4: Set startup command (Portal)**
-```
-cd /home/site/wwwroot/src && pip install -r requirements.txt && python -m uvicorn api:app --host 0.0.0.0 --port 8000
-```
-
-**Step 5: Restart App Service**
-
-### Phase 5: Verification (From Devbox VM)
-
-Connect via Bastion, then test:
-```powershell
-# Health check
-Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/health"
-
-# List cases
-Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/cases"
-
-# Chat with agent
-$body = @{ message = "Check CSAT rules for case-001"; engineer_id = "eng-001" } | ConvertTo-Json
-Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/chat" -Method POST -ContentType "application/json" -Body $body
+csat-guardian/
+├── src/
+│   ├── api.py                    # FastAPI REST endpoints
+│   ├── config.py                 # Configuration management
+│   ├── db_sync.py                # Azure SQL database client
+│   ├── models.py                 # Data models
+│   ├── static/                   # Frontend UI
+│   │   ├── index.html            # Single-page app
+│   │   ├── css/styles.css        # Styling
+│   │   └── js/app.js             # Frontend logic
+│   ├── agent/
+│   │   ├── guardian_agent.py     # Semantic Kernel agent
+│   │   └── csat_rules_plugin.py  # CSAT rules plugin
+│   ├── services/
+│   │   ├── sentiment_service.py  # Azure OpenAI integration
+│   │   └── alert_service.py      # Alert generation
+│   └── clients/
+│       ├── azure_sql_adapter.py  # Azure SQL adapter
+│       └── dfm_client_memory.py  # In-memory data client
+├── infrastructure/
+│   ├── bicep/                    # Infrastructure as Code
+│   └── sql/                      # Database schemas
+├── docs/                         # Documentation
+└── README.md
 ```
 
 ---
@@ -258,108 +158,56 @@ Invoke-RestMethod -Uri "https://app-csatguardian-dev.azurewebsites.net/api/chat"
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/health` | GET | Service health status |
-| `/api/cases` | GET | List cases (with filters) |
-| `/api/cases/{id}` | GET | Get case with timeline |
+| `/api/cases` | GET | List cases with filters |
+| `/api/cases/{id}` | GET | Get case with full timeline |
 | `/api/analyze/{id}` | POST | AI sentiment analysis |
 | `/api/chat` | POST | Chat with CSAT Guardian agent |
+| `/api/feedback` | POST | Submit user feedback |
 
 ---
 
-## 📁 Project Structure
+## 🧪 Test Scenarios
 
-```
-csat-guardian/
-├── src/
-│   ├── api.py                    # FastAPI REST endpoints + static serving
-│   ├── config.py                 # Configuration management
-│   ├── db_sync.py                # Azure SQL sync client
-│   ├── models.py                 # Pydantic data models
-│   ├── static/                   # ** FRONTEND UI **
-│   │   ├── index.html            # Microsoft Learn-style HTML
-│   │   ├── css/styles.css        # Fluent Design CSS
-│   │   └── js/app.js             # Frontend JavaScript
-│   ├── agent/
-│   │   ├── guardian_agent.py     # Semantic Kernel agent
-│   │   └── csat_rules_plugin.py  # CSAT rules function plugin
-│   ├── services/
-│   │   ├── sentiment_service.py  # Azure OpenAI sentiment analysis
-│   │   └── alert_service.py      # Alert generation
-│   └── clients/
-│       └── dfm_client.py         # DfM API client (async)
-├── infrastructure/
-│   ├── bicep/                    # Azure IaC templates
-│   ├── sql/
-│   │   ├── 001-schema-complete.sql  # Database schema
-│   │   └── 002-seed-data.sql        # Test data (8 cases)
-│   └── DEPLOYMENT_GUIDE.md
-├── docs/
-│   └── ARCHITECTURE.md
-└── README.md
-```
+The demo includes 8 pre-configured test cases:
+
+| Case | Scenario | Risk Level |
+|------|----------|------------|
+| case-001 | Happy, engaged customer | Healthy |
+| case-002 | Frustrated customer | At Risk |
+| case-003 | Neutral progress | Healthy |
+| case-004 | Declining sentiment | At Risk |
+| case-005 | 7-day warning approaching | At Risk |
+| case-006 | 7-day compliance breach | Breach |
+| case-007 | Technical complexity | Healthy |
+| case-008 | Escalation scenario | At Risk |
 
 ---
 
-## 🧪 Test Cases
+## 🔮 Future Roadmap
 
-| Case ID | Scenario | Expected Behavior |
-|---------|----------|-------------------|
-| `case-001` | Happy customer | Good communication, no violations |
-| `case-002` | Frustrated customer | Negative sentiment detected |
-| `case-003` | Neutral progress | Steady engagement |
-| `case-004` | Declining sentiment | Trend analysis alerts |
-| `case-005` | 7-day warning | Approaching compliance breach |
-| `case-006` | 7-day breach | Compliance violation |
-| `case-007` | Technical complexity | Complex troubleshooting |
-| `case-008` | Escalation scenario | Multi-team involvement |
+- [ ] **DfM/Kusto Integration** - Connect to real case data
+- [ ] **Teams Notifications** - Proactive alerts via Teams
+- [ ] **CI/CD Pipeline** - Automated deployments
+- [ ] **Real-time Updates** - WebSocket live refresh
 
 ---
 
-## 🔐 Credentials
+## 🤝 Contributing
 
-| Resource | Username | Notes |
-|----------|----------|-------|
-| SQL Admin | `sqladmin` | Password stored in Key Vault |
-| Devbox VM | `testadmin` | Password stored in Key Vault |
-| Azure OpenAI Key | - | Key Vault secret: `azure-openai-key` |
+We welcome feedback and contributions! 
 
----
-
-## 🔧 Troubleshooting
-
-### App returns 500 errors
-- Check Portal → App Service → Log stream
-- Or Kudu: `https://app-csatguardian-dev.scm.azurewebsites.net/api/logstream`
-
-### "No module named uvicorn"
-Ensure startup command includes `pip install -r requirements.txt`
-
-### SQL connection fails
-- Verify `WEBSITE_VNET_ROUTE_ALL=1`
-- Check Private DNS zone linked to VNet
-- Restart App Service
-
-### Chat endpoint returns error
-- Check `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT` settings
-- Verify Key Vault access for managed identity
+- **Try the app:** [Live Demo](https://app-csatguardian-dev.azurewebsites.net/ui)
+- **Submit feedback:** Use the Feedback button in the app
+- **Join the project:** [Innovation Studio](https://innovationstudio.microsoft.com/hackathons/CXP-ACES-AI-Bash/project/115573)
 
 ---
 
-## 📈 Known Deployment Issues & Workarounds
+## 👨‍💻 Author
 
-| Issue | Workaround |
-|-------|------------|
-| `az webapp up` fails | Use Kudu file upload method |
-| `az webapp deployment source sync` caches old code | Use Kudu file upload method |
-| Cloud Shell MSI token scope errors | Upload files via Kudu manually |
+**Kyle Monteagudo**  
+Government Support Engineer | GSX
 
----
-
-## 🔮 Future Enhancements
-
-1. **DfM Integration**: Replace seed data with real case sync
-2. **Teams Notifications**: Alert managers on CSAT risks
-3. **CI/CD Pipeline**: GitHub Actions for automated deployment
-4. **Real-time Updates**: WebSocket for live dashboard refresh
+*Built for the CXP ACES AI Bash Hackathon 2026*
 
 ---
 

@@ -243,8 +243,7 @@ Step 6: RETURN RESPONSE
 
 All resources are deployed in **Commercial Azure** (not Government), **Central US** region.
 
-**Resource Group:** `CSAT_Guardian_Dev`  
-**Subscription:** `a20d761d-cb36-4f83-b827-58ccdb166f39`
+**Resource Group:** `CSAT_Guardian_Dev`
 
 ### Complete Resource List
 
@@ -1121,9 +1120,7 @@ az vm run-command invoke --resource-group CSAT_Guardian_Dev --name vm-devbox-csa
 
 | Resource | ID/Value |
 |----------|----------|
-| Subscription | a20d761d-cb36-4f83-b827-58ccdb166f39 |
 | Resource Group | CSAT_Guardian_Dev |
-| App MSI Object ID | 7b0f0d42-0f23-48cd-b982-41abad5f1927 |
 | VNet Address Space | 10.100.0.0/16 |
 
 ---

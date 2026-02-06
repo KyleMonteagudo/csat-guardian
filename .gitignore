@@ -5,6 +5,15 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
+# Internal Development Files (DO NOT COMMIT)
+# -----------------------------------------------------------------------------
+SESSION_STATE.md
+docs/VIDEO_SCRIPT.md
+docs/TEAM_INVITATION_EMAIL.*
+docs/AUTHENTICATION_PLAN.md
+docs/DFM_INTEGRATION_REQUEST.md
+
+# -----------------------------------------------------------------------------
 # Deployment Artifacts (generated - never commit)
 # -----------------------------------------------------------------------------
 deploy.zip
