@@ -1559,12 +1559,12 @@ function renderLandingPage() {
                     <span>Export Reports</span>
                 </div>
                 <div class="hero-feature">
-                    <span class="feature-icon">📱</span>
-                    <span>Mobile Friendly</span>
-                </div>
-                <div class="hero-feature">
                     <span class="feature-icon">🤖</span>
                     <span>AI Coaching</span>
+                </div>
+                <div class="hero-feature">
+                    <span class="feature-icon">📈</span>
+                    <span>Real-time Analytics</span>
                 </div>
             </div>
         </div>
@@ -1572,12 +1572,12 @@ function renderLandingPage() {
         <div class="tech-stack-section">
             <h3 class="tech-stack-title">Powered by Azure AI</h3>
             <div class="tech-stack-badges">
-                <span class="tech-stack-badge pulse-ring">Azure OpenAI GPT-4o</span>
+                <span class="tech-stack-badge">Azure OpenAI</span>
                 <span class="tech-stack-badge">Semantic Kernel</span>
                 <span class="tech-stack-badge">Azure SQL</span>
                 <span class="tech-stack-badge">FastAPI</span>
             </div>
-            <p class="tech-stack-subtitle">Built with ❤️ using Claude Opus 4.5</p>
+            <p class="tech-stack-subtitle">Built by EngOps / GSX</p>
         </div>
     `;
     updateBreadcrumb([]);
